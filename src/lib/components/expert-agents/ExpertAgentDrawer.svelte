@@ -52,7 +52,7 @@
 			aria-label="关闭专家面板"
 			on:click={close}
 			in:fade={{ duration: 120 }}
-		/>
+		></button>
 
 		<aside
 			class="absolute bottom-0 right-0 top-0 flex w-full flex-col bg-gray-50 shadow-2xl outline-none dark:bg-gray-950 sm:w-[400px]"

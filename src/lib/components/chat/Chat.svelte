@@ -94,6 +94,11 @@
 	import { createOpenAITextStream } from '$lib/apis/streaming';
 	import { getFunctions } from '$lib/apis/functions';
 	import { updateFolderById } from '$lib/apis/folders';
+	import {
+		clearExpertAgentStartRequest,
+		expertAgentStartRequest,
+		type ExpertAgentStartRequest
+	} from '$lib/stores/expertAgents';
 
 	import Banner from '../common/Banner.svelte';
 	import MessageInput from '$lib/components/chat/MessageInput.svelte';
@@ -153,6 +158,7 @@
 	let codeInterpreterEnabled = false;
 
 	let showCommands = false;
+	let processingExpertAgentStart = false;
 
 	let generating = false;
 	let dragged = false;
@@ -696,6 +702,41 @@
 		} catch {}
 	};
 
+	const waitForExpertAgentChatReady = async () => {
+		for (let i = 0; i < 50; i++) {
+			await tick();
+
+			if (!loading && selectedModels.some((modelId) => modelId)) {
+				return true;
+			}
+
+			await new Promise((resolve) => setTimeout(resolve, 50));
+		}
+
+		return false;
+	};
+
+	const startExpertAgentChat = async (request: ExpertAgentStartRequest) => {
+		if (processingExpertAgentStart) {
+			return;
+		}
+
+		processingExpertAgentStart = true;
+
+		try {
+			const ready = await waitForExpertAgentChatReady();
+			if (!ready) {
+				toast.error($i18n.t('Model not selected'));
+				return;
+			}
+
+			clearExpertAgentStartRequest();
+			await submitHandler(request.prompt);
+		} finally {
+			processingExpertAgentStart = false;
+		}
+	};
+
 	onMount(() => {
 		loading = true;
 		console.log('mounted');
@@ -764,6 +805,12 @@
 			}
 		});
 
+		const expertAgentStartSubscribe = expertAgentStartRequest.subscribe((request) => {
+			if (request) {
+				void startExpertAgentChat(request);
+			}
+		});
+
 		const storageChatInput = sessionStorage.getItem(
 			`chat-input${chatIdProp ? `-${chatIdProp}` : ''}`
 		);
@@ -813,6 +860,7 @@
 				pageSubscribe();
 				showControlsSubscribe();
 				selectedFolderSubscribe();
+				expertAgentStartSubscribe();
 				window.removeEventListener('message', onMessageHandler);
 				$socket?.off('events', chatEventHandler);
 				audioQueueInstance?.destroy();
