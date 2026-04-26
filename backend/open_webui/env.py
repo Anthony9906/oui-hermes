@@ -2,7 +2,6 @@ import importlib.metadata
 import json
 import logging
 import os
-import pkgutil
 import sys
 import shutil
 import traceback
@@ -184,7 +183,7 @@ try:
         changelog_content = file.read()
 
 except Exception:
-    changelog_content = (pkgutil.get_data('open_webui', 'CHANGELOG.md') or b'').decode()
+	changelog_content = ''
 
 # Convert markdown content to HTML
 html_content = markdown.markdown(changelog_content)
