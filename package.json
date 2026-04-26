@@ -6,7 +6,7 @@
 		"dev": "vite dev --host",
 		"dev:5050": "vite dev --port 5050",
 		"build": "vite build",
-		"build:watch": "npm run pyodide:fetch && vite build --watch",
+		"build:watch": "vite build --watch",
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
@@ -17,8 +17,7 @@
 		"format": "prettier --plugin-search-dir --write \"**/*.{js,ts,svelte,css,md,html,json}\"",
 		"format:backend": "ruff format . --exclude .venv --exclude venv",
 		"i18n:parse": "i18next --config i18next-parser.config.ts && prettier --write \"src/lib/i18n/**/*.{js,json}\"",
-		"test:frontend": "vitest --passWithNoTests",
-		"pyodide:fetch": "node scripts/prepare-pyodide.js"
+		"test:frontend": "vitest --passWithNoTests"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "3.2.2",

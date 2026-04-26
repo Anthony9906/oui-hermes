@@ -36,7 +36,7 @@ OUI Hermes 是基于 Open WebUI 裁剪的 Hermes Agent 对话 UI。当前项目�
 - Admin Functions 前端路由已删除。
 - RAG、Retrieval、Vector DB、Web Search、Image Generation、Code Execution 默认禁用。
 - 后端不再挂载 `retrieval`、`images`、`knowledge`、`prompts`、`tools`、`skills`、`memories`、`files`、`notes`、`channels`、`calendar` 等 router。
-- 前端 `dev` / `build` 不再自动执行 `pyodide:fetch`。
+- 前端 `dev` / `build` / `build:watch` 不再自动执行 `pyodide:fetch`，仓库不再保存预下载的 Pyodide 分发文件。
 
 ## 环境变量
 
