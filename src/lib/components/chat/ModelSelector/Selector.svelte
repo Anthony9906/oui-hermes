@@ -383,6 +383,11 @@
 	};
 
 	const setOllamaVersion = async () => {
+		if (!$config?.features?.enable_ollama_api) {
+			ollamaVersion = false;
+			return;
+		}
+
 		ollamaVersion = await getOllamaVersion(localStorage.token).catch((error) => false);
 	};
 

@@ -15,29 +15,12 @@ from typing import Optional
 from fastapi import Request
 
 from open_webui.models.users import UserModel
-from open_webui.routers.retrieval import search_web as _search_web
-from open_webui.retrieval.utils import get_content_from_url
-from open_webui.routers.images import (
-    image_generations,
-    image_edits,
-    CreateImageForm,
-    EditImageForm,
-)
-from open_webui.routers.memories import (
-    query_memory,
-    add_memory as _add_memory,
-    update_memory_by_id,
-    QueryMemoryForm,
-    AddMemoryForm,
-    MemoryUpdateModel,
-)
 from open_webui.models.notes import Notes
 from open_webui.models.chats import Chats
 from open_webui.models.channels import Channels, ChannelMember, Channel
 from open_webui.models.messages import Messages, Message
 from open_webui.models.groups import Groups
 from open_webui.models.memories import Memories
-from open_webui.retrieval.vector.async_client import ASYNC_VECTOR_DB_CLIENT
 from open_webui.utils.sanitize import sanitize_code
 
 log = logging.getLogger(__name__)
@@ -198,7 +181,12 @@ async def search_web(
     if __request__ is None:
         return json.dumps({'error': 'Request context not available'})
 
+    if not getattr(__request__.app.state.config, 'ENABLE_WEB_SEARCH', False):
+        return json.dumps({'error': 'Web search is disabled'})
+
     try:
+        from open_webui.routers.retrieval import search_web as _search_web
+
         engine = __request__.app.state.config.WEB_SEARCH_ENGINE
         user = UserModel(**__user__) if __user__ else None
 
@@ -234,7 +222,12 @@ async def fetch_url(
     if __request__ is None:
         return json.dumps({'error': 'Request context not available'})
 
+    if not getattr(__request__.app.state.config, 'ENABLE_WEB_SEARCH', False):
+        return json.dumps({'error': 'Web fetching is disabled'})
+
     try:
+        from open_webui.retrieval.utils import get_content_from_url
+
         content, _ = await asyncio.to_thread(get_content_from_url, __request__, url)
 
         # Truncate if configured (WEB_FETCH_MAX_CONTENT_LENGTH)
@@ -274,7 +267,12 @@ async def generate_image(
     if __request__ is None:
         return json.dumps({'error': 'Request context not available'})
 
+    if not getattr(__request__.app.state.config, 'ENABLE_IMAGE_GENERATION', False):
+        return json.dumps({'error': 'Image generation is disabled'})
+
     try:
+        from open_webui.routers.images import image_generations, CreateImageForm
+
         user = UserModel(**__user__) if __user__ else None
 
         images = await image_generations(
@@ -341,7 +339,12 @@ async def edit_image(
     if __request__ is None:
         return json.dumps({'error': 'Request context not available'})
 
+    if not getattr(__request__.app.state.config, 'ENABLE_IMAGE_GENERATION', False):
+        return json.dumps({'error': 'Image editing is disabled'})
+
     try:
+        from open_webui.routers.images import image_edits, EditImageForm
+
         user = UserModel(**__user__) if __user__ else None
 
         images = await image_edits(
@@ -577,7 +580,12 @@ async def search_memories(
     if __request__ is None:
         return json.dumps({'error': 'Request context not available'})
 
+    if not getattr(__request__.app.state.config, 'ENABLE_MEMORIES', False):
+        return json.dumps({'error': 'Memories are disabled'})
+
     try:
+        from open_webui.routers.memories import query_memory, QueryMemoryForm
+
         user = UserModel(**__user__) if __user__ else None
 
         results = await query_memory(
@@ -621,7 +629,12 @@ async def add_memory(
     if __request__ is None:
         return json.dumps({'error': 'Request context not available'})
 
+    if not getattr(__request__.app.state.config, 'ENABLE_MEMORIES', False):
+        return json.dumps({'error': 'Memories are disabled'})
+
     try:
+        from open_webui.routers.memories import add_memory as _add_memory, AddMemoryForm
+
         user = UserModel(**__user__) if __user__ else None
 
         memory = await _add_memory(
@@ -652,7 +665,12 @@ async def replace_memory_content(
     if __request__ is None:
         return json.dumps({'error': 'Request context not available'})
 
+    if not getattr(__request__.app.state.config, 'ENABLE_MEMORIES', False):
+        return json.dumps({'error': 'Memories are disabled'})
+
     try:
+        from open_webui.routers.memories import update_memory_by_id, MemoryUpdateModel
+
         user = UserModel(**__user__) if __user__ else None
 
         memory = await update_memory_by_id(
@@ -685,12 +703,17 @@ async def delete_memory(
     if __request__ is None:
         return json.dumps({'error': 'Request context not available'})
 
+    if not getattr(__request__.app.state.config, 'ENABLE_MEMORIES', False):
+        return json.dumps({'error': 'Memories are disabled'})
+
     try:
         user = UserModel(**__user__) if __user__ else None
 
         result = await Memories.delete_memory_by_id_and_user_id(memory_id, user.id)
 
         if result:
+            from open_webui.retrieval.vector.async_client import ASYNC_VECTOR_DB_CLIENT
+
             await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=f'user-memory-{user.id}', ids=[memory_id])
             return json.dumps(
                 {'status': 'success', 'message': f'Memory {memory_id} deleted'},

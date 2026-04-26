@@ -41,38 +41,16 @@ from open_webui.routers.tasks import (
     generate_image_prompt,
     generate_chat_tags,
 )
-from open_webui.routers.retrieval import (
-    process_web_search,
-    SearchForm,
-)
 from open_webui.utils.tools import get_builtin_tools
-from open_webui.routers.images import (
-    image_generations,
-    CreateImageForm,
-    image_edits,
-    EditImageForm,
-)
 from open_webui.routers.pipelines import (
     process_pipeline_inlet_filter,
     process_pipeline_outlet_filter,
 )
-from open_webui.routers.memories import query_memory, QueryMemoryForm
 
 from open_webui.utils.webhook import post_webhook
-from open_webui.utils.files import (
-    convert_markdown_base64_images,
-    get_file_url_from_base64,
-    get_image_base64_from_url,
-    get_image_url_from_base64,
-)
-
-
 from open_webui.models.users import UserModel
 from open_webui.models.functions import Functions
 from open_webui.models.models import Models
-
-from open_webui.retrieval.utils import get_sources_from_items
-
 
 from open_webui.utils.sanitize import sanitize_code
 from open_webui.utils.chat import generate_chat_completion
@@ -115,6 +93,50 @@ from open_webui.utils.code_interpreter import execute_code_jupyter
 from open_webui.utils.payload import apply_system_prompt_to_body
 from open_webui.utils.response import normalize_usage
 from open_webui.utils.mcp.client import MCPClient
+
+
+class _DisabledForm:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+
+SearchForm = CreateImageForm = EditImageForm = QueryMemoryForm = _DisabledForm
+
+
+async def process_web_search(*args, **kwargs):
+    raise RuntimeError('Web search is disabled')
+
+
+async def image_generations(*args, **kwargs):
+    raise RuntimeError('Image generation is disabled')
+
+
+async def image_edits(*args, **kwargs):
+    raise RuntimeError('Image editing is disabled')
+
+
+async def query_memory(*args, **kwargs):
+    raise RuntimeError('Memories are disabled')
+
+
+async def get_sources_from_items(*args, **kwargs):
+    return []
+
+
+async def convert_markdown_base64_images(*args, **kwargs):
+    return args[0] if args else ''
+
+
+async def get_file_url_from_base64(*args, **kwargs):
+    raise RuntimeError('File uploads are disabled')
+
+
+async def get_image_base64_from_url(*args, **kwargs):
+    raise RuntimeError('Image handling is disabled')
+
+
+async def get_image_url_from_base64(*args, **kwargs):
+    raise RuntimeError('Image handling is disabled')
 
 
 from open_webui.config import (

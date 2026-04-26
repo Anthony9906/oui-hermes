@@ -1043,7 +1043,7 @@ ENABLE_DIRECT_CONNECTIONS = PersistentConfig(
 ENABLE_OLLAMA_API = PersistentConfig(
     'ENABLE_OLLAMA_API',
     'ollama.enable',
-    os.environ.get('ENABLE_OLLAMA_API', 'True').lower() == 'true',
+    os.environ.get('ENABLE_OLLAMA_API', 'False').lower() == 'true',
 )
 
 OLLAMA_API_BASE_URL = os.environ.get('OLLAMA_API_BASE_URL', 'http://localhost:11434/api')
@@ -1127,8 +1127,11 @@ ENABLE_OPENAI_API = PersistentConfig(
 )
 
 
+HERMES_API_BASE_URL = os.environ.get('HERMES_API_BASE_URL', 'http://127.0.0.1:8642').rstrip('/')
+
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
-OPENAI_API_BASE_URL = os.environ.get('OPENAI_API_BASE_URL', '')
+HERMES_API_KEY = OPENAI_API_KEY
+OPENAI_API_BASE_URL = os.environ.get('OPENAI_API_BASE_URL', HERMES_API_BASE_URL)
 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 GEMINI_API_BASE_URL = os.environ.get('GEMINI_API_BASE_URL', '')
@@ -1166,7 +1169,9 @@ try:
     OPENAI_API_KEY = OPENAI_API_KEYS.value[OPENAI_API_BASE_URLS.value.index('https://api.openai.com/v1')]
 except Exception:
     pass
-OPENAI_API_BASE_URL = 'https://api.openai.com/v1'
+if not OPENAI_API_KEY:
+    OPENAI_API_KEY = HERMES_API_KEY
+OPENAI_API_BASE_URL = HERMES_API_BASE_URL
 
 
 ####################################
@@ -1479,11 +1484,11 @@ USER_PERMISSIONS_CHAT_SHARE = os.environ.get('USER_PERMISSIONS_CHAT_SHARE', 'Tru
 
 USER_PERMISSIONS_CHAT_EXPORT = os.environ.get('USER_PERMISSIONS_CHAT_EXPORT', 'True').lower() == 'true'
 
-USER_PERMISSIONS_CHAT_STT = os.environ.get('USER_PERMISSIONS_CHAT_STT', 'True').lower() == 'true'
+USER_PERMISSIONS_CHAT_STT = os.environ.get('USER_PERMISSIONS_CHAT_STT', 'False').lower() == 'true'
 
-USER_PERMISSIONS_CHAT_TTS = os.environ.get('USER_PERMISSIONS_CHAT_TTS', 'True').lower() == 'true'
+USER_PERMISSIONS_CHAT_TTS = os.environ.get('USER_PERMISSIONS_CHAT_TTS', 'False').lower() == 'true'
 
-USER_PERMISSIONS_CHAT_CALL = os.environ.get('USER_PERMISSIONS_CHAT_CALL', 'True').lower() == 'true'
+USER_PERMISSIONS_CHAT_CALL = os.environ.get('USER_PERMISSIONS_CHAT_CALL', 'False').lower() == 'true'
 
 USER_PERMISSIONS_CHAT_MULTIPLE_MODELS = (
     os.environ.get('USER_PERMISSIONS_CHAT_MULTIPLE_MODELS', 'True').lower() == 'true'
@@ -1500,21 +1505,21 @@ USER_PERMISSIONS_FEATURES_DIRECT_TOOL_SERVERS = (
     os.environ.get('USER_PERMISSIONS_FEATURES_DIRECT_TOOL_SERVERS', 'False').lower() == 'true'
 )
 
-USER_PERMISSIONS_FEATURES_WEB_SEARCH = os.environ.get('USER_PERMISSIONS_FEATURES_WEB_SEARCH', 'True').lower() == 'true'
+USER_PERMISSIONS_FEATURES_WEB_SEARCH = os.environ.get('USER_PERMISSIONS_FEATURES_WEB_SEARCH', 'False').lower() == 'true'
 
 USER_PERMISSIONS_FEATURES_IMAGE_GENERATION = (
-    os.environ.get('USER_PERMISSIONS_FEATURES_IMAGE_GENERATION', 'True').lower() == 'true'
+    os.environ.get('USER_PERMISSIONS_FEATURES_IMAGE_GENERATION', 'False').lower() == 'true'
 )
 
 USER_PERMISSIONS_FEATURES_CODE_INTERPRETER = (
-    os.environ.get('USER_PERMISSIONS_FEATURES_CODE_INTERPRETER', 'True').lower() == 'true'
+    os.environ.get('USER_PERMISSIONS_FEATURES_CODE_INTERPRETER', 'False').lower() == 'true'
 )
 
 USER_PERMISSIONS_FEATURES_FOLDERS = os.environ.get('USER_PERMISSIONS_FEATURES_FOLDERS', 'True').lower() == 'true'
 
-USER_PERMISSIONS_FEATURES_NOTES = os.environ.get('USER_PERMISSIONS_FEATURES_NOTES', 'True').lower() == 'true'
+USER_PERMISSIONS_FEATURES_NOTES = os.environ.get('USER_PERMISSIONS_FEATURES_NOTES', 'False').lower() == 'true'
 
-USER_PERMISSIONS_FEATURES_CHANNELS = os.environ.get('USER_PERMISSIONS_FEATURES_CHANNELS', 'True').lower() == 'true'
+USER_PERMISSIONS_FEATURES_CHANNELS = os.environ.get('USER_PERMISSIONS_FEATURES_CHANNELS', 'False').lower() == 'true'
 
 USER_PERMISSIONS_FEATURES_API_KEYS = os.environ.get('USER_PERMISSIONS_FEATURES_API_KEYS', 'False').lower() == 'true'
 
@@ -1524,7 +1529,7 @@ USER_PERMISSIONS_FEATURES_AUTOMATIONS = (
     os.environ.get('USER_PERMISSIONS_FEATURES_AUTOMATIONS', 'False').lower() == 'true'
 )
 
-USER_PERMISSIONS_FEATURES_CALENDAR = os.environ.get('USER_PERMISSIONS_FEATURES_CALENDAR', 'True').lower() == 'true'
+USER_PERMISSIONS_FEATURES_CALENDAR = os.environ.get('USER_PERMISSIONS_FEATURES_CALENDAR', 'False').lower() == 'true'
 
 
 USER_PERMISSIONS_SETTINGS_INTERFACE = os.environ.get('USER_PERMISSIONS_SETTINGS_INTERFACE', 'True').lower() == 'true'
@@ -1630,7 +1635,7 @@ ENABLE_CHANNELS = PersistentConfig(
 ENABLE_CALENDAR = PersistentConfig(
     'ENABLE_CALENDAR',
     'calendar.enable',
-    os.environ.get('ENABLE_CALENDAR', 'True').lower() == 'true',
+    os.environ.get('ENABLE_CALENDAR', 'False').lower() == 'true',
 )
 
 ENABLE_AUTOMATIONS = PersistentConfig(
@@ -1654,7 +1659,7 @@ AUTOMATION_MIN_INTERVAL = PersistentConfig(
 ENABLE_NOTES = PersistentConfig(
     'ENABLE_NOTES',
     'notes.enable',
-    os.environ.get('ENABLE_NOTES', 'True').lower() == 'true',
+    os.environ.get('ENABLE_NOTES', 'False').lower() == 'true',
 )
 
 ENABLE_USER_STATUS = PersistentConfig(
@@ -2125,7 +2130,7 @@ Responses from models: {{responses}}"""
 ENABLE_CODE_EXECUTION = PersistentConfig(
     'ENABLE_CODE_EXECUTION',
     'code_execution.enable',
-    os.environ.get('ENABLE_CODE_EXECUTION', 'True').lower() == 'true',
+    os.environ.get('ENABLE_CODE_EXECUTION', 'False').lower() == 'true',
 )
 
 CODE_EXECUTION_ENGINE = PersistentConfig(
@@ -2168,7 +2173,7 @@ CODE_EXECUTION_JUPYTER_TIMEOUT = PersistentConfig(
 ENABLE_CODE_INTERPRETER = PersistentConfig(
     'ENABLE_CODE_INTERPRETER',
     'code_interpreter.enable',
-    os.environ.get('ENABLE_CODE_INTERPRETER', 'True').lower() == 'true',
+    os.environ.get('ENABLE_CODE_INTERPRETER', 'False').lower() == 'true',
 )
 
 ENABLE_MEMORIES = PersistentConfig(
@@ -2275,7 +2280,7 @@ CODE_INTERPRETER_PYODIDE_PROMPT = """
 # Vector Database
 ####################################
 
-VECTOR_DB = os.environ.get('VECTOR_DB', 'chroma')
+VECTOR_DB = os.environ.get('VECTOR_DB', 'none')
 
 # Chroma
 CHROMA_DATA_PATH = f'{DATA_DIR}/vector_db'

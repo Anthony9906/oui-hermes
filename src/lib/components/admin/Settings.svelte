@@ -10,16 +10,11 @@
 
 	import General from './Settings/General.svelte';
 	import Pipelines from './Settings/Pipelines.svelte';
-	import Audio from './Settings/Audio.svelte';
-	import Images from './Settings/Images.svelte';
 	import Interface from './Settings/Interface.svelte';
 	import Models from './Settings/Models.svelte';
 	import Connections from './Settings/Connections.svelte';
-	import Documents from './Settings/Documents.svelte';
-	import WebSearch from './Settings/WebSearch.svelte';
 
 	import Evaluations from './Settings/Evaluations.svelte';
-	import CodeExecution from './Settings/CodeExecution.svelte';
 	import Integrations from './Settings/Integrations.svelte';
 
 	import ChartBar from '../icons/ChartBar.svelte';
@@ -41,12 +36,7 @@
 			'models',
 			'evaluations',
 			'integrations',
-			'documents',
-			'web',
-			'code-execution',
 			'interface',
-			'audio',
-			'images',
 			'pipelines',
 			'db'
 		].includes(tabFromPath)
@@ -69,6 +59,17 @@
 	let search = '';
 	let searchDebounceTimeout;
 	let filteredSettings = [];
+
+	const enabledSettingTabs = [
+		'general',
+		'connections',
+		'models',
+		'evaluations',
+		'integrations',
+		'interface',
+		'pipelines',
+		'db'
+	];
 
 	const allSettings = [
 		{
@@ -244,7 +245,7 @@
 			route: '/admin/settings/db',
 			keywords: ['database', 'export', 'import', 'backup', 'chats', 'users']
 		}
-	];
+	].filter((tab) => enabledSettingTabs.includes(tab.id));
 
 	const setFilteredSettings = () => {
 		filteredSettings = allSettings.filter((tab) => {
@@ -527,47 +528,8 @@
 			<Evaluations />
 		{:else if selectedTab === 'integrations'}
 			<Integrations />
-		{:else if selectedTab === 'documents'}
-			<Documents
-				on:save={async () => {
-					toast.success($i18n.t('Settings saved successfully!'));
-
-					await tick();
-					await config.set(await getBackendConfig());
-				}}
-			/>
-		{:else if selectedTab === 'web'}
-			<WebSearch
-				saveHandler={async () => {
-					toast.success($i18n.t('Settings saved successfully!'));
-
-					await tick();
-					await config.set(await getBackendConfig());
-				}}
-			/>
-		{:else if selectedTab === 'code-execution'}
-			<CodeExecution
-				saveHandler={async () => {
-					toast.success($i18n.t('Settings saved successfully!'));
-
-					await tick();
-					await config.set(await getBackendConfig());
-				}}
-			/>
 		{:else if selectedTab === 'interface'}
 			<Interface
-				on:save={() => {
-					toast.success($i18n.t('Settings saved successfully!'));
-				}}
-			/>
-		{:else if selectedTab === 'audio'}
-			<Audio
-				saveHandler={() => {
-					toast.success($i18n.t('Settings saved successfully!'));
-				}}
-			/>
-		{:else if selectedTab === 'images'}
-			<Images
 				on:save={() => {
 					toast.success($i18n.t('Settings saved successfully!'));
 				}}

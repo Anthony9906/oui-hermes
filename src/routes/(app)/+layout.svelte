@@ -10,7 +10,6 @@
 	import { fade } from 'svelte/transition';
 
 	import { getModels, getToolServersData, getVersionUpdates } from '$lib/apis';
-	import { getTools } from '$lib/apis/tools';
 	import { getBanners } from '$lib/apis/configs';
 	import { getTerminalServers } from '$lib/apis/terminal';
 	import { getUserSettings } from '$lib/apis/users';
@@ -23,9 +22,6 @@
 		user,
 		settings,
 		models,
-		knowledge,
-		tools,
-		functions,
 		tags,
 		banners,
 		showSettings,
@@ -187,11 +183,6 @@
 		banners.set(bannersData);
 	};
 
-	const setTools = async () => {
-		const toolsData = await getTools(localStorage.token);
-		tools.set(toolsData);
-	};
-
 	onMount(async () => {
 		if ($user === undefined || $user === null) {
 			await goto('/auth');
@@ -205,7 +196,6 @@
 		await Promise.all([
 			checkLocalDBChats(),
 			setBanners().catch((e) => console.error('Failed to load banners:', e)),
-			setTools().catch((e) => console.error('Failed to load tools:', e)),
 			setUserSettings(async () => {
 				await Promise.all([
 					setModels().catch((e) => console.error('Failed to load models:', e)),
