@@ -5,6 +5,7 @@ import sys
 import os
 import base64
 import textwrap
+import mimetypes
 
 import asyncio
 from aiocache import cached
@@ -2026,6 +2027,45 @@ def get_images_from_messages(message_list):
     return images
 
 
+async def get_model_image_url_from_file(file: dict, request: Request) -> str:
+    url = file.get('url') or ''
+    if url.startswith(('http://', 'https://', 'data:image/')):
+        return url
+
+    file_id = url
+    match = re.search(r'/api/v1/files/([^/]+)/content', url)
+    if match:
+        file_id = match.group(1)
+
+    try:
+        from pathlib import Path
+
+        from open_webui.models.files import Files
+        from open_webui.storage.provider import Storage
+
+        file_item = await Files.get_file_by_id(file_id)
+        if file_item:
+            file_path = Path(await asyncio.to_thread(Storage.get_file, file_item.path))
+            if file_path.is_file():
+                with open(file_path, 'rb') as image_file:
+                    encoded = base64.b64encode(image_file.read()).decode('utf-8')
+
+                content_type = (
+                    file.get('content_type')
+                    or (file_item.meta or {}).get('content_type')
+                    or mimetypes.guess_type(file_path.name)[0]
+                    or 'image/png'
+                )
+                return f'data:{content_type};base64,{encoded}'
+    except Exception as e:
+        log.debug(f'Failed to convert image file to data URL: {e}')
+
+    base_url = str(request.app.state.config.WEBUI_URL or request.base_url).rstrip('/')
+    if url.startswith('/'):
+        return f'{base_url}{url}'
+    return f'{base_url}/api/v1/files/{file_id}/content'
+
+
 async def get_image_urls(delta_images, request, metadata, user) -> list[str]:
     if not isinstance(delta_images, list):
         return []
@@ -2628,16 +2668,20 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 if message.get('role') == 'user' and image_files:
                     text_content = message.get('content', '')
                     if isinstance(text_content, str):
+                        image_parts = []
+                        for file in image_files:
+                            image_url = await get_model_image_url_from_file(file, request)
+                            if image_url:
+                                image_parts.append(
+                                    {
+                                        'type': 'image_url',
+                                        'image_url': {'url': image_url},
+                                    }
+                                )
+
                         message['content'] = [
                             {'type': 'text', 'text': text_content},
-                            *[
-                                {
-                                    'type': 'image_url',
-                                    'image_url': {'url': f['url']},
-                                }
-                                for f in image_files
-                                if f.get('url')
-                            ],
+                            *image_parts,
                         ]
                 # Strip files field — it's been incorporated into content
                 message.pop('files', None)

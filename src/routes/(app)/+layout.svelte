@@ -38,18 +38,12 @@
 	} from '$lib/stores';
 
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
-	import ExpertAgentDrawer from '$lib/components/expert-agents/ExpertAgentDrawer.svelte';
 	import SettingsModal from '$lib/components/chat/SettingsModal.svelte';
 	import ChangelogModal from '$lib/components/ChangelogModal.svelte';
 	import AccountPending from '$lib/components/layout/Overlay/AccountPending.svelte';
 	import UpdateInfoToast from '$lib/components/layout/UpdateInfoToast.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import { Shortcut, shortcuts } from '$lib/shortcuts';
-	import {
-		closeExpertAgentDrawer,
-		requestStartExpertSkillChat,
-		showExpertAgentDrawer
-	} from '$lib/stores/expertAgents';
 
 	const i18n = getContext('i18n');
 
@@ -451,16 +445,6 @@
 				{/if}
 
 				<Sidebar />
-				<ExpertAgentDrawer
-					bind:show={$showExpertAgentDrawer}
-					on:start={async (event) => {
-						closeExpertAgentDrawer();
-						await goto('/');
-						await tick();
-						requestStartExpertSkillChat(event.detail);
-					}}
-				/>
-
 				{#if loaded}
 					<slot />
 				{:else}

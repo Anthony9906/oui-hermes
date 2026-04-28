@@ -95,6 +95,7 @@
 	import { getFunctions } from '$lib/apis/functions';
 	import { updateFolderById } from '$lib/apis/folders';
 	import {
+		buildExpertSkillPrompt,
 		clearExpertAgentStartRequest,
 		expertAgentStartRequest,
 		type ExpertAgentStartRequest
@@ -128,6 +129,44 @@
 	let autoScroll = true;
 	let processing = '';
 	let messagesContainerElement: HTMLDivElement;
+	let activeExpertSkillName = '';
+
+	const buildChatMeta = (meta = chat?.chat?.meta ?? {}) => {
+		const nextMeta = { ...(meta ?? {}) };
+
+		if (activeExpertSkillName) {
+			nextMeta.expert_skill_name = activeExpertSkillName;
+		} else {
+			delete nextMeta.expert_skill_name;
+		}
+
+		return nextMeta;
+	};
+
+	const getExpertSkillNameFromChatContent = (chatContent) => {
+		const messages = [
+			...Object.values(chatContent?.history?.messages ?? {}),
+			...(Array.isArray(chatContent?.messages) ? chatContent.messages : [])
+		];
+
+		for (const message of messages) {
+			const content = typeof message?.content === 'string' ? message.content : '';
+
+			const templateMatch = content.match(
+				/当前对话启用专家技能：\s+(?:\*\*)?(.+?)(?:\*\*)?(?:\n|$)/
+			);
+			if (templateMatch?.[1]) {
+				return templateMatch[1];
+			}
+
+			const legacyMatch = content.match(/现在开始使用专家技能\s+(.+?)\s+来完成/);
+			if (legacyMatch?.[1]) {
+				return legacyMatch[1];
+			}
+		}
+
+		return '';
+	};
 
 	let navbarElement;
 
@@ -706,6 +745,27 @@
 		for (let i = 0; i < 50; i++) {
 			await tick();
 
+			const availableModels = $models
+				.filter((m) => !(m?.info?.meta?.hidden ?? false))
+				.map((m) => m.id);
+
+			const selectedAvailableModels = selectedModels.filter((modelId) =>
+				availableModels.includes(modelId)
+			);
+
+			if (selectedAvailableModels.length > 0 && !equal(selectedModels, selectedAvailableModels)) {
+				selectedModels = selectedAvailableModels;
+			}
+
+			if (
+				availableModels.length > 0 &&
+				(selectedModels.length === 0 || selectedModels.every((modelId) => !modelId))
+			) {
+				selectedModels = [
+					availableModels.includes('expertagent') ? 'expertagent' : availableModels[0]
+				];
+			}
+
 			if (!loading && selectedModels.some((modelId) => modelId)) {
 				return true;
 			}
@@ -731,6 +791,7 @@
 			}
 
 			clearExpertAgentStartRequest();
+			activeExpertSkillName = request.skill_name;
 			await submitHandler(request.prompt);
 		} finally {
 			processingExpertAgentStart = false;
@@ -762,7 +823,7 @@
 		const pageSubscribe = page.subscribe(async (p) => {
 			if (p.url.pathname === '/') {
 				await tick();
-				initNewChat();
+				await initNewChat();
 
 				// Re-fetch banners on navigation to homepage so newly configured banners appear
 				try {
@@ -1125,6 +1186,8 @@
 
 	const initNewChat = async () => {
 		console.log('initNewChat');
+		activeExpertSkillName = '';
+
 		if ($user?.role !== 'admin' && $user?.permissions?.chat?.temporary_enforced) {
 			await temporaryChatEnabled.set(true);
 		}
@@ -1339,6 +1402,15 @@
 					submitHandler(query || '');
 				}
 			}
+		} else if ($page.url.searchParams.get('expert-agent')) {
+			const skillName = $page.url.searchParams.get('expert-agent') ?? '';
+			if (skillName) {
+				await startExpertAgentChat({
+					skill_name: skillName,
+					prompt: buildExpertSkillPrompt(skillName),
+					nonce: $page.url.searchParams.get('expert-agent-start') ?? uuidv4()
+				});
+			}
 		} else if ($page.url.searchParams.get('q')) {
 			const q = $page.url.searchParams.get('q') ?? '';
 			messageInput?.setText(q);
@@ -1389,6 +1461,11 @@
 				if (!($user?.role === 'admin' || ($user?.permissions?.chat?.multiple_models ?? true))) {
 					selectedModels = selectedModels.length > 0 ? [selectedModels[0]] : [''];
 				}
+
+				activeExpertSkillName =
+					chatContent?.meta?.expert_skill_name ??
+					chat?.meta?.expert_skill_name ??
+					getExpertSkillNameFromChatContent(chatContent);
 
 				oldSelectedModelIds = structuredClone(selectedModels);
 
@@ -1548,7 +1625,8 @@
 					messages: messages,
 					history: history,
 					params: params,
-					files: chatFiles
+					files: chatFiles,
+					meta: buildChatMeta()
 				});
 
 				currentChatPage.set(1);
@@ -2723,6 +2801,7 @@
 					params: params,
 					history: history,
 					messages: createMessagesList(history, history.currentId),
+					meta: buildChatMeta(),
 					tags: [],
 					timestamp: Date.now()
 				},
@@ -2757,7 +2836,8 @@
 					history: history,
 					messages: createMessagesList(history, history.currentId),
 					params: params,
-					files: chatFiles
+					files: chatFiles,
+					meta: buildChatMeta()
 				});
 			}
 		}
@@ -2928,6 +3008,7 @@
 										params: params,
 										history: history,
 										messages: messages,
+										meta: buildChatMeta(),
 										timestamp: Date.now()
 									},
 									null
@@ -2948,7 +3029,23 @@
 						}}
 					/>
 
-					<div id="chat-pane" class="flex flex-col flex-auto z-10 w-full @container overflow-auto">
+					<div
+						id="chat-pane"
+						class="relative flex flex-col flex-auto z-10 w-full @container overflow-auto"
+					>
+						{#if activeExpertSkillName}
+							<div
+								class="pointer-events-none absolute inset-x-0 top-3 z-30 flex justify-center px-4"
+							>
+								<div
+									class="inline-flex max-w-full items-center gap-1.5 rounded-[20px] bg-[#69a259] px-3.5 py-1.5 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(31,41,55,0.22)]"
+								>
+									<span aria-hidden="true">🧩</span>
+									<span class="truncate">专家模式：{activeExpertSkillName}</span>
+								</div>
+							</div>
+						{/if}
+
 						{#if ($settings?.landingPageMode === 'chat' && !$selectedFolder) || createMessagesList(history, history.currentId).length > 0}
 							<div
 								class=" pb-2.5 flex flex-col justify-between w-full flex-auto overflow-auto h-0 max-w-full z-10 scrollbar-hidden"

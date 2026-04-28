@@ -1,8 +1,9 @@
 <script context="module" lang="ts">
-	let savedTab: 'controls' | 'files' | 'overview' = 'controls';
+	let savedTab: 'controls' | 'files' | 'overview' | 'expertAgents' = 'controls';
 </script>
 
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { SvelteFlowProvider } from '@xyflow/svelte';
 	import { slide } from 'svelte/transition';
 	import { Pane, PaneResizer } from 'paneforge';
@@ -24,6 +25,7 @@
 	} from '$lib/stores';
 
 	import { uploadFile } from '$lib/apis/files';
+	import type { ExpertSkillCard } from '$lib/apis/expert-agents';
 	import { toast } from 'svelte-sonner';
 
 	import Controls from './Controls/Controls.svelte';
@@ -34,6 +36,8 @@
 	import FileNav from './FileNav.svelte';
 	import PyodideFileNav from './PyodideFileNav.svelte';
 	import Overview from './Overview.svelte';
+	import ExpertAgentDrawer from '$lib/components/expert-agents/ExpertAgentDrawer.svelte';
+	import { closeExpertAgentDrawer, showExpertAgentDrawer } from '$lib/stores/expertAgents';
 
 	const i18n = getContext('i18n');
 
@@ -78,18 +82,26 @@
 				($user?.permissions?.features?.direct_tool_servers ?? true))) ||
 		(codeInterpreterEnabled && $config?.code?.interpreter_engine !== 'jupyter');
 	$: showOverviewTab = hasMessages;
+	$: showExpertAgentTab = $showExpertAgentDrawer;
 
 	// Tab fallback: if active tab becomes hidden, switch to next available
 	$: if (!showOverviewTab && activeTab === 'overview') activeTab = 'controls';
 	$: if (!showFilesTab && activeTab === 'files') activeTab = 'controls';
+	$: if (!showExpertAgentTab && activeTab === 'expertAgents') activeTab = 'controls';
 	$: if (!showControlsTab && activeTab === 'controls') {
 		if (showFilesTab) activeTab = 'files';
 		else if (showOverviewTab) activeTab = 'overview';
+		else if (showExpertAgentTab) activeTab = 'expertAgents';
 	}
 
 	// Auto-close if there are no visible tabs
-	$: if (!showControlsTab && !showFilesTab && !showOverviewTab) {
-		showControls.set(false);
+	$: if (!showControlsTab && !showFilesTab && !showOverviewTab && !showExpertAgentTab) {
+		closePanel();
+	}
+
+	$: if ($showExpertAgentDrawer) {
+		activeTab = 'expertAgents';
+		showControls.set(true);
 	}
 
 	// Auto-switch to Files tab when display_file is triggered
@@ -195,6 +207,22 @@
 		dragged = false;
 	};
 
+	function closePanel() {
+		showControls.set(false);
+		closeExpertAgentDrawer();
+	}
+
+	async function startExpertAgentChat(skill: ExpertSkillCard) {
+		const searchParams = new URLSearchParams({
+			'expert-agent': skill.skill_name,
+			'expert-agent-start': uuidv4()
+		});
+
+		await goto(`/?${searchParams.toString()}`);
+		await tick();
+		closePanel();
+	}
+
 	onMount(() => {
 		const mediaQuery = window.matchMedia('(min-width: 1024px)');
 		mediaQuery.addEventListener('change', handleMediaQuery);
@@ -250,7 +278,7 @@
 			paneReady = false;
 			resizeObserver?.disconnect();
 			if (!largeScreen) {
-				showControls.set(false);
+				closePanel();
 			}
 			mediaQuery.removeEventListener('change', handleMediaQuery);
 			document.removeEventListener('mousedown', onMouseDown);
@@ -260,10 +288,11 @@
 
 	const closeHandler = () => {
 		if (!largeScreen) {
-			showControls.set(false);
+			closePanel();
 		}
 		showArtifacts.set(false);
 		showEmbeds.set(false);
+		closeExpertAgentDrawer();
 		if ($showCallOverlay) showCallOverlay.set(false);
 	};
 
@@ -277,7 +306,7 @@
 	{#if $showControls}
 		<Drawer
 			show={$showControls}
-			onClose={() => showControls.set(false)}
+			onClose={closePanel}
 			className="min-h-[100dvh] !bg-white dark:!bg-gray-850"
 		>
 			<div class="h-[100dvh] flex flex-col">
@@ -292,7 +321,7 @@
 							{modelId}
 							{chatId}
 							{eventTarget}
-							on:close={() => showControls.set(false)}
+							on:close={closePanel}
 						/>
 					</div>
 				{:else if $showEmbeds}
@@ -338,10 +367,21 @@
 										{$i18n.t('Overview')}
 									</button>
 								{/if}
+								{#if showExpertAgentTab}
+									<button
+										class="px-2.5 py-1 text-sm rounded-lg transition whitespace-nowrap {activeTab ===
+										'expertAgents'
+											? 'bg-gray-100 dark:bg-gray-800 font-medium text-gray-900 dark:text-white'
+											: 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}"
+										on:click={() => (activeTab = 'expertAgents')}
+									>
+										Expert Agent
+									</button>
+								{/if}
 							</div>
 							<button
 								class="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition text-gray-500 dark:text-gray-400"
-								on:click={() => showControls.set(false)}
+								on:click={closePanel}
 								aria-label={$i18n.t('Close')}
 							>
 								<svg
@@ -360,9 +400,11 @@
 						<div
 							class="flex-1 min-h-0 {activeTab === 'overview'
 								? 'h-full'
-								: activeTab === 'controls'
-									? 'overflow-y-auto px-3 pt-1'
-									: ''}"
+								: activeTab === 'expertAgents'
+									? 'h-full'
+									: activeTab === 'controls'
+										? 'overflow-y-auto px-3 pt-1'
+										: ''}"
 						>
 							{#if activeTab === 'overview'}
 								<Overview
@@ -372,6 +414,14 @@
 										showMessage(node.data.message, true);
 									}}
 									onClose={() => showControls.set(false)}
+								/>
+							{:else if activeTab === 'expertAgents'}
+								<ExpertAgentDrawer
+									show={$showExpertAgentDrawer}
+									on:start={(event) => {
+										void startExpertAgentChat(event.detail);
+									}}
+									on:close={closePanel}
 								/>
 							{:else if activeTab === 'files' && $selectedTerminalId}
 								<FileNav onAttach={handleTerminalAttach} {chatId} />
@@ -413,7 +463,7 @@
 			}
 		}}
 		onCollapse={() => {
-			if (paneReady) showControls.set(false);
+			if (paneReady) closePanel();
 		}}
 		collapsible={true}
 		class="z-10 bg-white dark:bg-gray-850"
@@ -438,7 +488,7 @@
 								{modelId}
 								{chatId}
 								{eventTarget}
-								on:close={() => showControls.set(false)}
+								on:close={closePanel}
 							/>
 						</div>
 					{:else if $showEmbeds}
@@ -484,10 +534,21 @@
 											{$i18n.t('Overview')}
 										</button>
 									{/if}
+									{#if showExpertAgentTab}
+										<button
+											class="px-2.5 py-1 text-sm rounded-lg transition whitespace-nowrap {activeTab ===
+											'expertAgents'
+												? 'bg-gray-100 dark:bg-gray-800 font-medium text-gray-900 dark:text-white'
+												: 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}"
+											on:click={() => (activeTab = 'expertAgents')}
+										>
+											Expert Agent
+										</button>
+									{/if}
 								</div>
 								<button
 									class="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition text-gray-500 dark:text-gray-400"
-									on:click={() => showControls.set(false)}
+									on:click={closePanel}
 									aria-label={$i18n.t('Close')}
 								>
 									<svg
@@ -506,9 +567,11 @@
 							<div
 								class="flex-1 min-h-0 {activeTab === 'overview'
 									? 'h-full'
-									: activeTab === 'controls'
-										? 'overflow-y-auto px-3 pt-1'
-										: ''}"
+									: activeTab === 'expertAgents'
+										? 'h-full'
+										: activeTab === 'controls'
+											? 'overflow-y-auto px-3 pt-1'
+											: ''}"
 							>
 								{#if activeTab === 'overview'}
 									<Overview
@@ -523,6 +586,14 @@
 											showMessage(node.data.message, true);
 										}}
 										onClose={() => showControls.set(false)}
+									/>
+								{:else if activeTab === 'expertAgents'}
+									<ExpertAgentDrawer
+										show={$showExpertAgentDrawer}
+										on:start={(event) => {
+											void startExpertAgentChat(event.detail);
+										}}
+										on:close={closePanel}
 									/>
 								{:else if activeTab === 'files' && $selectedTerminalId}
 									<FileNav onAttach={handleTerminalAttach} overlay={dragged} {chatId} />

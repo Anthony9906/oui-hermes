@@ -29,7 +29,8 @@
 		selectedFolder,
 		WEBUI_NAME,
 		sidebarWidth,
-		activeChatIds
+		activeChatIds,
+		showControls
 	} from '$lib/stores';
 	import { onMount, getContext, tick, onDestroy } from 'svelte';
 
@@ -666,6 +667,7 @@
 		event.stopImmediatePropagation();
 		event.preventDefault();
 
+		showControls.set(true);
 		toggleExpertAgentDrawer();
 
 		if ($mobile) {

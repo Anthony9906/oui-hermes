@@ -86,7 +86,9 @@ from open_webui.routers import (
     folders,
     configs,
     groups,
+    files,
     functions,
+    tools,
     models,
     evaluations,
     expert_agents,
@@ -1356,7 +1358,9 @@ app.include_router(expert_agents.router, prefix='/api/v1/expert-agents', tags=['
 
 app.include_router(folders.router, prefix='/api/v1/folders', tags=['folders'])
 app.include_router(groups.router, prefix='/api/v1/groups', tags=['groups'])
+app.include_router(files.router, prefix='/api/v1/files', tags=['files'])
 app.include_router(functions.router, prefix='/api/v1/functions', tags=['functions'])
+app.include_router(tools.router, prefix='/api/v1/tools', tags=['tools'])
 app.include_router(evaluations.router, prefix='/api/v1/evaluations', tags=['evaluations'])
 if ENABLE_ADMIN_ANALYTICS:
     app.include_router(analytics.router, prefix='/api/v1/analytics', tags=['analytics'])

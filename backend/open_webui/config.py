@@ -1264,31 +1264,28 @@ except Exception as e:
 if default_prompt_suggestions == []:
     default_prompt_suggestions = [
         {
-            'title': ['Help me study', 'vocabulary for a college entrance exam'],
-            'content': "Help me study vocabulary: write a sentence for me to fill in the blank, and I'll try to pick the correct option.",
+            'title': ['整理会议纪要', '提炼结论、待办与责任人'],
+            'content': '请将下面的会议记录整理成结构化纪要，包括：会议主题、核心结论、待办事项、负责人、截止时间、风险与待确认问题。请用简洁清晰的中文输出。',
         },
         {
-            'title': ['Give me ideas', "for what to do with my kids' art"],
-            'content': "What are 5 creative things I could do with my kids' art? I don't want to throw them away, but it's also so much clutter.",
+            'title': ['起草工作邮件', '写一封专业可发送的邮件'],
+            'content': '请根据我提供的背景信息，帮我起草一封专业、清晰、语气得体、可直接发送的工作邮件。请先确认收件人、目的、关键信息和期望动作；如果信息不足，请列出需要我补充的内容。',
         },
         {
-            'title': ['Tell me a fun fact', 'about the Roman Empire'],
-            'content': 'Tell me a random fun fact about the Roman Empire',
+            'title': ['分析表格数据', '找出趋势、异常和建议'],
+            'content': '请根据我提供的表格或数据内容，分析其中的关键趋势、异常点、可能原因和下一步行动建议。请优先输出可执行结论，而不是只描述数据。',
         },
         {
-            'title': ['Show me a code snippet', "of a website's sticky header"],
-            'content': "Show me a code snippet of a website's sticky header in CSS and JavaScript.",
+            'title': ['梳理设计需求', '整理功能、工况与约束'],
+            'content': '请将下面的非标工程设计需求整理成结构化需求文档，包括：设备/机构目标、使用场景、输入输出、工况参数、空间限制、精度要求、节拍要求、安全要求、成本约束和待确认问题。',
         },
         {
-            'title': [
-                'Explain options trading',
-                "if I'm familiar with buying and selling stocks",
-            ],
-            'content': "Explain options trading in simple terms if I'm familiar with buying and selling stocks.",
+            'title': ['生成设计方案', '形成可落地的工程思路'],
+            'content': '请基于我提供的工况、约束和目标，生成一个可落地的非标工程设计方案。请包括：总体结构思路、关键机构选择、传动/执行方案、材料与加工建议、装配维护考虑、主要风险和需要进一步验证的参数。',
         },
         {
-            'title': ['Overcome procrastination', 'give me tips'],
-            'content': 'Could you start by asking me about instances when I procrastinate the most and then give me some suggestions to overcome it?',
+            'title': ['推荐标准件选型', '匹配气缸、模组等标准件'],
+            'content': '请根据我提供的应用场景、负载、行程、速度、安装空间、精度、环境和成本要求，推荐合适的标准件选型方案。请优先考虑常见标准件，如气缸、直线模组、KK模组、导轨、丝杆、电机、轴承等，并说明选型依据、关键参数、风险和需要补充确认的信息。',
         },
     ]
 
