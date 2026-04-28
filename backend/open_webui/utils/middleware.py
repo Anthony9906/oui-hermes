@@ -429,6 +429,324 @@ _OPENAI_TOOL_DISPLAY_NAMES = {
     'computer_call': 'Computer Use',
 }
 
+_HERMES_TOOL_EVENT_TYPES = {
+    'hermes.tool.progress',
+    'tool',
+    'tool_call',
+    'tool_start',
+    'tool_use',
+    'tool_result',
+    'tool_complete',
+    'tool_done',
+}
+
+_HERMES_GENERIC_TOOL_NAMES = _HERMES_TOOL_EVENT_TYPES | {
+    'tool',
+    'tools',
+    'function',
+    'function_call',
+    'call',
+}
+_HERMES_TOOL_NAME_KEYS = [
+    'tool_name',
+    'function_name',
+    'skill_name',
+    'command_name',
+    'server_name',
+    'tool',
+    'name',
+]
+_HERMES_TOOL_ARGUMENT_KEYS = [
+    'arguments',
+    'args',
+    'parameters',
+    'params',
+    'input',
+    'tool_input',
+]
+_HERMES_TOOL_RESULT_KEYS = [
+    'result',
+    'output',
+    'content',
+    'text',
+    'response',
+    'observation',
+    'stdout',
+    'stderr',
+    'error',
+]
+_HERMES_TOOL_PREVIEW_KEYS = [
+    'label',
+    'emoji',
+    'command',
+    'cmd',
+    'query',
+    'pattern',
+    'path',
+    'cwd',
+    'working_directory',
+    'file',
+    'filename',
+    'url',
+    'description',
+    'summary',
+]
+
+
+def _compact_json(value) -> str:
+    if value is None:
+        return ''
+    if isinstance(value, str):
+        return value
+    try:
+        return json.dumps(value, ensure_ascii=False)
+    except Exception:
+        return str(value)
+
+
+def _first_present(mapping: dict, keys: list[str]):
+    for key in keys:
+        if key in mapping and mapping.get(key) is not None:
+            return mapping.get(key)
+    return None
+
+
+def _nested_dict(mapping: dict, keys: list[str]) -> dict:
+    for key in keys:
+        value = mapping.get(key)
+        if isinstance(value, dict):
+            return value
+    return {}
+
+
+def _walk_values(value):
+    yield value
+    if isinstance(value, dict):
+        for nested in value.values():
+            yield from _walk_values(nested)
+    elif isinstance(value, list):
+        for nested in value:
+            yield from _walk_values(nested)
+
+
+def _is_useful_tool_name(value) -> bool:
+    if not isinstance(value, str):
+        return False
+    text = value.strip()
+    if not text:
+        return False
+    return text.lower() not in _HERMES_GENERIC_TOOL_NAMES
+
+
+def _is_empty_tool_value(value) -> bool:
+    if value in (None, '', {}, []):
+        return True
+    if isinstance(value, str):
+        text = value.strip()
+        return text in {'', '{}', '[]', 'null'}
+    return False
+
+
+def _recursive_first_key(data, keys: list[str]):
+    for value in _walk_values(data):
+        if not isinstance(value, dict):
+            continue
+        for key in keys:
+            if key in value and value.get(key) is not None:
+                return value.get(key)
+    return None
+
+
+def _recursive_tool_name(data) -> str | None:
+    for value in _walk_values(data):
+        if not isinstance(value, dict):
+            continue
+
+        function_payload = value.get('function')
+        if isinstance(function_payload, dict):
+            name = function_payload.get('name')
+            if _is_useful_tool_name(name):
+                return name
+
+        for key in _HERMES_TOOL_NAME_KEYS:
+            name = value.get(key)
+            if _is_useful_tool_name(name):
+                return name
+    return None
+
+
+def _recursive_tool_arguments(data):
+    arguments = _recursive_first_key(data, _HERMES_TOOL_ARGUMENT_KEYS)
+    if not _is_empty_tool_value(arguments):
+        return arguments
+
+    preview = {}
+    for value in _walk_values(data):
+        if not isinstance(value, dict):
+            continue
+        for key in _HERMES_TOOL_PREVIEW_KEYS:
+            item = value.get(key)
+            if item not in (None, '') and key not in preview:
+                preview[key] = item
+        if preview:
+            return preview
+    return {}
+
+
+def _recursive_tool_result(data):
+    result = _recursive_first_key(data, _HERMES_TOOL_RESULT_KEYS)
+    if _is_empty_tool_value(result):
+        return result
+    if isinstance(result, dict):
+        # Avoid treating another wrapper object as the visible tool result.
+        nested = _recursive_first_key(result, _HERMES_TOOL_RESULT_KEYS)
+        return nested if nested is not None and nested is not result else result
+    return result
+
+
+def _get_hermes_event_type(data: dict, sse_event_type: str | None = None) -> str:
+    event_value = data.get('event')
+    event_type = sse_event_type or (event_value if isinstance(event_value, str) else None)
+    event_type = event_type or data.get('type') or data.get('event_type') or data.get('name')
+    return str(event_type or '').strip()
+
+
+def _is_hermes_tool_event(data: dict, sse_event_type: str | None = None) -> bool:
+    event_type = _get_hermes_event_type(data, sse_event_type).lower()
+    if event_type in _HERMES_TOOL_EVENT_TYPES:
+        return True
+    if event_type.startswith('hermes.tool.'):
+        return True
+    if event_type.startswith('tool_') or event_type.startswith('tool.'):
+        return True
+    return any(key in data for key in ('tool_call', 'tool', 'tool_name')) and not data.get('choices')
+
+
+def _extract_hermes_tool_payload(data: dict) -> dict:
+    for key in ('tool_call', 'toolCall', 'tool_use', 'toolUse', 'tool', 'call', 'data', 'payload', 'content'):
+        value = data.get(key)
+        if isinstance(value, dict):
+            return {**data, **value}
+    return data
+
+
+def _extract_hermes_tool_name(payload: dict) -> str:
+    function_payload = _nested_dict(payload, ['function'])
+    name = _recursive_tool_name(payload) or _first_present(
+        payload,
+        ['tool_name', 'name', 'function_name', 'skill_name', 'server_name'],
+    )
+    if not name:
+        name = _first_present(function_payload, ['name'])
+    return str(name or 'tool')
+
+
+def _extract_hermes_tool_arguments(payload: dict) -> str:
+    function_payload = _nested_dict(payload, ['function'])
+    arguments = _recursive_tool_arguments(payload)
+    if _is_empty_tool_value(arguments):
+        arguments = _first_present(
+            payload,
+            ['arguments', 'args', 'parameters', 'params', 'input', 'tool_input'],
+        )
+    if _is_empty_tool_value(arguments):
+        arguments = _first_present(function_payload, ['arguments'])
+    return _compact_json(arguments if arguments is not None else {})
+
+
+def _extract_hermes_tool_result(payload: dict) -> str:
+    result = _recursive_tool_result(payload)
+    if _is_empty_tool_value(result):
+        result = _first_present(
+            payload,
+            ['result', 'output', 'content', 'text', 'response', 'observation', 'error'],
+        )
+    return _compact_json(result)
+
+
+def _find_tool_call_item(output: list, call_id: str, name: str) -> dict | None:
+    fallback = None
+    for item in output:
+        if item.get('type') != 'function_call':
+            continue
+        if call_id and item.get('call_id') == call_id:
+            return item
+        if item.get('name') == name and item.get('status') != 'completed':
+            fallback = item
+    return fallback
+
+
+def _has_tool_call_output(output: list, call_id: str) -> bool:
+    return any(
+        item.get('type') == 'function_call_output' and item.get('call_id') == call_id
+        for item in output
+    )
+
+
+def _upsert_hermes_tool_event(output: list, data: dict, sse_event_type: str | None = None) -> list:
+    event_type = _get_hermes_event_type(data, sse_event_type).lower()
+    payload = _extract_hermes_tool_payload(data)
+    is_progress_event = event_type == 'hermes.tool.progress'
+    name = _extract_hermes_tool_name(payload)
+    call_id = str(
+        _first_present(
+            payload,
+            ['call_id', 'tool_call_id', 'id', 'uuid'],
+        )
+        or ''
+    )
+    arguments = _extract_hermes_tool_arguments(payload)
+    result = _extract_hermes_tool_result(payload)
+    status = str(payload.get('status') or '').lower()
+    done = (
+        is_progress_event
+        or event_type in {'tool_result', 'tool_complete', 'tool_done'}
+        or event_type.endswith('.result')
+        or event_type.endswith('.complete')
+        or event_type.endswith('_complete')
+        or status in {'completed', 'complete', 'done', 'failed', 'error'}
+        or bool(result)
+    )
+
+    tool_call = _find_tool_call_item(output, call_id, name)
+    if tool_call is None:
+        call_id = call_id or f'call_{uuid4().hex[:24]}'
+        tool_call = {
+            'type': 'function_call',
+            'id': call_id,
+            'call_id': call_id,
+            'name': name,
+            'arguments': arguments or '{}',
+            'status': 'completed' if done else 'in_progress',
+        }
+        if is_progress_event:
+            tool_call['hermes_display_only'] = True
+        output.append(tool_call)
+    else:
+        call_id = tool_call.get('call_id') or call_id or f'call_{uuid4().hex[:24]}'
+        tool_call['call_id'] = call_id
+        tool_call['id'] = tool_call.get('id') or call_id
+        tool_call['name'] = name or tool_call.get('name', 'tool')
+        if arguments and arguments != '{}':
+            tool_call['arguments'] = arguments
+        if done:
+            tool_call['status'] = 'completed'
+        if is_progress_event:
+            tool_call['hermes_display_only'] = True
+
+    if done and result and not is_progress_event and not _has_tool_call_output(output, call_id):
+        output.append(
+            {
+                'type': 'function_call_output',
+                'id': output_id('fco'),
+                'call_id': call_id,
+                'output': [{'type': 'input_text', 'text': result}],
+                'status': 'completed',
+            }
+        )
+
+    return output
+
 
 def _render_openai_tool_call_handler(item: dict, done: bool) -> str:
     """Render an OpenAI Responses API server-side tool item as a <details> block.
@@ -518,6 +836,10 @@ def serialize_output(output: list) -> str:
 
                 parts.append(
                     f'<details type="tool_calls" done="true" id="{call_id}" name="{name}" arguments="{html.escape(json.dumps(arguments))}" files="{html.escape(json.dumps(files)) if files else ""}" embeds="{html.escape(json.dumps(embeds))}">\n<summary>Tool Executed</summary>\n{html.escape(json.dumps(result_text, ensure_ascii=False))}\n</details>'
+                )
+            elif item.get('status') == 'completed':
+                parts.append(
+                    f'<details type="tool_calls" done="true" id="{call_id}" name="{name}" arguments="{html.escape(json.dumps(arguments))}">\n<summary>Tool Executed</summary>\n</details>'
                 )
             else:
                 parts.append(
@@ -3851,6 +4173,7 @@ async def streaming_chat_response_handler(response, ctx):
                         int(metadata.get('params', {}).get('stream_delta_chunk_size') or 1),
                     )
                     last_delta_data = None
+                    sse_event_type = None
 
                     async def flush_pending_delta_data(threshold: int = 0):
                         nonlocal delta_count
@@ -3870,8 +4193,24 @@ async def streaming_chat_response_handler(response, ctx):
                         line = line.decode('utf-8', 'replace') if isinstance(line, bytes) else line
                         data = line
 
+                        if '\n' in data.strip() and not data.startswith('data:'):
+                            data_line = None
+                            for raw_line in data.splitlines():
+                                if raw_line.startswith('event:'):
+                                    sse_event_type = raw_line[len('event:') :].strip()
+                                elif raw_line.startswith('data:'):
+                                    data_line = raw_line
+                                    break
+                            if data_line is None:
+                                continue
+                            data = data_line
+
                         # Skip empty lines
                         if not data.strip():
+                            continue
+
+                        if data.startswith('event:'):
+                            sse_event_type = data[len('event:') :].strip()
                             continue
 
                         # "data:" is the prefix for each event
@@ -3883,6 +4222,8 @@ async def streaming_chat_response_handler(response, ctx):
 
                         try:
                             data = json.loads(data)
+                            current_sse_event_type = sse_event_type
+                            sse_event_type = None
 
                             data, _ = await process_filter_functions(
                                 request=request,
@@ -3893,6 +4234,20 @@ async def streaming_chat_response_handler(response, ctx):
                             )
 
                             if data:
+                                if _is_hermes_tool_event(data, current_sse_event_type):
+                                    await flush_pending_delta_data()
+                                    output = _upsert_hermes_tool_event(output, data, current_sse_event_type)
+                                    await event_emitter(
+                                        {
+                                            'type': 'chat:completion',
+                                            'data': {
+                                                'content': serialize_output(full_output()),
+                                                'output': full_output(),
+                                            },
+                                        }
+                                    )
+                                    continue
+
                                 if 'event' in data and not getattr(request.state, 'direct', False):
                                     await event_emitter(data.get('event', {}))
 
@@ -4398,7 +4753,11 @@ async def streaming_chat_response_handler(response, ctx):
                         }
                         responses_api_tool_calls = []
                         for item in output:
-                            if item.get('type') == 'function_call' and item.get('call_id') not in handled_call_ids:
+                            if (
+                                item.get('type') == 'function_call'
+                                and item.get('call_id') not in handled_call_ids
+                                and not item.get('hermes_display_only')
+                            ):
                                 arguments = item.get('arguments', '{}')
                                 responses_api_tool_calls.append(
                                     {

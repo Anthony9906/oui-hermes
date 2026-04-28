@@ -6,6 +6,7 @@
 		"dev": "vite dev --host",
 		"dev:5050": "vite dev --port 5050",
 		"build": "vite build",
+		"build:bigmem": "NODE_OPTIONS=--max-old-space-size=8192 vite build",
 		"build:watch": "vite build --watch",
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",

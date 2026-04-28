@@ -216,8 +216,8 @@
 
 <div
 	class="flex flex-col w-full h-screen max-h-[100dvh] transition-width duration-200 ease-in-out {$showSidebar
-		? 'md:max-w-[calc(100%-var(--sidebar-width))]'
-		: ''} max-w-full"
+		? 'md:max-w-[calc(100%-var(--sidebar-width)-20px)]'
+		: ''} max-w-full ml-5"
 >
 	<div class="flex-1 max-h-full overflow-y-auto">
 		{#if loaded}

@@ -29,8 +29,8 @@
 {#if loaded}
 	<div
 		class=" flex flex-col h-screen max-h-[100dvh] flex-1 transition-width duration-200 ease-in-out {$showSidebar
-			? 'md:max-w-[calc(100%-var(--sidebar-width))]'
-			: ' md:max-w-[calc(100%-49px)]'}  w-full max-w-full"
+			? 'md:max-w-[calc(100%-var(--sidebar-width)-20px)]'
+			: ' md:max-w-[calc(100%-49px-20px)]'}  w-full max-w-full"
 	>
 		<nav class="   px-2.5 pt-1.5 backdrop-blur-xl drag-region select-none">
 			<div class=" flex items-center gap-1">
@@ -62,8 +62,8 @@
 						<a
 							draggable="false"
 							class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/users')
-								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
+								? 'text-white'
+								: 'text-white/70 hover:text-white'} transition select-none"
 							href="/admin">{$i18n.t('Users')}</a
 						>
 
@@ -71,8 +71,8 @@
 							<a
 								draggable="false"
 								class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/analytics')
-									? ''
-									: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
+									? 'text-white'
+									: 'text-white/70 hover:text-white'} transition select-none"
 								href="/admin/analytics">{$i18n.t('Analytics')}</a
 							>
 						{/if}
@@ -80,16 +80,16 @@
 						<a
 							draggable="false"
 							class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/evaluations')
-								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
+								? 'text-white'
+								: 'text-white/70 hover:text-white'} transition select-none"
 							href="/admin/evaluations">{$i18n.t('Evaluations')}</a
 						>
 
 						<a
 							draggable="false"
 							class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/settings')
-								? ''
-								: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition select-none"
+								? 'text-white'
+								: 'text-white/70 hover:text-white'} transition select-none"
 							href="/admin/settings">{$i18n.t('Settings')}</a
 						>
 					</div>

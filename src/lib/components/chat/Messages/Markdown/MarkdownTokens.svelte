@@ -53,7 +53,11 @@
 		return 'h' + depth;
 	};
 
-	const GROUPABLE_DETAIL_TYPES = new Set(['tool_calls', 'reasoning', 'code_interpreter']);
+	const GROUPABLE_DETAIL_TYPES = new Set(['code_interpreter']);
+	const DEFAULT_DETAIL_BUTTON_CLASS =
+		'w-fit text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition';
+	const MUTED_DETAIL_BUTTON_CLASS =
+		'w-fit text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400 transition';
 
 	const isGroupableDetailToken = (token: Token & { attributes?: { type?: string } }) => {
 		return token?.type === 'details' && GROUPABLE_DETAIL_TYPES.has(token?.attributes?.type ?? '');
@@ -382,19 +386,29 @@
 							attributes={detailToken.attributes}
 							resultContent={getDetailTextContent(detailToken)}
 							grouped={true}
-							open={$settings?.expandDetails ?? false}
+							open={false}
 							className="w-full space-y-1"
 						/>
 					{:else if textContent.length > 0}
 						<Collapsible
 							title={detailToken.summary}
-							open={$settings?.expandDetails ?? false}
+							open={detailToken?.attributes?.type === 'reasoning'
+								? true
+								: ($settings?.expandDetails ?? false)}
 							attributes={detailToken?.attributes}
 							messageDone={done}
 							className="w-full space-y-1"
+							buttonClassName={detailToken?.attributes?.type === 'reasoning'
+								? MUTED_DETAIL_BUTTON_CLASS
+								: DEFAULT_DETAIL_BUTTON_CLASS}
 							dir="auto"
 						>
-							<div class="mb-1.5" slot="content">
+							<div
+								class="mb-1.5 {detailToken?.attributes?.type === 'reasoning'
+									? 'hermes-detail-muted'
+									: ''}"
+								slot="content"
+							>
 								<svelte:self
 									id={`${id}-${tokenIdx}-${detailIdx}-d`}
 									tokens={marked.lexer(decode(detailToken.text))}
@@ -430,19 +444,25 @@
 				id={`${id}-${tokenIdx}-tc`}
 				attributes={token.attributes}
 				resultContent={getDetailTextContent(token)}
-				open={$settings?.expandDetails ?? false}
+				open={false}
 				className="w-full space-y-1"
 			/>
 		{:else if textContent.length > 0}
 			<Collapsible
 				title={token.summary}
-				open={$settings?.expandDetails ?? false}
+				open={token?.attributes?.type === 'reasoning' ? true : ($settings?.expandDetails ?? false)}
 				attributes={token?.attributes}
 				messageDone={done}
 				className="w-full space-y-1"
+				buttonClassName={token?.attributes?.type === 'reasoning'
+					? MUTED_DETAIL_BUTTON_CLASS
+					: DEFAULT_DETAIL_BUTTON_CLASS}
 				dir="auto"
 			>
-				<div class=" mb-1.5" slot="content">
+				<div
+					class="mb-1.5 {token?.attributes?.type === 'reasoning' ? 'hermes-detail-muted' : ''}"
+					slot="content"
+				>
 					<svelte:self
 						id={`${id}-${tokenIdx}-d`}
 						tokens={marked.lexer(decode(token.text))}
@@ -554,3 +574,15 @@
 		{console.log('Unknown token', token)}
 	{/if}
 {/each}
+
+<style>
+	:global(.light .chat-assistant .hermes-detail-muted),
+	:global(.light .chat-assistant .hermes-detail-muted *) {
+		color: #bbc0cc !important;
+	}
+
+	:global(.dark .hermes-detail-muted),
+	:global(.dark .hermes-detail-muted *) {
+		color: rgb(156 163 175) !important;
+	}
+</style>

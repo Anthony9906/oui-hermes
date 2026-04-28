@@ -86,34 +86,40 @@
 					</div>
 				{/if}
 
-				<div class="">
+				<div class="flex min-w-0 items-center gap-1.5">
 					{#if attributes?.type === 'reasoning'}
-						{#if (attributes?.done === 'true' || messageDone) && attributes?.duration}
-							{#if attributes.duration < 1}
-								{$i18n.t('Thought for less than a second')}
-							{:else if attributes.duration < 60}
-								{$i18n.t('Thought for {{DURATION}} seconds', {
-									DURATION: attributes.duration
-								})}
-							{:else}
-								{$i18n.t('Thought for {{DURATION}}', {
-									DURATION: dayjs.duration(attributes.duration, 'seconds').humanize()
-								})}
-							{/if}
-						{:else if attributes?.done === 'true' || messageDone}
-							{$i18n.t('Thought')}
-						{:else}
-							{$i18n.t('Thinking...')}
-						{/if}
-					{:else if attributes?.type === 'code_interpreter'}
-						{#if attributes?.done === 'true' || messageDone}
-							{$i18n.t('Analyzed')}
-						{:else}
-							{$i18n.t('Analyzing...')}
-						{/if}
-					{:else}
-						{title}
+						<span class="shrink-0 text-[0.95em]" aria-hidden="true">💡</span>
 					{/if}
+
+					<span class="min-w-0">
+						{#if attributes?.type === 'reasoning'}
+							{#if (attributes?.done === 'true' || messageDone) && attributes?.duration}
+								{#if attributes.duration < 1}
+									{$i18n.t('Thought for less than a second')}
+								{:else if attributes.duration < 60}
+									{$i18n.t('Thought for {{DURATION}} seconds', {
+										DURATION: attributes.duration
+									})}
+								{:else}
+									{$i18n.t('Thought for {{DURATION}}', {
+										DURATION: dayjs.duration(attributes.duration, 'seconds').humanize()
+									})}
+								{/if}
+							{:else if attributes?.done === 'true' || messageDone}
+								{$i18n.t('Thought')}
+							{:else}
+								{$i18n.t('Thinking...')}
+							{/if}
+						{:else if attributes?.type === 'code_interpreter'}
+							{#if attributes?.done === 'true' || messageDone}
+								{$i18n.t('Analyzed')}
+							{:else}
+								{$i18n.t('Analyzing...')}
+							{/if}
+						{:else}
+							{title}
+						{/if}
+					</span>
 				</div>
 
 				{#if !disabled}
