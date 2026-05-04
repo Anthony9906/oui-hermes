@@ -135,3 +135,46 @@ async def get_expert_agent_detail(skill_name: str, user=Depends(get_verified_use
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail='Failed to load Hermes skill detail',
         )
+
+
+@router.delete('/{skill_name:path}')
+async def delete_expert_agent(skill_name: str, user=Depends(get_verified_user)):
+    try:
+        timeout = aiohttp.ClientTimeout(total=10)
+        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
+            headers = {}
+            if HERMES_API_KEY:
+                headers['Authorization'] = f'Bearer {HERMES_API_KEY}'
+
+            encoded_skill_name = quote(skill_name, safe='')
+            async with session.delete(
+                f'{HERMES_API_BASE_URL}/skills/{encoded_skill_name}', headers=headers
+            ) as response:
+                if response.status == 404:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail='Expert skill not found',
+                    )
+                if response.status >= 400:
+                    body = await response.text()
+                    log.warning(
+                        'Failed to delete Hermes skill: status=%s body=%s',
+                        response.status,
+                        body,
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail='Failed to delete Hermes skill',
+                    )
+
+                data = await response.json()
+
+        return data
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.exception('Failed to delete Hermes skill: %s', e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail='Failed to delete Hermes skill',
+        )

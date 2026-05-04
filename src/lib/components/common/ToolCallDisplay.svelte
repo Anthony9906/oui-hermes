@@ -1,23 +1,16 @@
 <script lang="ts">
 	import { decode } from 'html-entities';
-	import { v4 as uuidv4 } from 'uuid';
 
 	import { getContext } from 'svelte';
 	const i18n = getContext('i18n');
 
-	import { slide } from 'svelte/transition';
-	import { quintOut } from 'svelte/easing';
-
-	import ChevronUp from '../icons/ChevronUp.svelte';
-	import ChevronDown from '../icons/ChevronDown.svelte';
 	import Spinner from './Spinner.svelte';
 	import Terminal from '../icons/Terminal.svelte';
 	import Search from '../icons/Search.svelte';
 	import GlobeAlt from '../icons/GlobeAlt.svelte';
 	import Wrench from '../icons/Wrench.svelte';
-	import Image from './Image.svelte';
-	import FullHeightIframe from './FullHeightIframe.svelte';
-	import { settings } from '$lib/stores';
+	import CheckCircle from '../icons/CheckCircle.svelte';
+	import XMark from '../icons/XMark.svelte';
 
 	export let id: string = '';
 	export let attributes: {
@@ -36,8 +29,6 @@
 	export let className = '';
 
 	const HEADER_PREVIEW_LIMIT = 128;
-	const EXPANDED_RESULT_PREVIEW_LIMIT = 128;
-	const TOOL_RESULT_PENDING_TEXT = '等待 Tool 返回信息';
 	const EMPTY_PREVIEW_TEXTS = new Set(['{}', '[]', '""', 'null']);
 	const GENERIC_TOOL_NAMES = new Set(['tool', 'tools', 'function', 'function_call', 'call']);
 	const COMMAND_KEYS = ['command', 'cmd', 'shell', 'bash', 'terminal'];
@@ -69,11 +60,15 @@
 		'tool',
 		'name'
 	];
+	type TodoStatus = 'completed' | 'in_progress' | 'pending' | 'cancelled';
+	type TodoItem = {
+		id?: string;
+		content: string;
+		status: TodoStatus;
+	};
 
 	export let buttonClassName =
 		'w-fit text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400 transition';
-
-	const componentId = id || uuidv4();
 
 	function parseJSONString(str: string) {
 		try {
@@ -181,6 +176,90 @@
 		}
 
 		return compactText(toDisplayText(value));
+	}
+
+	function normalizeTodoStatus(value: unknown): TodoStatus {
+		const status = String(value ?? 'pending')
+			.trim()
+			.toLowerCase()
+			.replace(/[-\s]+/g, '_');
+
+		if (['completed', 'complete', 'done', 'finished', 'success'].includes(status)) {
+			return 'completed';
+		}
+		if (['in_progress', 'progress', 'running', 'active', 'working'].includes(status)) {
+			return 'in_progress';
+		}
+		if (['cancelled', 'canceled', 'cancel', 'aborted'].includes(status)) {
+			return 'cancelled';
+		}
+		return 'pending';
+	}
+
+	function findTodos(value: unknown): unknown[] | undefined {
+		for (const item of walkValues(value)) {
+			if (isRecord(item) && Array.isArray(item.todos)) {
+				return item.todos;
+			}
+		}
+		return undefined;
+	}
+
+	function getTodoItems(value: unknown): TodoItem[] {
+		const todos = findTodos(value);
+		if (!todos) {
+			return [];
+		}
+
+		return todos
+			.map((item) => {
+				if (!isRecord(item)) {
+					return null;
+				}
+
+				const content = compactText(
+					valueToPreview(item.content ?? item.title ?? item.task ?? item.id)
+				);
+				if (!content) {
+					return null;
+				}
+
+				return {
+					id: valueToPreview(item.id),
+					content,
+					status: normalizeTodoStatus(item.status)
+				};
+			})
+			.filter(Boolean) as TodoItem[];
+	}
+
+	function getTodoSummaryText(value: unknown): string {
+		const summary = readValueByKeys(value, ['summary']);
+		if (!isRecord(summary)) {
+			const todos = getTodoItems(value);
+			if (todos.length === 0) {
+				return '';
+			}
+			return `Agent 正在分步完成任务：${todos.filter((todo) => todo.status === 'completed').length} / ${todos.length}`;
+		}
+
+		const total = Number(summary.total ?? 0);
+		const completed = Number(summary.completed ?? 0);
+		if (!Number.isFinite(total) || total <= 0) {
+			return '';
+		}
+
+		return `Agent 正在分步完成任务：${Number.isFinite(completed) ? completed : 0} / ${todos.length}`;
+	}
+
+	function isTodoTool(rawName: string, parsedArgs: unknown, parsedResult: unknown): boolean {
+		const names = [
+			rawName,
+			valueToPreview(readValueByKeys(parsedArgs, ['tool', 'name', 'function_name'])),
+			valueToPreview(readValueByKeys(parsedResult, ['tool', 'name', 'function_name']))
+		];
+
+		return names.some((name) => name.trim().toLowerCase() === 'todo');
 	}
 
 	function hasAnyKey(value: unknown, keys: string[]): boolean {
@@ -327,9 +406,6 @@
 	export let resultContent: string = '';
 
 	$: result = resultContent || decode(attributes?.result ?? '');
-	$: files = parseJSONString(decode(attributes?.files ?? ''));
-	$: embeds = parseJSONString(decode(attributes?.embeds ?? ''));
-	$: isDone = attributes?.done === 'true';
 	$: isExecuting = attributes?.done && attributes?.done !== 'true';
 
 	$: parsedArgs = parseJSONString(args);
@@ -344,24 +420,23 @@
 		valueToPreview(readValueByKeys(parsedResult, EMOJI_KEYS));
 	$: visibleArgsText = EMPTY_PREVIEW_TEXTS.has(compactText(argsText)) ? '' : argsText;
 	$: visibleResultText = EMPTY_PREVIEW_TEXTS.has(compactText(resultText)) ? '' : resultText;
+	$: todoItems = isTodoTool(toolName, parsedArgs, parsedResult)
+		? getTodoItems(parsedResult).length > 0
+			? getTodoItems(parsedResult)
+			: getTodoItems(parsedArgs)
+		: [];
+	$: todoSummaryText = isTodoTool(toolName, parsedArgs, parsedResult)
+		? getTodoSummaryText(parsedResult) || getTodoSummaryText(parsedArgs)
+		: '';
 	$: previewText = limitText(
-		getPreviewText(parsedArgs, parsedResult, visibleArgsText, visibleResultText, displayToolName),
+		todoSummaryText ||
+			getPreviewText(parsedArgs, parsedResult, visibleArgsText, visibleResultText, displayToolName),
 		HEADER_PREVIEW_LIMIT
-	);
-	$: expandedDetailText = limitText(
-		compactText(visibleResultText) || TOOL_RESULT_PENDING_TEXT,
-		EXPANDED_RESULT_PREVIEW_LIMIT
 	);
 </script>
 
 <div {id} class={className}>
-	<!-- svelte-ignore a11y-no-static-element-interactions -->
-	<div
-		class="{buttonClassName} cursor-pointer hermes-tool-call"
-		on:pointerup={() => {
-			open = !open;
-		}}
-	>
+	<div class="{buttonClassName} hermes-tool-call">
 		<div class="w-full max-w-full flex items-center gap-1.5 {isExecuting ? 'shimmer' : ''}">
 			{#if isExecuting}
 				<div class="hermes-tool-call-icon">
@@ -395,83 +470,42 @@
 					<span class="hermes-tool-call-preview"> {previewText}</span>
 				{/if}
 			</div>
-
-			<div class="flex shrink-0 self-center translate-y-[1px] hermes-tool-call-icon">
-				{#if open}
-					<ChevronUp strokeWidth="3.5" className="size-3.5" />
-				{:else}
-					<ChevronDown strokeWidth="3.5" className="size-3.5" />
-				{/if}
-			</div>
 		</div>
 	</div>
 
-	{#if open}
-		<div transition:slide={{ duration: 300, easing: quintOut, axis: 'y' }}>
-			<div class="hermes-tool-call-panel my-1.5 rounded-lg border p-2.5">
-				<pre
-					class="hermes-tool-call-detail max-h-40 overflow-hidden whitespace-pre-wrap break-words font-mono text-xs">{expandedDetailText}</pre>
-
-				{#if !grouped && embeds && Array.isArray(embeds) && embeds.length > 0}
-					{#each embeds as embed, idx}
-						<div class="my-2" id={`${componentId}-tool-call-embed-${idx}`}>
-							<FullHeightIframe
-								src={embed}
-								{args}
-								allowScripts={true}
-								allowForms={$settings?.iframeSandboxAllowForms ?? false}
-								allowSameOrigin={$settings?.iframeSandboxAllowSameOrigin ?? false}
-								allowPopups={true}
-							/>
-						</div>
-					{/each}
-				{/if}
-			</div>
-		</div>
-	{/if}
-
-	<!-- Files display (images etc.) when done -->
-	{#if open && isDone}
-		{#if typeof files === 'object'}
-			{#each files ?? [] as file, idx}
-				{#if typeof file === 'string'}
-					{#if file.startsWith('data:image/')}
-						<Image id={`${componentId}-tool-call-result-${idx}`} src={file} alt="Image" />
-					{/if}
-				{:else if typeof file === 'object'}
-					{#if (file.type === 'image' || (file?.content_type ?? '').startsWith('image/')) && file.url}
-						<Image id={`${componentId}-tool-call-result-${idx}`} src={file.url} alt="Image" />
-					{/if}
-				{/if}
+	{#if todoItems.length > 0}
+		<ul class="hermes-tool-todos" aria-label="Todo tasks">
+			{#each todoItems as todo}
+				<li class="hermes-tool-todo hermes-tool-todo-{todo.status}">
+					<span class="hermes-tool-todo-icon" aria-hidden="true">
+						{#if todo.status === 'completed'}
+							<CheckCircle className="size-4" strokeWidth="2" />
+						{:else if todo.status === 'in_progress'}
+							<span class="hermes-tool-todo-dot"></span>
+						{:else if todo.status === 'cancelled'}
+							<XMark className="size-3.5" />
+						{:else}
+							<span class="hermes-tool-todo-ring"></span>
+						{/if}
+					</span>
+					<span class="hermes-tool-todo-content">{todo.content}</span>
+				</li>
 			{/each}
-		{/if}
+		</ul>
 	{/if}
 </div>
 
 <style>
-	.hermes-tool-call-panel {
-		background: transparent;
-		border-color: rgba(164, 174, 194, 0.22);
-	}
-
 	:global(.light .chat-assistant .hermes-tool-call),
-	:global(.light .chat-assistant .hermes-tool-call *),
-	:global(.light .chat-assistant .hermes-tool-call-panel),
-	:global(.light .chat-assistant .hermes-tool-call-panel *) {
+	:global(.light .chat-assistant .hermes-tool-call *) {
 		color: #828ca3 !important;
-		margin:4px 0;
-		font-size: 14px;
+		margin: 6px 0;
+		font-size: 16px;
 	}
 
 	:global(.dark .hermes-tool-call),
-	:global(.dark .hermes-tool-call *),
-	:global(.dark .hermes-tool-call-panel),
-	:global(.dark .hermes-tool-call-panel *) {
+	:global(.dark .hermes-tool-call *) {
 		color: rgb(156 163 175) !important;
-	}
-
-	:global(.dark) .hermes-tool-call-panel {
-		border-color: rgba(75, 85, 99, 0.28);
 	}
 
 	:global(.light .chat-assistant .hermes-tool-call-name) {
@@ -491,5 +525,81 @@
 		font-size: 0.875rem;
 		line-height: 1rem;
 		text-align: center;
+	}
+
+	.hermes-tool-todos {
+		margin: 2px 0 8px 1.55rem;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		list-style: none;
+	}
+
+	.hermes-tool-todo {
+		display: grid;
+		grid-template-columns: 1rem minmax(0, 1fr);
+		align-items: start;
+		gap: 0.45rem;
+		max-width: 100%;
+		font-size: 13px;
+		line-height: 1.45;
+	}
+
+	.hermes-tool-todo-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 1rem;
+		height: 1.25rem;
+		flex: none;
+	}
+
+	.hermes-tool-todo-dot,
+	.hermes-tool-todo-ring {
+		display: block;
+		width: 0.55rem;
+		height: 0.55rem;
+		border-radius: 9999px;
+	}
+
+	.hermes-tool-todo-dot {
+		background: currentColor;
+		box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent);
+	}
+
+	.hermes-tool-todo-ring {
+		border: 1.5px solid currentColor;
+	}
+
+	.hermes-tool-todo-content {
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
+
+	.hermes-tool-todo-completed .hermes-tool-todo-icon {
+		color: #50ac45 !important;
+	}
+
+	.hermes-tool-todo-completed .hermes-tool-todo-icon :global(svg) {
+		color: #50ac45 !important;
+		stroke: #50ac45 !important;
+	}
+
+	.hermes-tool-todo-completed .hermes-tool-todo-content {
+		color: #bbc0cc !important;
+	}
+
+	.hermes-tool-todo-in_progress .hermes-tool-todo-dot {
+		color: rgb(139, 148, 193) !important;
+	}
+
+	.hermes-tool-todo-pending .hermes-tool-todo-content {
+		color: #bbc0cc !important;
+	}
+
+	.hermes-tool-todo-cancelled .hermes-tool-todo-content {
+		text-decoration: line-through;
+		color: #bbc0cc !important;
 	}
 </style>

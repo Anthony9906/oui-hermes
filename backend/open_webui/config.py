@@ -990,17 +990,44 @@ if CUSTOM_NAME:
 # STORAGE PROVIDER
 ####################################
 
-STORAGE_PROVIDER = os.environ.get('STORAGE_PROVIDER', 'local')  # defaults to local, s3
+ARTIFACT_STORAGE_PROVIDER = os.environ.get('ARTIFACT_STORAGE_PROVIDER')
+STORAGE_PROVIDER = os.environ.get('STORAGE_PROVIDER') or ARTIFACT_STORAGE_PROVIDER or 'local'
+USE_R2_STORAGE_ENV = STORAGE_PROVIDER == 'r2' or ARTIFACT_STORAGE_PROVIDER == 'r2'
 STORAGE_LOCAL_CACHE = os.environ.get('STORAGE_LOCAL_CACHE', 'true').lower() == 'true'
 
-S3_ACCESS_KEY_ID = os.environ.get('S3_ACCESS_KEY_ID', None)
-S3_SECRET_ACCESS_KEY = os.environ.get('S3_SECRET_ACCESS_KEY', None)
-S3_REGION_NAME = os.environ.get('S3_REGION_NAME', None)
-S3_BUCKET_NAME = os.environ.get('S3_BUCKET_NAME', None)
+S3_ACCESS_KEY_ID = (
+    (os.environ.get('R2_ACCESS_KEY_ID') if USE_R2_STORAGE_ENV else None)
+    or os.environ.get('S3_ACCESS_KEY_ID')
+    or os.environ.get('R2_ACCESS_KEY_ID')
+)
+S3_SECRET_ACCESS_KEY = (
+    (os.environ.get('R2_SECRET_ACCESS_KEY') if USE_R2_STORAGE_ENV else None)
+    or os.environ.get('S3_SECRET_ACCESS_KEY')
+    or os.environ.get('R2_SECRET_ACCESS_KEY')
+)
+S3_REGION_NAME = (
+    (os.environ.get('AWS_DEFAULT_REGION') if USE_R2_STORAGE_ENV else None)
+    or os.environ.get('S3_REGION_NAME')
+    or os.environ.get('AWS_DEFAULT_REGION')
+)
+S3_BUCKET_NAME = (
+    (os.environ.get('R2_BUCKET') if USE_R2_STORAGE_ENV else None)
+    or os.environ.get('S3_BUCKET_NAME')
+    or os.environ.get('R2_BUCKET')
+)
 S3_KEY_PREFIX = os.environ.get('S3_KEY_PREFIX', None)
-S3_ENDPOINT_URL = os.environ.get('S3_ENDPOINT_URL', None)
+S3_ENDPOINT_URL = (
+    (os.environ.get('R2_ENDPOINT') if USE_R2_STORAGE_ENV else None)
+    or os.environ.get('S3_ENDPOINT_URL')
+    or os.environ.get('R2_ENDPOINT')
+)
+S3_PUBLIC_BASE_URL = (
+    (os.environ.get('R2_PUBLIC_BASE_URL') if USE_R2_STORAGE_ENV else None)
+    or os.environ.get('S3_PUBLIC_BASE_URL')
+    or os.environ.get('R2_PUBLIC_BASE_URL')
+)
 S3_USE_ACCELERATE_ENDPOINT = os.environ.get('S3_USE_ACCELERATE_ENDPOINT', 'false').lower() == 'true'
-S3_ADDRESSING_STYLE = os.environ.get('S3_ADDRESSING_STYLE', None)
+S3_ADDRESSING_STYLE = os.environ.get('S3_ADDRESSING_STYLE') or ('path' if USE_R2_STORAGE_ENV else None)
 S3_ENABLE_TAGGING = os.getenv('S3_ENABLE_TAGGING', 'false').lower() == 'true'
 
 GCS_BUCKET_NAME = os.environ.get('GCS_BUCKET_NAME', None)
@@ -1908,14 +1935,14 @@ FOLLOW_UP_GENERATION_PROMPT_TEMPLATE = PersistentConfig(
 )
 
 DEFAULT_FOLLOW_UP_GENERATION_PROMPT_TEMPLATE = """### Task:
-Suggest 3-5 relevant follow-up questions or prompts that the user might naturally ask next in this conversation as a **user**, based on the chat history, to help continue or deepen the discussion.
+Suggest exactly 3 relevant follow-up questions or prompts that the user might naturally ask next in this conversation as a **user**, based on the chat history, to help continue or deepen the discussion.
 ### Guidelines:
 - Write all follow-up questions from the user’s point of view, directed to the assistant.
 - Make questions concise, clear, and directly related to the discussed topic(s).
 - Only suggest follow-ups that make sense given the chat content and do not repeat what was already covered.
 - If the conversation is very short or not specific, suggest more general (but relevant) follow-ups the user might ask.
 - Use the conversation's primary language; default to English if multilingual.
-- Response must be a JSON object with a "follow_ups" key containing an array of strings, no extra text or formatting.
+- Response must be a JSON object with a "follow_ups" key containing exactly 3 strings, no extra text or formatting.
 ### Output:
 JSON format: { "follow_ups": ["Question 1?", "Question 2?", "Question 3?"] }
 ### Chat History:

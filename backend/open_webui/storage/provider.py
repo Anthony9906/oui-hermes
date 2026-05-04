@@ -14,6 +14,7 @@ from open_webui.config import (
     S3_BUCKET_NAME,
     S3_ENDPOINT_URL,
     S3_KEY_PREFIX,
+    S3_PUBLIC_BASE_URL,
     S3_REGION_NAME,
     S3_SECRET_ACCESS_KEY,
     S3_USE_ACCELERATE_ENDPOINT,
@@ -132,6 +133,7 @@ class S3StorageProvider(StorageProvider):
 
         self.bucket_name = S3_BUCKET_NAME
         self.key_prefix = S3_KEY_PREFIX if S3_KEY_PREFIX else ''
+        self.public_base_url = S3_PUBLIC_BASE_URL.rstrip('/') if S3_PUBLIC_BASE_URL else None
 
     @staticmethod
     def sanitize_tag_value(s: str) -> str:
@@ -203,6 +205,12 @@ class S3StorageProvider(StorageProvider):
 
     def _get_local_file_path(self, s3_key: str) -> str:
         return os.path.join(UPLOAD_DIR, s3_key.split('/')[-1])
+
+    def get_public_url(self, full_file_path: str) -> str | None:
+        if not self.public_base_url:
+            return None
+        s3_key = self._extract_s3_key(full_file_path)
+        return f'{self.public_base_url}/{s3_key}'
 
 
 class GCSStorageProvider(StorageProvider):
@@ -334,7 +342,7 @@ class AzureStorageProvider(StorageProvider):
 def get_storage_provider(storage_provider: str):
     if storage_provider == 'local':
         Storage = LocalStorageProvider()
-    elif storage_provider == 's3':
+    elif storage_provider in ('s3', 'r2'):
         Storage = S3StorageProvider()
     elif storage_provider == 'gcs':
         Storage = GCSStorageProvider()

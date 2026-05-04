@@ -45,7 +45,7 @@ from open_webui.storage.provider import Storage
 
 
 from open_webui.config import BYPASS_ADMIN_ACCESS_CONTROL, STORAGE_LOCAL_CACHE, STORAGE_PROVIDER, UPLOAD_DIR
-from open_webui.utils.auth import get_admin_user, get_verified_user
+from open_webui.utils.auth import decode_token, get_admin_user, get_verified_user
 from open_webui.utils.misc import strict_match_mime_type
 from pydantic import BaseModel
 
@@ -55,6 +55,49 @@ router = APIRouter()
 
 
 from open_webui.utils.access_control.files import has_access_to_file
+
+
+async def _get_file_content_response(file: FileModel, attachment: bool):
+    try:
+        file_path = await asyncio.to_thread(Storage.get_file, file.path)
+        file_path = Path(file_path)
+
+        # Check if the file already exists in the cache
+        if file_path.is_file():
+            # Handle Unicode filenames
+            filename = file.meta.get('name', file.filename)
+            encoded_filename = quote(filename)  # RFC5987 encoding
+
+            content_type = file.meta.get('content_type')
+            filename = file.meta.get('name', file.filename)
+            encoded_filename = quote(filename)
+            headers = {}
+
+            if attachment:
+                headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded_filename}"
+            else:
+                if content_type == 'application/pdf' or filename.lower().endswith('.pdf'):
+                    headers['Content-Disposition'] = f"inline; filename*=UTF-8''{encoded_filename}"
+                    content_type = 'application/pdf'
+                elif content_type != 'text/plain':
+                    headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded_filename}"
+
+            return FileResponse(file_path, headers=headers, media_type=content_type)
+
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=ERROR_MESSAGES.NOT_FOUND,
+            )
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        log.exception(e)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.DEFAULT('Error retrieving file content'),
+        )
 
 ############################
 # Upload File
@@ -623,51 +666,37 @@ async def get_file_content_by_id(
         )
 
     if file.user_id == user.id or user.role == 'admin' or await has_access_to_file(id, 'read', user, db=db):
-        try:
-            file_path = await asyncio.to_thread(Storage.get_file, file.path)
-            file_path = Path(file_path)
-
-            # Check if the file already exists in the cache
-            if file_path.is_file():
-                # Handle Unicode filenames
-                filename = file.meta.get('name', file.filename)
-                encoded_filename = quote(filename)  # RFC5987 encoding
-
-                content_type = file.meta.get('content_type')
-                filename = file.meta.get('name', file.filename)
-                encoded_filename = quote(filename)
-                headers = {}
-
-                if attachment:
-                    headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded_filename}"
-                else:
-                    if content_type == 'application/pdf' or filename.lower().endswith('.pdf'):
-                        headers['Content-Disposition'] = f"inline; filename*=UTF-8''{encoded_filename}"
-                        content_type = 'application/pdf'
-                    elif content_type != 'text/plain':
-                        headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded_filename}"
-
-                return FileResponse(file_path, headers=headers, media_type=content_type)
-
-            else:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=ERROR_MESSAGES.NOT_FOUND,
-                )
-        except HTTPException as e:
-            raise e
-        except Exception as e:
-            log.exception(e)
-            log.error('Error getting file content')
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=ERROR_MESSAGES.DEFAULT('Error getting file content'),
-            )
+        return await _get_file_content_response(file, attachment)
     else:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
+
+
+@router.get('/{id}/content/direct')
+async def get_file_content_by_id_direct(
+    id: str,
+    token: str = Query(...),
+    attachment: bool = Query(False),
+    db: AsyncSession = Depends(get_async_session),
+):
+    token_data = decode_token(token)
+    if not token_data or token_data.get('scope') != 'file_content' or token_data.get('file_id') != id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ERROR_MESSAGES.INVALID_TOKEN,
+        )
+
+    file = await Files.get_file_by_id(id, db=db)
+
+    if not file:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=ERROR_MESSAGES.NOT_FOUND,
+        )
+
+    return await _get_file_content_response(file, attachment)
 
 
 @router.get('/{id}/content/html')

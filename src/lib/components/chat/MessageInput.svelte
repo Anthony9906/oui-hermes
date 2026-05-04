@@ -763,7 +763,9 @@
 
 				reader.readAsDataURL(file['type'] === 'image/heic' ? await convertHeicToJpeg(file) : file);
 			} else {
-				uploadFileHandler(file);
+				const needsServerProcessing =
+					file.type.startsWith('audio/') || file.type.startsWith('video/');
+				uploadFileHandler(file, needsServerProcessing);
 			}
 		});
 	};

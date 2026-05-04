@@ -1,6 +1,6 @@
 # Development Progress
 
-Last updated: 2026-04-28
+Last updated: 2026-05-04
 
 This file is the compact handoff log for Hermes-specific Open WebUI development. Keep it evidence-based and concise: preserve current outcomes, key structure, validation rules, and hard-won lessons; avoid step-by-step process history.
 
@@ -197,6 +197,143 @@ Notes:
 
 - Directly restoring the original `files` router was not sufficient: its previous top-level vector import crashed startup under `VECTOR_DB=none`.
 - Uploading and sending are separate paths: upload success only proves `/api/v1/files`; model send also needs image references normalized to `http(s)` or `data:image/...`.
+- Full `npm run check` and `npm run build:bigmem` were intentionally not run automatically.
+
+### 2026-04-30: PDF Upload Direct File URL Path
+
+Status: patched
+
+Goal: keep Open WebUI from re-entering its removed RAG/vector flow for chat document attachments, and pass uploaded document URLs directly to Hermes Agent for agent-side parsing.
+
+Changed areas:
+
+- `src/lib/components/chat/MessageInput.svelte`
+  - Non-image document uploads now call `uploadFileHandler(file, needsServerProcessing)`.
+  - Only audio/video keep server processing; PDFs and other documents upload without Open WebUI RAG extraction.
+- `backend/open_webui/utils/middleware.py`
+  - Added direct file context injection for chat payloads.
+  - For uploaded `type="file"` attachments, Open WebUI now injects an `<attached_files>` block into the latest user message with a model-accessible URL, content type, and file name.
+  - When the stored file path is `s3://...`, the middleware generates a temporary S3/MinIO presigned URL from `Storage.s3_client`.
+  - When S3 is unavailable, it falls back to `/api/v1/files/{file_id}/content`.
+  - `metadata.files` is cleared after direct context injection so `chat_completion_files_handler` does not trigger Open WebUI RAG retrieval.
+- `.env.example`
+  - Documents the S3-compatible MinIO configuration keys used by Open WebUI's existing storage provider.
+- `backend/dev.sh` and `backend/start.sh`
+  - Local backend startup now auto-loads repo-root `.env` when present. This matters for non-Docker local runs because `docker-compose.yaml` is not involved.
+
+Validation:
+
+- Backend: `python3 -m py_compile backend/open_webui/utils/middleware.py backend/open_webui/storage/provider.py`
+- Frontend: `./node_modules/.bin/prettier --write src/lib/components/chat/MessageInput.svelte`
+- Frontend: single-file Svelte compiler smoke compile for `MessageInput.svelte`
+- Shell: `bash -n backend/dev.sh backend/start.sh`
+- Diff hygiene: `git diff --check -- backend/dev.sh backend/start.sh backend/open_webui/utils/middleware.py src/lib/components/chat/MessageInput.svelte .env.example`
+- Local presigned URL shape probe confirmed MinIO URL generation without requiring network access.
+
+Notes:
+
+- Hermes gateway currently supports text and image URL/message parts, but not OpenAI-style `file`/`input_file` parts. Injecting a textual `<attached_files>` block is the current compatible handoff contract.
+- Existing local backend processes must be restarted after changing `.env`, startup scripts, or middleware code.
+- The user's actual MinIO credentials live only in local `.env`, which is ignored; do not commit secrets.
+- Full `npm run check` and `npm run build:bigmem` were intentionally not run automatically.
+
+### 2026-04-30: PDF Preview And Chat Controls Cleanup
+
+Status: patched
+
+Changed areas:
+
+- `src/lib/components/common/FileItemModal.svelte`
+  - Document modals now open directly in preview mode.
+  - Removed the old `Content` tab and the focused retrieval / entire document toggle from the file preview modal.
+- `src/lib/components/chat/Controls/Controls.svelte`
+  - Removed the Valves/configuration section from the chat controls panel.
+  - Renamed the system prompt section to `添加系统提示词`.
+  - Added the Expert Agent CoWaiN logo at the bottom of the controls panel using `static/assets/images/expert-agent-cowain-logo.png`.
+  - Controls panel content now uses a height-fitting flex layout: the settings content scrolls internally and the logo remains pinned near the bottom with 40px bottom padding.
+- `src/lib/components/chat/Settings/Advanced/AdvancedParams.svelte`
+  - Added `chatControls` mode so the chat-side advanced params show only: seed, temperature, reasoning_effort, max_tokens, top_k, top_p, frequency_penalty, and presence_penalty.
+  - Full advanced parameter rendering remains available for other settings surfaces.
+- `src/lib/components/chat/ChatControls.svelte`
+  - For the controls tab, the parent content area now provides full height instead of owning vertical scroll, allowing `Controls.svelte` to manage its own content and bottom logo layout.
+
+Validation:
+
+- Frontend: `./node_modules/.bin/prettier --write src/lib/components/common/FileItemModal.svelte src/lib/components/chat/Controls/Controls.svelte src/lib/components/chat/Settings/Advanced/AdvancedParams.svelte src/lib/components/chat/ChatControls.svelte`
+- Frontend: `git diff --check -- src/lib/components/common/FileItemModal.svelte src/lib/components/chat/Controls/Controls.svelte src/lib/components/chat/Settings/Advanced/AdvancedParams.svelte src/lib/components/chat/ChatControls.svelte`
+- Frontend: single-file Svelte compiler smoke compile for `FileItemModal.svelte`, `Controls.svelte`, `AdvancedParams.svelte`, and `ChatControls.svelte`.
+
+Notes:
+
+- These UI changes intentionally remove Open WebUI RAG-facing controls from the PDF/document attachment workflow.
+- Full `npm run check` and `npm run build:bigmem` were intentionally not run automatically.
+
+### 2026-05-04: R2 Storage And Local Backend Runtime
+
+Status: verified
+
+Changed areas:
+
+- `backend/open_webui/config.py`
+  - Open WebUI storage config now accepts Hermes-style `ARTIFACT_STORAGE_PROVIDER=r2` and `R2_*` variables, mapping them onto the existing S3-compatible storage provider.
+  - When R2 mode is selected, `AWS_DEFAULT_REGION=auto`, `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, and `R2_PUBLIC_BASE_URL` are enough for upload and public URL generation.
+- `backend/open_webui/storage/provider.py`
+  - `STORAGE_PROVIDER=r2` reuses the S3-compatible provider.
+  - `R2_PUBLIC_BASE_URL` / `S3_PUBLIC_BASE_URL` is used to produce model-accessible public object URLs.
+- `backend/open_webui/utils/middleware.py`
+  - Direct chat file attachments are injected into the latest user message as `<attached_files>` with public R2 URLs when available.
+  - Uploaded images stored in R2 are passed to the model as R2 public URLs instead of being converted to base64 first.
+- `src/lib/apis/files/index.ts`
+  - `process=false` uploads return after the upload response and no longer wait for `/process/status`, avoiding stale upload spinners for direct attachment flows.
+
+Validation:
+
+- Backend health: `curl http://127.0.0.1:8080/health` returned `200 {"status": true}` after starting Open WebUI with R2 environment.
+- Text upload: `POST /api/v1/files/?process=false` returned `200`; DB `file.path` was `s3://hermes-artifacts/open-webui/...`; `https://assets.abbyread.com/open-webui/...txt` returned the uploaded text.
+- Image upload: `POST /api/v1/files/?process=false` returned `200`; DB `file.path` was `s3://hermes-artifacts/open-webui/...`; `https://assets.abbyread.com/open-webui/...png` returned `HTTP/2 200` with `content-type: image/png`.
+- Middleware probe confirmed `add_direct_file_context(...)` emits `<attached_files>` with the R2 public URL, content type, and file name.
+- Middleware probe confirmed `get_model_image_url_from_file(...)` returns the R2 public image URL.
+- Lightweight checks: `python3 -m py_compile backend/open_webui/config.py backend/open_webui/storage/provider.py backend/open_webui/utils/middleware.py`; `git diff --check -- backend/open_webui/config.py backend/open_webui/storage/provider.py backend/open_webui/utils/middleware.py src/lib/apis/files/index.ts .env.example`; `./node_modules/.bin/prettier --check src/lib/apis/files/index.ts`.
+
+Runtime notes:
+
+- The previous long-running `8080` process was still using the repo `.env` MinIO/S3 settings, not Hermes R2. Restart is required after changing storage environment or middleware code.
+- In this environment, starting uvicorn with `--reload` from Codex can fail with `Operation not permitted` because file watching is blocked.
+- Binding `0.0.0.0:8080` from the non-escalated sandbox can also fail with `Operation not permitted`; use an approved/escalated launch path for runtime validation.
+- `launchctl submit` can keep Open WebUI running as a user-session background job. Do not source the repo `.env` from launchctl if it hits `operation not permitted`; source `/Users/anthony/.hermes/profiles/expertagent/.env` for R2 secrets and pass the non-secret Open WebUI variables explicitly.
+- Current verified background job label: `com.openwebui.r2`; it listens on `8080` and uses `STORAGE_PROVIDER=r2` plus `S3_KEY_PREFIX=open-webui`.
+- Full `npm run check` and `npm run build:bigmem` were intentionally not run automatically.
+
+### 2026-05-04: Attachment Upload And Preview Contract
+
+Status: verified
+
+Current behavior:
+
+- Image attachments upload directly with `process=false`; Open WebUI previews them from `/api/v1/files/{id}/content`, and Hermes receives model-accessible image URLs for direct visual understanding.
+- PDF, HTML, Markdown, and plain text-like files upload directly with `process=false`; Open WebUI injects an `<attached_files>` block with URL, content type, and file name into the latest user message instead of running Open WebUI RAG/vector processing.
+- Hermes gateway is responsible for lightweight attachment ingest for PDF, HTML, Markdown, TXT, JSON, CSV, and YAML: download to cache, extract readable text, inject the extracted content into the user message, then remove the raw attachment URL marker from the model-visible prompt after successful ingest.
+- Images are intentionally excluded from gateway text ingest because the model already handles image URLs efficiently.
+- Audio and video uploads still use server processing when required by the existing Open WebUI media path.
+
+Preview behavior:
+
+- PDF preview uses the existing `PDFViewer` against `/api/v1/files/{id}/content`.
+- Markdown preview fetches the stored raw file content and renders it as Markdown.
+- HTML preview fetches the stored raw file content and renders it as a sandboxed web page via `iframe srcdoc`, not as source code.
+- Other code-like text files remain source previews through `CodeBlock`.
+- Office previews remain client-side conversions where supported: Excel tables, DOCX via Mammoth, and PPTX slide images.
+
+Validation:
+
+- Frontend: `./node_modules/.bin/prettier --write src/lib/components/common/FileItemModal.svelte`
+- Frontend: `git diff --check -- src/lib/components/common/FileItemModal.svelte`
+- Frontend: single-file Svelte compiler smoke compile for `FileItemModal.svelte`.
+- User runtime checks confirmed PDF attachment ingest no longer triggers agent-side web extraction, and Markdown/HTML files now open in the file preview modal.
+
+Notes:
+
+- `iframe srcdoc` is intentionally scoped to single-file HTML reports. HTML files that depend on sibling relative assets may need a later resource-resolution path.
 - Full `npm run check` and `npm run build:bigmem` were intentionally not run automatically.
 
 ## Trial And Error Lessons

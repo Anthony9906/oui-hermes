@@ -17,6 +17,8 @@ import inspect
 import re
 import ast
 
+from datetime import timedelta
+from urllib.parse import urlencode
 from uuid import uuid4
 from concurrent.futures import ThreadPoolExecutor
 
@@ -692,20 +694,21 @@ def _upsert_hermes_tool_event(output: list, data: dict, sse_event_type: str | No
     call_id = str(
         _first_present(
             payload,
-            ['call_id', 'tool_call_id', 'id', 'uuid'],
+            ['call_id', 'tool_call_id', 'toolCallId', 'callId', 'id', 'uuid'],
         )
         or ''
     )
     arguments = _extract_hermes_tool_arguments(payload)
     result = _extract_hermes_tool_result(payload)
     status = str(payload.get('status') or '').lower()
+    progress_done = status in {'completed', 'complete', 'done', 'failed', 'error'}
     done = (
-        is_progress_event
+        (is_progress_event and (progress_done or not status))
         or event_type in {'tool_result', 'tool_complete', 'tool_done'}
         or event_type.endswith('.result')
         or event_type.endswith('.complete')
         or event_type.endswith('_complete')
-        or status in {'completed', 'complete', 'done', 'failed', 'error'}
+        or progress_done
         or bool(result)
     )
 
@@ -2045,6 +2048,11 @@ async def get_model_image_url_from_file(file: dict, request: Request) -> str:
 
         file_item = await Files.get_file_by_id(file_id)
         if file_item:
+            if isinstance(file_item.path, str) and file_item.path.startswith('s3://'):
+                direct_url = await get_file_access_url({'id': file_id}, request)
+                if direct_url:
+                    return direct_url
+
             file_path = Path(await asyncio.to_thread(Storage.get_file, file_item.path))
             if file_path.is_file():
                 with open(file_path, 'rb') as image_file:
@@ -2135,6 +2143,95 @@ async def add_file_context(messages: list, chat_id: str, user) -> list:
             message['content'] = [{'type': 'text', 'text': file_context}] + content
         else:
             message['content'] = file_context + content
+
+    return messages
+
+
+async def get_file_access_url(file: dict, request: Request) -> str:
+    """Return a model-accessible URL for an uploaded file without RAG processing."""
+    file_id = file.get('id') or file.get('url') or ''
+    if isinstance(file_id, str):
+        match = re.search(r'/api/v1/files/([^/]+)/content', file_id)
+        if match:
+            file_id = match.group(1)
+
+    if not file_id:
+        return ''
+
+    try:
+        from open_webui.models.files import Files
+        from open_webui.storage.provider import Storage
+
+        file_item = await Files.get_file_by_id(file_id)
+        if file_item and isinstance(file_item.path, str) and file_item.path.startswith('s3://'):
+            s3_key = Storage._extract_s3_key(file_item.path)
+            if getattr(Storage, 'public_base_url', None):
+                public_url = Storage.get_public_url(file_item.path)
+                if public_url:
+                    return public_url
+
+            return await asyncio.to_thread(
+                Storage.s3_client.generate_presigned_url,
+                'get_object',
+                Params={'Bucket': Storage.bucket_name, 'Key': s3_key},
+                ExpiresIn=3600,
+            )
+    except Exception as e:
+        log.debug(f'Failed to generate direct file access URL for {file_id}: {e}')
+
+    from open_webui.utils.auth import create_token
+
+    token = create_token(
+        {
+            'sub': 'hermes-file-access',
+            'scope': 'file_content',
+            'file_id': file_id,
+        },
+        expires_delta=timedelta(hours=1),
+    )
+    base_url = str(request.app.state.config.WEBUI_URL or request.base_url).rstrip('/')
+    return f'{base_url}/api/v1/files/{file_id}/content/direct?{urlencode({"token": token})}'
+
+
+async def add_direct_file_context(messages: list, files: list, request: Request) -> list:
+    """Inject uploaded file URLs into the latest user message for Hermes Agent."""
+    if not messages or not files:
+        return messages
+
+    file_tags = []
+    for file in files:
+        if not isinstance(file, dict):
+            continue
+        if file.get('type') != 'file':
+            continue
+
+        url = await get_file_access_url(file, request)
+        if not url:
+            continue
+
+        attrs = f'type="file" url="{html.escape(url, quote=True)}"'
+        name = file.get('name') or file.get('filename')
+        content_type = file.get('content_type') or file.get('file', {}).get('meta', {}).get('content_type')
+        if content_type:
+            attrs += f' content_type="{html.escape(str(content_type), quote=True)}"'
+        if name:
+            attrs += f' name="{html.escape(str(name), quote=True)}"'
+        file_tags.append(f'<file {attrs}/>')
+
+    if not file_tags:
+        return messages
+
+    file_context = '<attached_files>\n' + '\n'.join(file_tags) + '\n</attached_files>\n\n'
+
+    for message in reversed(messages):
+        if message.get('role') != 'user':
+            continue
+        content = message.get('content', '')
+        if isinstance(content, list):
+            message['content'] = [{'type': 'text', 'text': file_context}] + content
+        else:
+            message['content'] = file_context + str(content or '')
+        break
 
     return messages
 
@@ -2973,6 +3070,13 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         'files': files,
     }
     form_data['metadata'] = metadata
+
+    if files:
+        form_data['messages'] = await add_direct_file_context(form_data.get('messages', []), files, request)
+        metadata['direct_files'] = files
+        metadata['files'] = []
+        form_data['metadata'] = metadata
+        request.state.metadata = metadata
 
     # When the caller provides an explicit OpenAI-style `tools` array in the
     # request body, skip all server-side tool resolution and pass the caller's

@@ -2,7 +2,7 @@
 	import type { WorkBook } from 'xlsx';
 	import DOMPurify from 'dompurify';
 
-	import { getContext, onMount, tick } from 'svelte';
+	import { getContext, tick } from 'svelte';
 
 	import { formatFileSize, getLineCount } from '$lib/utils';
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
@@ -20,7 +20,6 @@
 
 	import Modal from './Modal.svelte';
 	import XMark from '../icons/XMark.svelte';
-	import Switch from './Switch.svelte';
 	import Tooltip from './Tooltip.svelte';
 	import dayjs from 'dayjs';
 	import Spinner from './Spinner.svelte';
@@ -32,13 +31,13 @@
 	export let show = false;
 	export let edit = false;
 
-	let enableFullContent = false;
 	let loading = false;
 
 	let isPDF = false;
 	let isAudio = false;
 	let isImage = false;
 	let isExcel = false;
+	let isHtml = false;
 	let isDocx = false;
 	let isPptx = false;
 
@@ -58,6 +57,8 @@
 	let pptxSlides: string[] = [];
 	let pptxCurrentSlide = 0;
 	let pptxError = '';
+	let textContent = '';
+	let textContentError = '';
 
 	let panzoomRef: PanzoomContainer;
 	const resetImageView = () => {
@@ -71,6 +72,11 @@
 	$: isMarkdown =
 		item?.meta?.content_type === 'text/markdown' ||
 		(item?.name && item?.name.toLowerCase().endsWith('.md'));
+
+	$: isHtml =
+		item?.meta?.content_type === 'text/html' ||
+		(item?.name &&
+			(item.name.toLowerCase().endsWith('.html') || item.name.toLowerCase().endsWith('.htm')));
 
 	$: isCode =
 		item?.name &&
@@ -136,6 +142,9 @@
 			'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
 		(item?.name && item.name.toLowerCase().endsWith('.pptx'));
 
+	$: hasDocumentPreview =
+		isAudio || isPDF || isExcel || isHtml || isCode || isMarkdown || isDocx || isPptx;
+
 	const loadExcelContent = async () => {
 		try {
 			excelError = '';
@@ -200,9 +209,27 @@
 		}
 	};
 
+	const loadTextContent = async () => {
+		if (item?.file?.data?.content || textContent) {
+			textContent = item?.file?.data?.content ?? textContent;
+			return;
+		}
+
+		try {
+			textContentError = '';
+			const arrayBuffer = await getFileContentById(item.id);
+			textContent = new TextDecoder('utf-8').decode(arrayBuffer);
+		} catch (error) {
+			console.error('Error loading text file:', error);
+			textContentError = $i18n.t('Failed to load file content. Please try downloading it instead.');
+		}
+	};
+
 	const loadContent = async () => {
-		selectedTab = '';
+		selectedTab = hasDocumentPreview ? 'preview' : '';
 		expandedContent = false;
+		textContent = '';
+		textContentError = '';
 		if (item?.type === 'collection') {
 			loading = true;
 
@@ -237,6 +264,9 @@
 			if (isPptx) {
 				await loadPptxContent();
 			}
+			if (isHtml || isCode || isMarkdown) {
+				await loadTextContent();
+			}
 
 			loading = false;
 		}
@@ -247,13 +277,6 @@
 	$: if (show) {
 		loadContent();
 	}
-
-	onMount(() => {
-		console.log(item);
-		if (item?.context === 'full') {
-			enableFullContent = true;
-		}
-	});
 </script>
 
 <Modal bind:show size="lg">
@@ -344,34 +367,6 @@
 							</div>
 						{/if}
 					</div>
-
-					{#if edit}
-						<div class=" self-end">
-							<Tooltip
-								content={enableFullContent
-									? $i18n.t(
-											'Inject the entire content as context for comprehensive processing, this is recommended for complex queries.'
-										)
-									: $i18n.t(
-											'Default to segmented retrieval for focused and relevant content extraction, this is recommended for most cases.'
-										)}
-							>
-								<div class="flex items-center gap-1.5 text-xs">
-									{#if enableFullContent}
-										{$i18n.t('Using Entire Document')}
-									{:else}
-										{$i18n.t('Using Focused Retrieval')}
-									{/if}
-									<Switch
-										bind:state={enableFullContent}
-										on:change={(e) => {
-											item.context = e.detail ? 'full' : undefined;
-										}}
-									/>
-								</div>
-							</Tooltip>
-						</div>
-					{/if}
 				</div>
 			</div>
 		</div>
@@ -387,32 +382,6 @@
 								</div>
 							</div>
 						{/each}
-					</div>
-				{/if}
-
-				{#if isAudio || isPDF || isExcel || isCode || isMarkdown || isDocx || isPptx}
-					<div
-						class="flex mb-2.5 scrollbar-none overflow-x-auto w-full border-b border-gray-50 dark:border-gray-850/30 text-center text-sm font-medium bg-transparent dark:text-gray-200"
-					>
-						<button
-							class="min-w-fit py-1.5 px-4 border-b {selectedTab === ''
-								? ' '
-								: ' border-transparent text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
-							type="button"
-							on:click={() => {
-								selectedTab = '';
-							}}>{$i18n.t('Content')}</button
-						>
-
-						<button
-							class="min-w-fit py-1.5 px-4 border-b {selectedTab === 'preview'
-								? ' '
-								: ' border-transparent text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition"
-							type="button"
-							on:click={() => {
-								selectedTab = 'preview';
-							}}>{$i18n.t('Preview')}</button
-						>
 					</div>
 				{/if}
 
@@ -549,23 +518,42 @@
 								<div class="text-gray-500 text-sm p-4">No content available</div>
 							{/if}
 						{/if}
-					{:else if isCode}
-						<div class="max-h-[60vh] overflow-scroll scrollbar-hidden text-sm relative">
-							<CodeBlock
-								code={item.file.data.content}
-								lang={item.name.split('.').pop()}
-								token={null}
-								edit={false}
-								run={false}
-								save={false}
+					{:else if isHtml}
+						{#if textContentError}
+							<div class="text-red-500 text-sm p-4">{textContentError}</div>
+						{:else}
+							<iframe
+								title={item?.name ?? 'HTML preview'}
+								srcdoc={textContent || item.file.data.content}
+								sandbox="allow-scripts allow-forms allow-popups allow-modals"
+								class="w-full h-[70vh] border-0 rounded-lg bg-white"
 							/>
-						</div>
+						{/if}
+					{:else if isCode}
+						{#if textContentError}
+							<div class="text-red-500 text-sm p-4">{textContentError}</div>
+						{:else}
+							<div class="max-h-[60vh] overflow-scroll scrollbar-hidden text-sm relative">
+								<CodeBlock
+									code={textContent || item.file.data.content}
+									lang={item.name.split('.').pop()}
+									token={null}
+									edit={false}
+									run={false}
+									save={false}
+								/>
+							</div>
+						{/if}
 					{:else if isMarkdown}
-						<div
-							class="max-h-[60vh] overflow-scroll scrollbar-hidden text-sm prose dark:prose-invert max-w-full"
-						>
-							<Markdown content={item.file.data.content} id="markdown-viewer" />
-						</div>
+						{#if textContentError}
+							<div class="text-red-500 text-sm p-4">{textContentError}</div>
+						{:else}
+							<div
+								class="max-h-[60vh] overflow-scroll scrollbar-hidden text-sm prose dark:prose-invert max-w-full"
+							>
+								<Markdown content={textContent || item.file.data.content} id="markdown-viewer" />
+							</div>
+						{/if}
 					{:else if isDocx}
 						{#if docxError}
 							<div class="text-red-500 text-sm p-4">{docxError}</div>

@@ -5,7 +5,6 @@
 
 	import XMark from '$lib/components/icons/XMark.svelte';
 	import AdvancedParams from '../Settings/Advanced/AdvancedParams.svelte';
-	import Valves from '$lib/components/chat/Controls/Valves.svelte';
 	import FileItem from '$lib/components/common/FileItem.svelte';
 	import Collapsible from '$lib/components/common/Collapsible.svelte';
 
@@ -25,12 +24,11 @@
 	};
 
 	let showFiles = getOpen('files');
-	let showValves = getOpen('valves', false);
 	let showSystemPrompt = getOpen('systemPrompt');
 	let showAdvancedParams = getOpen('advancedParams');
 </script>
 
-<div class=" dark:text-white">
+<div class="flex h-full min-h-0 flex-col dark:text-white">
 	{#if !embed}
 		<div class=" flex items-center justify-between dark:text-gray-100 mb-2">
 			<div class=" text-md self-center font-primary">{$i18n.t('Controls')}</div>
@@ -47,94 +45,90 @@
 	{/if}
 
 	{#if $user?.role === 'admin' || ($user?.permissions.chat?.controls ?? true)}
-		<div class=" dark:text-gray-200 text-sm py-0.5 px-0.5">
-			{#if chatFiles.length > 0}
-				<Collapsible
-					title={$i18n.t('Files')}
-					bind:open={showFiles}
-					onChange={setOpen('files')}
-					buttonClassName="w-full"
-				>
-					<div class="flex flex-col gap-1 mt-1.5" slot="content">
-						{#each chatFiles as file, fileIdx}
-							<FileItem
-								className="w-full"
-								item={file}
-								edit={true}
-								url={file?.url ? file.url : null}
-								name={file.name}
-								type={file.type}
-								size={file?.size}
-								dismissible={true}
-								small={true}
-								on:dismiss={() => {
-									// Remove the file from the chatFiles array
+		<div class="flex min-h-0 flex-1 flex-col dark:text-gray-200 text-sm py-0.5 px-0.5">
+			<div class="min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-hidden">
+				{#if chatFiles.length > 0}
+					<Collapsible
+						title={$i18n.t('Files')}
+						bind:open={showFiles}
+						onChange={setOpen('files')}
+						buttonClassName="w-full"
+					>
+						<div class="flex flex-col gap-1 mt-1.5" slot="content">
+							{#each chatFiles as file, fileIdx}
+								<FileItem
+									className="w-full"
+									item={file}
+									edit={true}
+									url={file?.url ? file.url : null}
+									name={file.name}
+									type={file.type}
+									size={file?.size}
+									dismissible={true}
+									small={true}
+									on:dismiss={() => {
+										// Remove the file from the chatFiles array
 
-									chatFiles.splice(fileIdx, 1);
-									chatFiles = chatFiles;
-								}}
-								on:click={() => {
-									console.log(file);
-								}}
-							/>
-						{/each}
-					</div>
-				</Collapsible>
-
-				<hr class="my-2 border-gray-50 dark:border-gray-700/10" />
-			{/if}
-
-			{#if $user?.role === 'admin' || ($user?.permissions.chat?.valves ?? true)}
-				<Collapsible
-					bind:open={showValves}
-					onChange={setOpen('valves')}
-					title={$i18n.t('Valves')}
-					buttonClassName="w-full"
-				>
-					<div class="text-sm" slot="content">
-						<Valves show={showValves} />
-					</div>
-				</Collapsible>
-
-				<hr class="my-2 border-gray-50 dark:border-gray-700/10" />
-			{/if}
-
-			{#if $user?.role === 'admin' || ($user?.permissions.chat?.system_prompt ?? true)}
-				<Collapsible
-					title={$i18n.t('System Prompt')}
-					bind:open={showSystemPrompt}
-					onChange={setOpen('systemPrompt')}
-					buttonClassName="w-full"
-				>
-					<div class="" slot="content">
-						<textarea
-							bind:value={params.system}
-							class="w-full text-xs outline-hidden resize-vertical {$settings.highContrastMode
-								? 'border-2 border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 p-2.5'
-								: 'py-1.5 bg-transparent'}"
-							rows="4"
-							placeholder={$i18n.t('Enter system prompt')}
-						/>
-					</div>
-				</Collapsible>
-
-				<hr class="my-2 border-gray-50 dark:border-gray-700/10" />
-			{/if}
-
-			{#if $user?.role === 'admin' || ($user?.permissions.chat?.params ?? true)}
-				<Collapsible
-					title={$i18n.t('Advanced Params')}
-					bind:open={showAdvancedParams}
-					onChange={setOpen('advancedParams')}
-					buttonClassName="w-full"
-				>
-					<div class="text-sm mt-1.5" slot="content">
-						<div>
-							<AdvancedParams admin={$user?.role === 'admin'} custom={true} bind:params />
+										chatFiles.splice(fileIdx, 1);
+										chatFiles = chatFiles;
+									}}
+									on:click={() => {
+										console.log(file);
+									}}
+								/>
+							{/each}
 						</div>
-					</div>
-				</Collapsible>
-			{/if}
+					</Collapsible>
+
+					<hr class="my-2 border-gray-50 dark:border-gray-700/10" />
+				{/if}
+
+				{#if $user?.role === 'admin' || ($user?.permissions.chat?.system_prompt ?? true)}
+					<Collapsible
+						title="添加系统提示词"
+						bind:open={showSystemPrompt}
+						onChange={setOpen('systemPrompt')}
+						buttonClassName="w-full"
+					>
+						<div class="" slot="content">
+							<textarea
+								bind:value={params.system}
+								class="w-full text-xs outline-hidden resize-vertical {$settings.highContrastMode
+									? 'border-2 border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 p-2.5'
+									: 'py-1.5 bg-transparent'}"
+								rows="4"
+								placeholder={$i18n.t('Enter system prompt')}
+							/>
+						</div>
+					</Collapsible>
+
+					<hr class="my-2 border-gray-50 dark:border-gray-700/10" />
+				{/if}
+
+				{#if $user?.role === 'admin' || ($user?.permissions.chat?.params ?? true)}
+					<Collapsible
+						title={$i18n.t('Advanced Params')}
+						bind:open={showAdvancedParams}
+						onChange={setOpen('advancedParams')}
+						buttonClassName="w-full"
+					>
+						<div class="text-sm mt-1.5" slot="content">
+							<div>
+								<AdvancedParams chatControls={true} bind:params />
+							</div>
+						</div>
+					</Collapsible>
+				{/if}
+			</div>
+
+			<div class="shrink-0 pt-6 pb-10 flex justify-center">
+				<img
+					src="/assets/images/expert-agent-cowain-logo.png"
+					alt="Expert Agent CoWaiN"
+					class="w-56 max-w-[46%]"
+					draggable="false"
+				/>
+			</div>
 		</div>
 	{/if}
 </div>

@@ -13,6 +13,7 @@
 	import Interface from './Settings/Interface.svelte';
 	import Models from './Settings/Models.svelte';
 	import Connections from './Settings/Connections.svelte';
+	import Audio from './Settings/Audio.svelte';
 
 	import Evaluations from './Settings/Evaluations.svelte';
 	import Integrations from './Settings/Integrations.svelte';
@@ -37,6 +38,7 @@
 			'evaluations',
 			'integrations',
 			'interface',
+			'audio',
 			'pipelines',
 			'db'
 		].includes(tabFromPath)
@@ -67,6 +69,7 @@
 		'evaluations',
 		'integrations',
 		'interface',
+		'audio',
 		'pipelines',
 		'db'
 	];
@@ -531,6 +534,12 @@
 		{:else if selectedTab === 'interface'}
 			<Interface
 				on:save={() => {
+					toast.success($i18n.t('Settings saved successfully!'));
+				}}
+			/>
+		{:else if selectedTab === 'audio'}
+			<Audio
+				saveHandler={() => {
 					toast.success($i18n.t('Settings saved successfully!'));
 				}}
 			/>

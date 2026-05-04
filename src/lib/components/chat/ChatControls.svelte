@@ -403,7 +403,7 @@
 								: activeTab === 'expertAgents'
 									? 'h-full'
 									: activeTab === 'controls'
-										? 'overflow-y-auto px-3 pt-1'
+										? 'h-full min-h-0 px-3 pt-1'
 										: ''}"
 						>
 							{#if activeTab === 'overview'}
@@ -570,7 +570,7 @@
 									: activeTab === 'expertAgents'
 										? 'h-full'
 										: activeTab === 'controls'
-											? 'overflow-y-auto px-3 pt-1'
+											? 'h-full min-h-0 px-3 pt-1'
 											: ''}"
 							>
 								{#if activeTab === 'overview'}
