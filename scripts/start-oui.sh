@@ -10,11 +10,16 @@ BACKEND_PORT="${BACKEND_PORT:-8080}"
 FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 BACKEND_HOST="${BACKEND_HOST:-0.0.0.0}"
 FRONTEND_HOST="${FRONTEND_HOST:-0.0.0.0}"
+ARTIFACT_SERVICE_DIR="${ARTIFACT_SERVICE_DIR:-$HOME/Documents/Hermes/local-artifact-preview-service}"
+ARTIFACT_SERVICE_PORT="${ARTIFACT_SERVICE_PORT:-8787}"
+ARTIFACT_SERVICE_HOST="${ARTIFACT_SERVICE_HOST:-0.0.0.0}"
+ARTIFACT_SERVICE_BASE_URL="${ARTIFACT_SERVICE_BASE_URL:-http://localhost:$ARTIFACT_SERVICE_PORT}"
 HERMES_PROFILE_ENV="${HERMES_PROFILE_ENV:-$HOME/.hermes/profiles/expertagent/.env}"
 LOG_DIR="${LOG_DIR:-$ROOT_DIR/logs}"
 
 BACKEND_LOG="$LOG_DIR/open-webui-backend.log"
 FRONTEND_LOG="$LOG_DIR/open-webui-frontend.log"
+ARTIFACT_SERVICE_LOG="$LOG_DIR/local-artifact-preview-service.log"
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
@@ -127,12 +132,29 @@ run_frontend() {
 	exec npm run dev -- --host "$FRONTEND_HOST" --port "$FRONTEND_PORT"
 }
 
+run_artifact_service() {
+	mkdir -p "$LOG_DIR"
+	if [ ! -d "$ARTIFACT_SERVICE_DIR" ]; then
+		printf '[open-webui] local artifact service directory not found: %s\n' "$ARTIFACT_SERVICE_DIR" >&2
+		exit 1
+	fi
+
+	cd "$ARTIFACT_SERVICE_DIR"
+	export LOCAL_ARTIFACT_HOST="$ARTIFACT_SERVICE_HOST"
+	export LOCAL_ARTIFACT_PORT="$ARTIFACT_SERVICE_PORT"
+	export LOCAL_ARTIFACT_BASE_URL="$ARTIFACT_SERVICE_BASE_URL"
+	exec uv run uvicorn app.main:app --host "$ARTIFACT_SERVICE_HOST" --port "$ARTIFACT_SERVICE_PORT"
+}
+
 case "${1:-}" in
 	--run-backend)
 		run_backend
 		;;
 	--run-frontend)
 		run_frontend
+		;;
+	--run-artifact-service)
+		run_artifact_service
 		;;
 esac
 
@@ -143,8 +165,14 @@ require_cmd uv
 
 mkdir -p "$LOG_DIR"
 
+stop_port "local artifact service" "$ARTIFACT_SERVICE_PORT"
 stop_port "frontend" "$FRONTEND_PORT"
 stop_port "backend" "$BACKEND_PORT"
+
+info "starting local artifact service on port $ARTIFACT_SERVICE_PORT"
+: >"$ARTIFACT_SERVICE_LOG"
+nohup /bin/bash "$SCRIPT_PATH" --run-artifact-service >"$ARTIFACT_SERVICE_LOG" 2>&1 &
+info "local artifact service pid: $!; log: $ARTIFACT_SERVICE_LOG"
 
 info "starting backend on port $BACKEND_PORT"
 : >"$BACKEND_LOG"
@@ -156,9 +184,11 @@ info "starting frontend on port $FRONTEND_PORT"
 nohup /bin/bash "$SCRIPT_PATH" --run-frontend >"$FRONTEND_LOG" 2>&1 &
 info "frontend pid: $!; log: $FRONTEND_LOG"
 
+wait_for_url "local artifact service" "http://127.0.0.1:$ARTIFACT_SERVICE_PORT/health" "$ARTIFACT_SERVICE_LOG"
 wait_for_url "backend" "http://127.0.0.1:$BACKEND_PORT/health" "$BACKEND_LOG"
 wait_for_url "frontend" "http://127.0.0.1:$FRONTEND_PORT/" "$FRONTEND_LOG"
 
 info "done"
-info "frontend: http://localhost:$FRONTEND_PORT/"
-info "backend:  http://localhost:$BACKEND_PORT/"
+info "frontend:               http://localhost:$FRONTEND_PORT/"
+info "backend:                http://localhost:$BACKEND_PORT/"
+info "local artifact service: $ARTIFACT_SERVICE_BASE_URL/"

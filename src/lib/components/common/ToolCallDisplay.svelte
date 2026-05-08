@@ -4,7 +4,6 @@
 	import { getContext } from 'svelte';
 	const i18n = getContext('i18n');
 
-	import Spinner from './Spinner.svelte';
 	import Terminal from '../icons/Terminal.svelte';
 	import Search from '../icons/Search.svelte';
 	import GlobeAlt from '../icons/GlobeAlt.svelte';
@@ -22,6 +21,7 @@
 		files?: string;
 		embeds?: string;
 		done?: string;
+		status?: string;
 	} = {};
 
 	export let open = false;
@@ -34,7 +34,16 @@
 	const COMMAND_KEYS = ['command', 'cmd', 'shell', 'bash', 'terminal'];
 	const SEARCH_KEYS = ['query', 'queries', 'pattern', 'search'];
 	const URL_KEYS = ['url', 'urls', 'link', 'href'];
-	const FILE_KEYS = ['path', 'file', 'filename', 'directory', 'cwd', 'working_directory'];
+	const FILE_KEYS = [
+		'path',
+		'file_path',
+		'file',
+		'filename',
+		'directory',
+		'cwd',
+		'working_directory'
+	];
+	const TODO_LIST_KEYS = ['todos', 'tasks', 'items'];
 	const PREVIEW_KEYS = [
 		'label',
 		'description',
@@ -45,6 +54,7 @@
 		'query',
 		'pattern',
 		'path',
+		'file_path',
 		'file',
 		'filename',
 		'url',
@@ -52,6 +62,34 @@
 		'working_directory'
 	];
 	const EMOJI_KEYS = ['emoji'];
+	const CUSTOM_TOOL_EMOJIS: Record<string, string> = {
+		todo: '🗒️',
+		terminal: '⌨️',
+		process: '⏱️',
+		execute_code: '🧪',
+		search_files: '🔎',
+		web_search: '🔍',
+		web_extract: '📄',
+		browser_navigate: '🌍',
+		browser_snapshot: '📸',
+		browser_click: '👆',
+		browser_type: '⌨️',
+		browser_scroll: '📜',
+		browser_back: '↩️',
+		browser_press: '⌨️',
+		browser_console: '🧾',
+		read_file: '📖',
+		write_file: '✍️',
+		patch: '🛠️',
+		memory: '🧠',
+		session_search: '🔎',
+		skill_view: '📚',
+		skills_list: '📚',
+		skill_manage: '🧩',
+		delegate_task: '🧭',
+		clarify: '💡',
+		cronjob: '⏰'
+	};
 	const TOOL_NAME_KEYS = [
 		'tool_name',
 		'function_name',
@@ -119,15 +157,40 @@
 		return typeof value === 'object' && value !== null && !Array.isArray(value);
 	}
 
-	function* walkValues(value: unknown): Generator<unknown> {
+	function parseNestedJSONValue(value: unknown): unknown {
+		if (typeof value !== 'string') {
+			return undefined;
+		}
+
+		const trimmed = value.trim();
+		if (!trimmed || !['{', '['].includes(trimmed[0])) {
+			return undefined;
+		}
+
+		try {
+			return JSON.parse(trimmed);
+		} catch {
+			return undefined;
+		}
+	}
+
+	function* walkValues(value: unknown, depth = 0): Generator<unknown> {
 		yield value;
+		if (depth > 8) {
+			return;
+		}
+		const parsed = parseNestedJSONValue(value);
+		if (parsed !== undefined) {
+			yield* walkValues(parsed, depth + 1);
+			return;
+		}
 		if (Array.isArray(value)) {
 			for (const item of value) {
-				yield* walkValues(item);
+				yield* walkValues(item, depth + 1);
 			}
 		} else if (isRecord(value)) {
 			for (const item of Object.values(value)) {
-				yield* walkValues(item);
+				yield* walkValues(item, depth + 1);
 			}
 		}
 	}
@@ -147,6 +210,25 @@
 				) {
 					return nestedValue;
 				}
+			}
+		}
+
+		return undefined;
+	}
+
+	function readOwnValueByKeys(value: unknown, keys: string[]): unknown {
+		if (!isRecord(value)) {
+			return undefined;
+		}
+
+		const normalizedKeys = new Set(keys.map((key) => key.toLowerCase()));
+		for (const [key, nestedValue] of Object.entries(value)) {
+			if (
+				normalizedKeys.has(key.toLowerCase()) &&
+				nestedValue !== null &&
+				nestedValue !== undefined
+			) {
+				return nestedValue;
 			}
 		}
 
@@ -178,6 +260,16 @@
 		return compactText(toDisplayText(value));
 	}
 
+	function normalizeToolIdentifier(value: string): string {
+		return value
+			.trim()
+			.replace(/Tool_tool$/i, '')
+			.replace(/Tool$/i, '')
+			.replace(/[-\s]+/g, '_')
+			.replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+			.toLowerCase();
+	}
+
 	function normalizeTodoStatus(value: unknown): TodoStatus {
 		const status = String(value ?? 'pending')
 			.trim()
@@ -198,8 +290,12 @@
 
 	function findTodos(value: unknown): unknown[] | undefined {
 		for (const item of walkValues(value)) {
-			if (isRecord(item) && Array.isArray(item.todos)) {
-				return item.todos;
+			if (!isRecord(item)) {
+				continue;
+			}
+			const nestedValue = readOwnValueByKeys(item, TODO_LIST_KEYS);
+			if (Array.isArray(nestedValue)) {
+				return nestedValue;
 			}
 		}
 		return undefined;
@@ -218,16 +314,18 @@
 				}
 
 				const content = compactText(
-					valueToPreview(item.content ?? item.title ?? item.task ?? item.id)
+					valueToPreview(
+						readOwnValueByKeys(item, ['content', 'title', 'task', 'description', 'id'])
+					)
 				);
 				if (!content) {
 					return null;
 				}
 
 				return {
-					id: valueToPreview(item.id),
+					id: valueToPreview(readOwnValueByKeys(item, ['id'])),
 					content,
-					status: normalizeTodoStatus(item.status)
+					status: normalizeTodoStatus(readOwnValueByKeys(item, ['status']))
 				};
 			})
 			.filter(Boolean) as TodoItem[];
@@ -249,7 +347,7 @@
 			return '';
 		}
 
-		return `Agent 正在分步完成任务：${Number.isFinite(completed) ? completed : 0} / ${todos.length}`;
+		return `Agent 正在分步完成任务：${Number.isFinite(completed) ? completed : 0} / ${total}`;
 	}
 
 	function isTodoTool(rawName: string, parsedArgs: unknown, parsedResult: unknown): boolean {
@@ -259,7 +357,49 @@
 			valueToPreview(readValueByKeys(parsedResult, ['tool', 'name', 'function_name']))
 		];
 
-		return names.some((name) => name.trim().toLowerCase() === 'todo');
+		return names.some((name) => normalizeToolIdentifier(name) === 'todo');
+	}
+
+	function hasToolIdentifier(
+		rawName: string,
+		parsedArgs: unknown,
+		parsedResult: unknown,
+		expectedNames: string[]
+	): boolean {
+		const expected = new Set(expectedNames.map(normalizeToolIdentifier));
+		const names = [
+			rawName,
+			valueToPreview(readValueByKeys(parsedArgs, ['tool'])),
+			valueToPreview(readValueByKeys(parsedResult, ['tool'])),
+			valueToPreview(readValueByKeys(parsedArgs, TOOL_NAME_KEYS)),
+			valueToPreview(readValueByKeys(parsedResult, TOOL_NAME_KEYS))
+		];
+
+		return names.some((name) => expected.has(normalizeToolIdentifier(name)));
+	}
+
+	function getCustomToolEmoji(
+		rawName: string,
+		parsedArgs: unknown,
+		parsedResult: unknown,
+		officialEmoji: string
+	): string {
+		const names = [
+			rawName,
+			valueToPreview(readValueByKeys(parsedArgs, ['tool'])),
+			valueToPreview(readValueByKeys(parsedResult, ['tool'])),
+			valueToPreview(readValueByKeys(parsedArgs, TOOL_NAME_KEYS)),
+			valueToPreview(readValueByKeys(parsedResult, TOOL_NAME_KEYS))
+		];
+
+		for (const name of names) {
+			const normalized = normalizeToolIdentifier(name);
+			if (CUSTOM_TOOL_EMOJIS[normalized]) {
+				return CUSTOM_TOOL_EMOJIS[normalized];
+			}
+		}
+
+		return officialEmoji;
 	}
 
 	function hasAnyKey(value: unknown, keys: string[]): boolean {
@@ -281,7 +421,7 @@
 
 	function humanizeToolName(value: string): string {
 		const name = value.trim();
-		const normalized = name.toLowerCase();
+		const normalized = normalizeToolIdentifier(name);
 
 		if (
 			['bash', 'shell', 'terminal', 'command', 'exec', 'execute', 'run_command'].includes(
@@ -293,10 +433,19 @@
 		if (['web_search', 'search', 'tavily_search', 'google_search'].includes(normalized)) {
 			return '搜索';
 		}
+		if (normalized === 'search_files') {
+			return 'Search Files';
+		}
 		if (['open_url', 'browser', 'web', 'fetch'].includes(normalized)) {
 			return '访问网页';
 		}
-		if (['read_file', 'write_file', 'list_files', 'file'].includes(normalized)) {
+		if (normalized === 'read_file') {
+			return '读取文件';
+		}
+		if (normalized === 'write_file') {
+			return '写入文件';
+		}
+		if (['list_files', 'file'].includes(normalized)) {
 			return '文件操作';
 		}
 		if (['skill_view', 'skill', 'load_skill'].includes(normalized)) {
@@ -334,7 +483,7 @@
 			valueToPreview(readValueByKeys(parsedArgs, ['tool'])) ||
 			valueToPreview(readValueByKeys(parsedResult, ['tool']));
 		if (hermesToolName && !isGenericToolName(hermesToolName)) {
-			return hermesToolName;
+			return humanizeToolName(hermesToolName);
 		}
 
 		const nestedName =
@@ -361,6 +510,55 @@
 		return '工具调用';
 	}
 
+	function getValuePreviewFromSources(sources: unknown[], keys: string[]): string {
+		for (const source of sources) {
+			const value = valueToPreview(readValueByKeys(source, keys));
+			if (value && !EMPTY_PREVIEW_TEXTS.has(value)) {
+				return value;
+			}
+		}
+		return '';
+	}
+
+	function joinPreviewParts(parts: string[]): string {
+		return parts.filter(Boolean).join(' ');
+	}
+
+	function getSpecificPreviewText(
+		rawName: string,
+		parsedArgs: unknown,
+		parsedResult: unknown
+	): string {
+		const sources = [parsedArgs, parsedResult];
+
+		if (hasToolIdentifier(rawName, parsedArgs, parsedResult, ['search_files'])) {
+			const pattern = getValuePreviewFromSources(sources, ['pattern']);
+			const path = getValuePreviewFromSources(sources, [
+				'path',
+				'file_path',
+				'directory',
+				'cwd',
+				'working_directory'
+			]);
+			if (pattern && path) {
+				return `${pattern} in ${path}`;
+			}
+			return joinPreviewParts([pattern, path]);
+		}
+
+		if (hasToolIdentifier(rawName, parsedArgs, parsedResult, ['read_file'])) {
+			return getValuePreviewFromSources(sources, ['path', 'file_path', 'file', 'filename']);
+		}
+
+		if (hasToolIdentifier(rawName, parsedArgs, parsedResult, ['skill_view'])) {
+			const skillName = getValuePreviewFromSources(sources, ['skill_name', 'name']);
+			const filePath = getValuePreviewFromSources(sources, ['file_path', 'path']);
+			return joinPreviewParts([skillName, filePath]);
+		}
+
+		return '';
+	}
+
 	function stripLeadingToolName(preview: string, displayToolName: string): string {
 		const normalizedName = displayToolName.trim();
 		if (!preview || !normalizedName) {
@@ -382,12 +580,18 @@
 	}
 
 	function getPreviewText(
+		rawName: string,
 		parsedArgs: unknown,
 		parsedResult: unknown,
 		argsText: string,
 		resultText: string,
 		displayToolName = ''
 	): string {
+		const specificPreview = getSpecificPreviewText(rawName, parsedArgs, parsedResult);
+		if (specificPreview) {
+			return specificPreview;
+		}
+
 		const previewValue =
 			readValueByKeys(parsedArgs, PREVIEW_KEYS) ?? readValueByKeys(parsedResult, PREVIEW_KEYS);
 		const preview = stripLeadingToolName(valueToPreview(previewValue), displayToolName);
@@ -406,7 +610,14 @@
 	export let resultContent: string = '';
 
 	$: result = resultContent || decode(attributes?.result ?? '');
-	$: isExecuting = attributes?.done && attributes?.done !== 'true';
+	$: toolStatus = String(attributes?.status ?? '')
+		.trim()
+		.toLowerCase()
+		.replace(/[-\s]+/g, '_');
+	$: isFailed = ['failed', 'error', 'cancelled', 'canceled'].includes(toolStatus);
+	$: isExecuting =
+		(toolStatus && ['running', 'in_progress', 'active', 'working'].includes(toolStatus)) ||
+		(attributes?.done && attributes?.done !== 'true');
 
 	$: parsedArgs = parseJSONString(args);
 	$: parsedResult = parseJSONString(result);
@@ -418,6 +629,7 @@
 	$: hermesEmoji =
 		valueToPreview(readValueByKeys(parsedArgs, EMOJI_KEYS)) ||
 		valueToPreview(readValueByKeys(parsedResult, EMOJI_KEYS));
+	$: displayEmoji = getCustomToolEmoji(toolName, parsedArgs, parsedResult, hermesEmoji);
 	$: visibleArgsText = EMPTY_PREVIEW_TEXTS.has(compactText(argsText)) ? '' : argsText;
 	$: visibleResultText = EMPTY_PREVIEW_TEXTS.has(compactText(resultText)) ? '' : resultText;
 	$: todoItems = isTodoTool(toolName, parsedArgs, parsedResult)
@@ -429,22 +641,32 @@
 		? getTodoSummaryText(parsedResult) || getTodoSummaryText(parsedArgs)
 		: '';
 	$: previewText = limitText(
-		todoSummaryText ||
-			getPreviewText(parsedArgs, parsedResult, visibleArgsText, visibleResultText, displayToolName),
+		getPreviewText(
+			toolName,
+			parsedArgs,
+			parsedResult,
+			visibleArgsText,
+			visibleResultText,
+			displayToolName
+		) || todoSummaryText,
 		HEADER_PREVIEW_LIMIT
 	);
 </script>
 
 <div {id} class={className}>
 	<div class="{buttonClassName} hermes-tool-call">
-		<div class="w-full max-w-full flex items-center gap-1.5 {isExecuting ? 'shimmer' : ''}">
-			{#if isExecuting}
-				<div class="hermes-tool-call-icon">
-					<Spinner className="size-4" />
+		<div
+			class="w-full max-w-full flex items-center gap-1.5 {isExecuting
+				? 'shimmer hermes-tool-call-running'
+				: ''}"
+		>
+			{#if isFailed}
+				<div class="hermes-tool-call-icon hermes-tool-call-failed">
+					<XMark className="size-3.5" />
 				</div>
-			{:else if hermesEmoji}
+			{:else if displayEmoji}
 				<div class="hermes-tool-call-icon hermes-tool-call-emoji">
-					{hermesEmoji}
+					{displayEmoji}
 				</div>
 			{:else if toolKind === 'command'}
 				<div class="hermes-tool-call-icon">
@@ -520,11 +742,32 @@
 		opacity: 0.82;
 	}
 
+	.hermes-tool-call-failed {
+		color: #d24d57 !important;
+	}
+
 	.hermes-tool-call-emoji {
 		width: 1rem;
 		font-size: 0.875rem;
 		line-height: 1rem;
 		text-align: center;
+	}
+
+	.hermes-tool-call-running .hermes-tool-call-emoji {
+		animation: hermes-tool-call-pulse 1.2s ease-in-out infinite;
+	}
+
+	@keyframes hermes-tool-call-pulse {
+		0%,
+		100% {
+			transform: translateY(0);
+			opacity: 0.78;
+		}
+
+		50% {
+			transform: translateY(-1px);
+			opacity: 1;
+		}
 	}
 
 	.hermes-tool-todos {
@@ -587,6 +830,7 @@
 	}
 
 	.hermes-tool-todo-completed .hermes-tool-todo-content {
+		text-decoration: line-through;
 		color: #bbc0cc !important;
 	}
 

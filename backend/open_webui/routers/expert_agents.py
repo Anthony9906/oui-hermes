@@ -1,22 +1,29 @@
 import logging
+import os
+from pathlib import Path
 from typing import Any
-from urllib.parse import quote
 
-import aiohttp
+import yaml
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from open_webui.config import HERMES_API_BASE_URL, HERMES_API_KEY
+from open_webui.config import (
+    HERMES_EXPERT_AGENT_HIDDEN_SKILLS,
+    HERMES_EXPERT_AGENT_SKILLS_DIR,
+    HERMES_EXPERT_AGENT_VISIBLE_SKILLS,
+)
 from open_webui.utils.auth import get_verified_user
 
 log = logging.getLogger(__name__)
 
 router = APIRouter()
 
+EXCLUDED_SKILL_DIRS = frozenset((".git", ".github", ".hub", ".archive", "__pycache__"))
+
 
 class ExpertAgentItem(BaseModel):
     skill_name: str
-    description: str = ''
+    description: str = ""
 
 
 class ExpertAgentListResponse(BaseModel):
@@ -25,7 +32,7 @@ class ExpertAgentListResponse(BaseModel):
 
 class ExpertAgentDetailResponse(BaseModel):
     name: str
-    description: str = ''
+    description: str = ""
     content: str
     path: str | None = None
     tags: list[str] = Field(default_factory=list)
@@ -37,144 +44,199 @@ class ExpertAgentDetailResponse(BaseModel):
     metadata: dict[str, Any] | None = None
 
 
-@router.get('', response_model=ExpertAgentListResponse)
-@router.get('/', response_model=ExpertAgentListResponse)
+def _split_env_list(value: str) -> set[str]:
+    return {item.strip() for item in value.split(",") if item.strip()}
+
+
+def _default_skills_root() -> Path:
+    hermes_home = Path(os.environ.get("HERMES_HOME") or Path.home() / ".hermes")
+    expertagent_root = hermes_home / "profiles" / "expertagent" / "skills"
+    if expertagent_root.exists():
+        return expertagent_root
+    return hermes_home / "skills"
+
+
+def _skills_root() -> Path:
+    return (
+        Path(HERMES_EXPERT_AGENT_SKILLS_DIR).expanduser()
+        if HERMES_EXPERT_AGENT_SKILLS_DIR
+        else _default_skills_root()
+    )
+
+
+def _read_bundled_skill_names(root: Path) -> set[str]:
+    manifest = root / ".bundled_manifest"
+    if not manifest.exists():
+        return set()
+
+    bundled = set()
+    try:
+        for line in manifest.read_text(encoding="utf-8").splitlines():
+            name, _, _digest = line.partition(":")
+            name = name.strip()
+            if name:
+                bundled.add(name)
+    except OSError as e:
+        log.warning("Failed to read Hermes bundled skill manifest %s: %s", manifest, e)
+    return bundled
+
+
+def _read_skill_frontmatter(content: str) -> dict[str, Any]:
+    if not content.startswith("---"):
+        return {}
+
+    lines = content.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return {}
+
+    for index, line in enumerate(lines[1:], start=1):
+        if line.strip() != "---":
+            continue
+
+        raw_frontmatter = "\n".join(lines[1:index])
+        try:
+            parsed = yaml.safe_load(raw_frontmatter) or {}
+            return parsed if isinstance(parsed, dict) else {}
+        except yaml.YAMLError as e:
+            log.warning("Failed to parse Hermes skill frontmatter: %s", e)
+            return {}
+
+    return {}
+
+
+def _read_skill(skill_md: Path) -> dict[str, Any] | None:
+    try:
+        content = skill_md.read_text(encoding="utf-8")
+    except OSError as e:
+        log.warning("Failed to read Hermes skill %s: %s", skill_md, e)
+        return None
+
+    frontmatter = _read_skill_frontmatter(content)
+    metadata = (
+        frontmatter.get("metadata")
+        if isinstance(frontmatter.get("metadata"), dict)
+        else {}
+    )
+    hermes_metadata = (
+        metadata.get("hermes") if isinstance(metadata.get("hermes"), dict) else {}
+    )
+
+    return {
+        "name": str(frontmatter.get("name") or skill_md.parent.name),
+        "description": str(frontmatter.get("description") or ""),
+        "content": content,
+        "path": str(skill_md.parent),
+        "tags": (
+            hermes_metadata.get("tags")
+            if isinstance(hermes_metadata.get("tags"), list)
+            else []
+        ),
+        "related_skills": (
+            hermes_metadata.get("related_skills")
+            if isinstance(hermes_metadata.get("related_skills"), list)
+            else []
+        ),
+        "linked_files": (
+            hermes_metadata.get("linked_files")
+            if isinstance(hermes_metadata.get("linked_files"), dict)
+            else None
+        ),
+        "readiness_status": hermes_metadata.get("readiness_status"),
+        "setup_needed": hermes_metadata.get("setup_needed"),
+        "setup_note": hermes_metadata.get("setup_note"),
+        "metadata": metadata or None,
+        "_skill_md": skill_md,
+    }
+
+
+def _is_excluded_path(path: Path, root: Path) -> bool:
+    try:
+        relative_parts = path.relative_to(root).parts
+    except ValueError:
+        return True
+    return any(
+        part in EXCLUDED_SKILL_DIRS or part.startswith(".") for part in relative_parts
+    )
+
+
+def _is_visible_skill(
+    skill: dict[str, Any], bundled: set[str], hidden: set[str], visible: set[str]
+) -> bool:
+    names = {str(skill.get("name") or ""), skill["_skill_md"].parent.name}
+    names.discard("")
+
+    if names & bundled:
+        return False
+    if hidden and names & hidden:
+        return False
+    if visible and not (names & visible):
+        return False
+    return True
+
+
+def _load_visible_skills() -> list[dict[str, Any]]:
+    root = _skills_root()
+    if not root.exists():
+        log.warning("Hermes expert agent skills directory does not exist: %s", root)
+        return []
+
+    bundled = _read_bundled_skill_names(root)
+    hidden = _split_env_list(HERMES_EXPERT_AGENT_HIDDEN_SKILLS)
+    visible = _split_env_list(HERMES_EXPERT_AGENT_VISIBLE_SKILLS)
+
+    skills = []
+    for skill_md in sorted(root.rglob("SKILL.md")):
+        if _is_excluded_path(skill_md, root):
+            continue
+
+        skill = _read_skill(skill_md)
+        if not skill or not _is_visible_skill(skill, bundled, hidden, visible):
+            continue
+        skills.append(skill)
+
+    return sorted(skills, key=lambda item: str(item.get("name") or "").lower())
+
+
+def _find_visible_skill(skill_name: str) -> dict[str, Any] | None:
+    for skill in _load_visible_skills():
+        names = {str(skill.get("name") or ""), skill["_skill_md"].parent.name}
+        if skill_name in names:
+            return skill
+    return None
+
+
+@router.get("", response_model=ExpertAgentListResponse)
+@router.get("/", response_model=ExpertAgentListResponse)
 async def get_expert_agents(user=Depends(get_verified_user)):
-    try:
-        timeout = aiohttp.ClientTimeout(total=10)
-        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
-            headers = {}
-            if HERMES_API_KEY:
-                headers['Authorization'] = f'Bearer {HERMES_API_KEY}'
-
-            async with session.get(f'{HERMES_API_BASE_URL}/skills', headers=headers) as response:
-                if response.status >= 400:
-                    body = await response.text()
-                    log.warning('Failed to load Hermes skills: status=%s body=%s', response.status, body)
-                    raise HTTPException(
-                        status_code=status.HTTP_502_BAD_GATEWAY,
-                        detail='Failed to load Hermes skills',
-                    )
-
-                data = await response.json()
-
-        items = []
-        for item in data.get('items', []):
-            skill_name = item.get('skill_name', '')
-            if not skill_name:
-                continue
-
-            items.append(
-                ExpertAgentItem(
-                    skill_name=skill_name,
-                    description=item.get('description', '') or '',
-                )
-            )
-
-        return ExpertAgentListResponse(items=items)
-    except HTTPException:
-        raise
-    except Exception as e:
-        log.exception('Failed to load Hermes skills: %s', e)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail='Failed to load Hermes skills',
+    items = [
+        ExpertAgentItem(
+            skill_name=skill["name"],
+            description=skill.get("description") or "",
         )
+        for skill in _load_visible_skills()
+    ]
+    return ExpertAgentListResponse(items=items)
 
 
-@router.get('/{skill_name:path}', response_model=ExpertAgentDetailResponse)
+@router.get("/{skill_name:path}", response_model=ExpertAgentDetailResponse)
 async def get_expert_agent_detail(skill_name: str, user=Depends(get_verified_user)):
-    try:
-        timeout = aiohttp.ClientTimeout(total=10)
-        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
-            headers = {}
-            if HERMES_API_KEY:
-                headers['Authorization'] = f'Bearer {HERMES_API_KEY}'
-
-            encoded_skill_name = quote(skill_name, safe='')
-            async with session.get(
-                f'{HERMES_API_BASE_URL}/skills/{encoded_skill_name}', headers=headers
-            ) as response:
-                if response.status == 404:
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail='Expert skill not found',
-                    )
-                if response.status >= 400:
-                    body = await response.text()
-                    log.warning(
-                        'Failed to load Hermes skill detail: status=%s body=%s',
-                        response.status,
-                        body,
-                    )
-                    raise HTTPException(
-                        status_code=status.HTTP_502_BAD_GATEWAY,
-                        detail='Failed to load Hermes skill detail',
-                    )
-
-                data = await response.json()
-
-        return ExpertAgentDetailResponse(
-            name=data.get('name') or skill_name,
-            description=data.get('description') or '',
-            content=data.get('content') or '',
-            path=data.get('path'),
-            tags=data.get('tags') or [],
-            related_skills=data.get('related_skills') or [],
-            linked_files=data.get('linked_files'),
-            readiness_status=data.get('readiness_status'),
-            setup_needed=data.get('setup_needed'),
-            setup_note=data.get('setup_note'),
-            metadata=data.get('metadata'),
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        log.exception('Failed to load Hermes skill detail: %s', e)
+    skill = _find_visible_skill(skill_name)
+    if not skill:
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail='Failed to load Hermes skill detail',
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Expert skill not found",
         )
 
-
-@router.delete('/{skill_name:path}')
-async def delete_expert_agent(skill_name: str, user=Depends(get_verified_user)):
-    try:
-        timeout = aiohttp.ClientTimeout(total=10)
-        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
-            headers = {}
-            if HERMES_API_KEY:
-                headers['Authorization'] = f'Bearer {HERMES_API_KEY}'
-
-            encoded_skill_name = quote(skill_name, safe='')
-            async with session.delete(
-                f'{HERMES_API_BASE_URL}/skills/{encoded_skill_name}', headers=headers
-            ) as response:
-                if response.status == 404:
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail='Expert skill not found',
-                    )
-                if response.status >= 400:
-                    body = await response.text()
-                    log.warning(
-                        'Failed to delete Hermes skill: status=%s body=%s',
-                        response.status,
-                        body,
-                    )
-                    raise HTTPException(
-                        status_code=status.HTTP_502_BAD_GATEWAY,
-                        detail='Failed to delete Hermes skill',
-                    )
-
-                data = await response.json()
-
-        return data
-    except HTTPException:
-        raise
-    except Exception as e:
-        log.exception('Failed to delete Hermes skill: %s', e)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail='Failed to delete Hermes skill',
-        )
+    return ExpertAgentDetailResponse(
+        name=skill["name"],
+        description=skill.get("description") or "",
+        content=skill.get("content") or "",
+        path=skill.get("path"),
+        tags=skill.get("tags") or [],
+        related_skills=skill.get("related_skills") or [],
+        linked_files=skill.get("linked_files"),
+        readiness_status=skill.get("readiness_status"),
+        setup_needed=skill.get("setup_needed"),
+        setup_note=skill.get("setup_note"),
+        metadata=skill.get("metadata"),
+    )

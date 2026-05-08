@@ -485,7 +485,10 @@ _HERMES_TOOL_PREVIEW_KEYS = [
     'cmd',
     'query',
     'pattern',
+    'target',
     'path',
+    'file_path',
+    'directory',
     'cwd',
     'working_directory',
     'file',
@@ -507,16 +510,146 @@ def _compact_json(value) -> str:
         return str(value)
 
 
-def _first_present(mapping: dict, keys: list[str]):
-    for key in keys:
-        if key in mapping and mapping.get(key) is not None:
-            return mapping.get(key)
+def _parse_compact_json(value):
+    if not isinstance(value, str):
+        return value
+
+    parsed = value
+    for _ in range(2):
+        if not isinstance(parsed, str):
+            break
+        try:
+            parsed = json.loads(parsed)
+        except Exception:
+            break
+    return parsed
+
+
+def _normalize_tool_identifier(value) -> str:
+    text = str(value or '').strip()
+    if not text:
+        return ''
+    text = re.sub(r'Tool_tool$', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'Tool$', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', text)
+    text = re.sub(r'[-\s]+', '_', text)
+    return text.lower()
+
+
+def _dict_get_ci(mapping: dict, keys: list[str]):
+    normalized = {key.lower() for key in keys}
+    for key, value in mapping.items():
+        if str(key).lower() in normalized:
+            return value
     return None
+
+
+def _todo_item_id(item) -> str:
+    if not isinstance(item, dict):
+        return ''
+    return str(_dict_get_ci(item, ['id']) or '').strip()
+
+
+def _summarize_todos(todos: list) -> dict:
+    summary = {
+        'total': 0,
+        'pending': 0,
+        'in_progress': 0,
+        'completed': 0,
+        'cancelled': 0,
+    }
+    for item in todos:
+        if not isinstance(item, dict):
+            continue
+        summary['total'] += 1
+        status = str(_dict_get_ci(item, ['status']) or 'pending').strip().lower()
+        status = status.replace('-', '_').replace(' ', '_')
+        if status in {'complete', 'done', 'finished', 'success'}:
+            status = 'completed'
+        elif status in {'progress', 'running', 'active', 'working'}:
+            status = 'in_progress'
+        elif status in {'canceled', 'cancel', 'aborted'}:
+            status = 'cancelled'
+        if status not in {'pending', 'in_progress', 'completed', 'cancelled'}:
+            status = 'pending'
+        summary[status] += 1
+    return summary
+
+
+def _merge_todo_tool_arguments(existing_args, incoming_args):
+    if not isinstance(incoming_args, dict):
+        return incoming_args
+
+    merged = dict(existing_args) if isinstance(existing_args, dict) else {}
+    merged.update(incoming_args)
+
+    incoming_todos = _dict_get_ci(incoming_args, ['todos'])
+    if not isinstance(incoming_todos, list):
+        return merged
+
+    existing_todos = _dict_get_ci(existing_args, ['todos']) if isinstance(existing_args, dict) else None
+    merge = bool(_dict_get_ci(incoming_args, ['merge']))
+    if merge and isinstance(existing_todos, list):
+        by_id = {
+            _todo_item_id(item): dict(item)
+            for item in existing_todos
+            if isinstance(item, dict) and _todo_item_id(item)
+        }
+        ordered_ids = [
+            _todo_item_id(item)
+            for item in existing_todos
+            if isinstance(item, dict) and _todo_item_id(item)
+        ]
+        appended = []
+        for item in incoming_todos:
+            if not isinstance(item, dict):
+                continue
+            item_id = _todo_item_id(item)
+            if item_id and item_id in by_id:
+                by_id[item_id].update(item)
+            elif item_id:
+                by_id[item_id] = dict(item)
+                appended.append(item_id)
+            else:
+                appended.append('')
+                by_id[''] = dict(item)
+
+        merged_todos = [by_id[item_id] for item_id in ordered_ids if item_id in by_id]
+        merged_todos.extend(by_id[item_id] for item_id in appended if item_id in by_id)
+    else:
+        merged_todos = incoming_todos
+
+    merged['todos'] = merged_todos
+    merged['summary'] = _summarize_todos(merged_todos)
+    return merged
+
+
+def _first_present(mapping: dict, keys: list[str]):
+    return _dict_get_ci(mapping, keys)
+
+
+def _collect_tool_preview_fields(data):
+    preview = {}
+    for value in _walk_values(data):
+        if not isinstance(value, dict):
+            continue
+        for key in _HERMES_TOOL_PREVIEW_KEYS:
+            item = _dict_get_ci(value, [key])
+            if item not in (None, '') and key not in preview:
+                preview[key] = item
+    return preview
+
+
+def _pack_tool_arguments_with_preview(data, arguments):
+    preview = _collect_tool_preview_fields(data)
+    if not preview:
+        return arguments
+    return {**preview, 'arguments': arguments}
 
 
 def _nested_dict(mapping: dict, keys: list[str]) -> dict:
     for key in keys:
-        value = mapping.get(key)
+        value = _dict_get_ci(mapping, [key])
         if isinstance(value, dict):
             return value
     return {}
@@ -554,9 +687,9 @@ def _recursive_first_key(data, keys: list[str]):
     for value in _walk_values(data):
         if not isinstance(value, dict):
             continue
-        for key in keys:
-            if key in value and value.get(key) is not None:
-                return value.get(key)
+        item = _dict_get_ci(value, keys)
+        if item is not None:
+            return item
     return None
 
 
@@ -581,19 +714,9 @@ def _recursive_tool_name(data) -> str | None:
 def _recursive_tool_arguments(data):
     arguments = _recursive_first_key(data, _HERMES_TOOL_ARGUMENT_KEYS)
     if not _is_empty_tool_value(arguments):
-        return arguments
+        return _pack_tool_arguments_with_preview(data, arguments)
 
-    preview = {}
-    for value in _walk_values(data):
-        if not isinstance(value, dict):
-            continue
-        for key in _HERMES_TOOL_PREVIEW_KEYS:
-            item = value.get(key)
-            if item not in (None, '') and key not in preview:
-                preview[key] = item
-        if preview:
-            return preview
-    return {}
+    return _collect_tool_preview_fields(data)
 
 
 def _recursive_tool_result(data):
@@ -686,6 +809,73 @@ def _has_tool_call_output(output: list, call_id: str) -> bool:
     )
 
 
+def _hermes_display_call_ids(output: list) -> set[str]:
+    return {
+        item.get('call_id')
+        for item in output
+        if item.get('type') == 'function_call'
+        and item.get('hermes_display_only')
+        and item.get('call_id')
+    }
+
+
+def _merge_hermes_display_tool_call_arguments(output: list, tool_call: dict) -> bool:
+    call_id = tool_call.get('id', '')
+    if not call_id:
+        return False
+
+    func = tool_call.get('function') or {}
+    name = func.get('name', '')
+    arguments = func.get('arguments', '{}')
+    if _is_empty_tool_value(arguments):
+        return True
+
+    item = _find_tool_call_item(output, call_id, name)
+    if not item or not item.get('hermes_display_only'):
+        return False
+
+    parsed_arguments = _parse_compact_json(arguments)
+    if _is_empty_tool_value(parsed_arguments):
+        return True
+
+    existing_arguments = _parse_compact_json(item.get('arguments', '{}'))
+    existing_tool_args = (
+        existing_arguments.get('arguments')
+        if isinstance(existing_arguments, dict)
+        else None
+    )
+    tool_name = name or (
+        _dict_get_ci(existing_arguments, ['tool', 'name'])
+        if isinstance(existing_arguments, dict)
+        else ''
+    )
+    if _normalize_tool_identifier(tool_name) == 'todo':
+        parsed_arguments = _merge_todo_tool_arguments(existing_tool_args, parsed_arguments)
+
+    if isinstance(existing_arguments, dict):
+        merged_arguments = {**existing_arguments}
+        merged_arguments['arguments'] = parsed_arguments
+    else:
+        merged_arguments = {'arguments': parsed_arguments}
+
+    item['arguments'] = _compact_json(merged_arguments)
+    return True
+
+
+def _skip_hermes_display_tool_calls(tool_calls: list[dict], output: list) -> list[dict]:
+    hermes_display_call_ids = _hermes_display_call_ids(output)
+    if not hermes_display_call_ids:
+        return tool_calls
+    for tool_call in tool_calls:
+        if tool_call.get('id') and tool_call.get('id') in hermes_display_call_ids:
+            _merge_hermes_display_tool_call_arguments(output, tool_call)
+    return [
+        tool_call
+        for tool_call in tool_calls
+        if not (tool_call.get('id') and tool_call.get('id') in hermes_display_call_ids)
+    ]
+
+
 def _upsert_hermes_tool_event(output: list, data: dict, sse_event_type: str | None = None) -> list:
     event_type = _get_hermes_event_type(data, sse_event_type).lower()
     payload = _extract_hermes_tool_payload(data)
@@ -723,6 +913,8 @@ def _upsert_hermes_tool_event(output: list, data: dict, sse_event_type: str | No
             'arguments': arguments or '{}',
             'status': 'completed' if done else 'in_progress',
         }
+        if status:
+            tool_call['status'] = 'completed' if progress_done else status
         if is_progress_event:
             tool_call['hermes_display_only'] = True
         output.append(tool_call)
@@ -731,10 +923,17 @@ def _upsert_hermes_tool_event(output: list, data: dict, sse_event_type: str | No
         tool_call['call_id'] = call_id
         tool_call['id'] = tool_call.get('id') or call_id
         tool_call['name'] = name or tool_call.get('name', 'tool')
+        # Official Hermes progress emits rich display fields on "running",
+        # then often sends only toolCallId/status on "completed"; preserve
+        # the earlier label/emoji preview instead of replacing it with {}.
         if arguments and arguments != '{}':
             tool_call['arguments'] = arguments
+        elif tool_call.get('arguments') in (None, ''):
+            tool_call['arguments'] = '{}'
         if done:
             tool_call['status'] = 'completed'
+        elif status:
+            tool_call['status'] = status
         if is_progress_event:
             tool_call['hermes_display_only'] = True
 
@@ -826,6 +1025,8 @@ def serialize_output(output: list) -> str:
             call_id = item.get('call_id', '')
             name = item.get('name', '')
             arguments = item.get('arguments', '')
+            status = item.get('status', '')
+            escaped_status = html.escape(str(status)) if status else ''
 
             result_item = tool_outputs.get(call_id)
             if result_item:
@@ -839,15 +1040,15 @@ def serialize_output(output: list) -> str:
                 embeds = result_item.get('embeds', '')
 
                 parts.append(
-                    f'<details type="tool_calls" done="true" id="{call_id}" name="{name}" arguments="{html.escape(json.dumps(arguments))}" files="{html.escape(json.dumps(files)) if files else ""}" embeds="{html.escape(json.dumps(embeds))}">\n<summary>Tool Executed</summary>\n{html.escape(json.dumps(result_text, ensure_ascii=False))}\n</details>'
+                    f'<details type="tool_calls" done="true" status="{escaped_status or "completed"}" id="{call_id}" name="{name}" arguments="{html.escape(json.dumps(arguments))}" files="{html.escape(json.dumps(files)) if files else ""}" embeds="{html.escape(json.dumps(embeds))}">\n<summary>Tool Executed</summary>\n{html.escape(json.dumps(result_text, ensure_ascii=False))}\n</details>'
                 )
             elif item.get('status') == 'completed':
                 parts.append(
-                    f'<details type="tool_calls" done="true" id="{call_id}" name="{name}" arguments="{html.escape(json.dumps(arguments))}">\n<summary>Tool Executed</summary>\n</details>'
+                    f'<details type="tool_calls" done="true" status="{escaped_status or "completed"}" id="{call_id}" name="{name}" arguments="{html.escape(json.dumps(arguments))}">\n<summary>Tool Executed</summary>\n</details>'
                 )
             else:
                 parts.append(
-                    f'<details type="tool_calls" done="false" id="{call_id}" name="{name}" arguments="{html.escape(json.dumps(arguments))}">\n<summary>Executing...</summary>\n</details>'
+                    f'<details type="tool_calls" done="false" status="{escaped_status or "running"}" id="{call_id}" name="{name}" arguments="{html.escape(json.dumps(arguments))}">\n<summary>Executing...</summary>\n</details>'
                 )
 
         elif item_type == 'function_call_output':
@@ -4596,8 +4797,12 @@ async def streaming_chat_response_handler(response, ctx):
 
                                             # Build pending function_call output items for display
                                             pending_fc_items = []
+                                            hermes_display_call_ids = _hermes_display_call_ids(full_output())
                                             for tc in response_tool_calls:
                                                 call_id = tc.get('id', '')
+                                                if call_id and call_id in hermes_display_call_ids:
+                                                    _merge_hermes_display_tool_call_arguments(output, tc)
+                                                    continue
                                                 func = tc.get('function', {})
                                                 pending_fc_items.append(
                                                     {
@@ -4887,7 +5092,12 @@ async def streaming_chat_response_handler(response, ctx):
                                 reasoning_item['status'] = 'completed'
 
                     if response_tool_calls:
-                        tool_calls.append(_split_tool_calls(response_tool_calls))
+                        executable_tool_calls = _skip_hermes_display_tool_calls(
+                            response_tool_calls,
+                            full_output(),
+                        )
+                        if executable_tool_calls:
+                            tool_calls.append(_split_tool_calls(executable_tool_calls))
 
                     # Responses API path: extract function_call items from output
                     if not response_tool_calls and output:
@@ -4952,6 +5162,9 @@ async def streaming_chat_response_handler(response, ctx):
                     tool_call_retries += 1
 
                     response_tool_calls = tool_calls.pop(0)
+                    response_tool_calls = _skip_hermes_display_tool_calls(response_tool_calls, output)
+                    if not response_tool_calls:
+                        continue
 
                     # Append function_call items for each tool call
                     # (Responses API already has them from streaming, so skip duplicates)

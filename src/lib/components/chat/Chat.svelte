@@ -1796,6 +1796,11 @@
 
 	const chatCompletionEventHandler = async (data, message, chatId) => {
 		const { id, done, choices, content, output, sources, selected_model_id, error, usage } = data;
+		const finishReason = choices?.[0]?.finish_reason ?? choices?.[0]?.finishReason ?? null;
+		const isCompletionFinished =
+			done ||
+			(finishReason &&
+				!['tool_calls', 'function_call', 'tool_call'].includes(String(finishReason)));
 
 		// Store raw OR-aligned output items from backend
 		if (output) {
@@ -1899,7 +1904,7 @@
 
 		history.messages[message.id] = message;
 
-		if (done) {
+		if (isCompletionFinished && message.done !== true) {
 			message.done = true;
 
 			if ($settings.responseAutoCopy) {

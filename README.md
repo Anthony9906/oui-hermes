@@ -19,7 +19,7 @@ OUI Hermes 是基于 Open WebUI 裁剪的 Hermes Agent 对话 UI。当前项目�
 - Chat UI：主页、会话页、消息渲染、聊天历史。
 - Auth/User/Admin：登录、用户管理、权限基础设施。
 - OpenAI-compatible API：默认指向 Hermes API。
-- Hermes Expert Agents：`/api/v1/expert-agents` 及对应前端组件，技能列表通过 Hermes gateway `GET /skills` 发现。
+- Hermes Expert Agents：`/api/v1/expert-agents` 及对应前端组件，技能列表由 Open WebUI 后端直接读取 Hermes skill 目录。
 - Files / Tools API：保留 `/api/v1/files` 支持聊天图片、PDF、Markdown、HTML、文本等附件上传与预览；保留 `/api/v1/tools` 满足聊天启动路径依赖。
 - Automations：保留前端路由和后端 API。
 - Admin Evaluations：保留。
@@ -46,12 +46,13 @@ OUI Hermes 是基于 Open WebUI 裁剪的 Hermes Agent 对话 UI。当前项目�
 
 - Hermes reasoning 和 tool call 走 Open WebUI 原生 Markdown `<details>` / `ToolCallDisplay` 渲染路径，不再维护并行的 Hermes trace UI。
 - `backend/open_webui/utils/middleware.py` 会把 Hermes tool SSE events 转成 Open WebUI-compatible `function_call` / `function_call_output` item。
-- `event: hermes.tool.progress` 只作为展示进度处理，不执行为本地 Open WebUI tool。
-- 前端优先显示 Hermes payload 中的 `emoji`、`tool`、`label` 字段，并递归提取常见嵌套字段用于工具摘要。
+- `event: hermes.tool.progress` 只作为流式状态/执行隔离信号处理，不执行为本地 Open WebUI tool；聊天中保留 Hermes 官方 `build_tool_preview(...)` 生成的工具预览，并按 `toolCallId` 去掉 Open WebUI 临时 pending 行的重复显示。
 
 ### Expert Agent
 
-- Open WebUI 通过 `HERMES_API_BASE_URL` 访问 Hermes gateway 8642；不要把它指向 Hermes Web UI 8787。
+- Chat completions 通过 `HERMES_API_BASE_URL` 访问 Hermes gateway 8642；不要把它指向 Hermes Web UI 8787。
+- Expert Agent skill 列表和详情由 Open WebUI 后端读取本地 Hermes skill 目录；默认优先使用 `~/.hermes/profiles/expertagent/skills`，过滤 `.bundled_manifest` 里的 Hermes 自带技能。
+- 可用 `HERMES_EXPERT_AGENT_HIDDEN_SKILLS` 隐藏不需要显示的专家技能；需要强控制时可用 `HERMES_EXPERT_AGENT_VISIBLE_SKILLS` 设置白名单。
 - Expert Agent 面板位于聊天右侧 pane 中，和 Controls / Files / Overview 共用交互模型。
 - 普通用户启动 Expert Agent 通过 URL 参数 `expert-agent` 和 `expert-agent-start` 进入新会话，启动 nonce 使用项目内 `uuidv4()`，避免 `crypto.randomUUID()` 浏览器兼容问题。
 - 当前会话会在聊天内容 `meta.expert_skill_name` 中保存启用的专家技能，并在聊天顶部显示专家模式 badge。

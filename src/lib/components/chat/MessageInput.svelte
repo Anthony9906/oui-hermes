@@ -123,9 +123,7 @@
 	export let taskIds = null;
 
 	$: isActive =
-		(taskIds && taskIds.length > 0) ||
-		(history.currentId && history.messages[history.currentId]?.done != true) ||
-		generating;
+		(history.currentId && history.messages[history.currentId]?.done != true) || generating;
 
 	export let prompt = '';
 	export let files = [];
