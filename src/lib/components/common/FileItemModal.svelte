@@ -40,6 +40,8 @@
 	let isHtml = false;
 	let isDocx = false;
 	let isPptx = false;
+	let isText = false;
+	let contentType = '';
 
 	let selectedTab = '';
 	let excelWorkbook: WorkBook | null = null;
@@ -65,16 +67,17 @@
 		panzoomRef?.reset();
 	};
 
+	$: contentType =
+		item?.meta?.content_type || item?.content_type || item?.file?.meta?.content_type || '';
+
 	$: isPDF =
-		item?.meta?.content_type === 'application/pdf' ||
-		(item?.name && item?.name.toLowerCase().endsWith('.pdf'));
+		contentType === 'application/pdf' || (item?.name && item?.name.toLowerCase().endsWith('.pdf'));
 
 	$: isMarkdown =
-		item?.meta?.content_type === 'text/markdown' ||
-		(item?.name && item?.name.toLowerCase().endsWith('.md'));
+		contentType === 'text/markdown' || (item?.name && item?.name.toLowerCase().endsWith('.md'));
 
 	$: isHtml =
-		item?.meta?.content_type === 'text/html' ||
+		contentType === 'text/html' ||
 		(item?.name &&
 			(item.name.toLowerCase().endsWith('.html') || item.name.toLowerCase().endsWith('.htm')));
 
@@ -102,7 +105,7 @@
 			item.name.toLowerCase().endsWith('.rb'));
 
 	$: isAudio =
-		(item?.meta?.content_type ?? '').startsWith('audio/') ||
+		contentType.startsWith('audio/') ||
 		(item?.name && item?.name.toLowerCase().endsWith('.mp3')) ||
 		(item?.name && item?.name.toLowerCase().endsWith('.wav')) ||
 		(item?.name && item?.name.toLowerCase().endsWith('.ogg')) ||
@@ -110,7 +113,7 @@
 		(item?.name && item?.name.toLowerCase().endsWith('.webm'));
 
 	$: isImage =
-		(item?.meta?.content_type ?? '').startsWith('image/') ||
+		contentType.startsWith('image/') ||
 		(item?.name &&
 			(item.name.toLowerCase().endsWith('.png') ||
 				item.name.toLowerCase().endsWith('.jpg') ||
@@ -122,28 +125,29 @@
 				item.name.toLowerCase().endsWith('.ico')));
 
 	$: isExcel =
-		item?.meta?.content_type === 'application/vnd.ms-excel' ||
-		item?.meta?.content_type ===
-			'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-		item?.meta?.content_type === 'text/csv' ||
-		item?.meta?.content_type === 'application/csv' ||
+		contentType === 'application/vnd.ms-excel' ||
+		contentType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+		contentType === 'text/csv' ||
+		contentType === 'application/csv' ||
 		(item?.name &&
 			(item.name.toLowerCase().endsWith('.xls') ||
 				item.name.toLowerCase().endsWith('.xlsx') ||
 				item.name.toLowerCase().endsWith('.csv')));
 
 	$: isDocx =
-		item?.meta?.content_type ===
-			'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+		contentType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
 		(item?.name && item.name.toLowerCase().endsWith('.docx'));
 
 	$: isPptx =
-		item?.meta?.content_type ===
-			'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+		contentType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
 		(item?.name && item.name.toLowerCase().endsWith('.pptx'));
 
+	$: isText =
+		(contentType.startsWith('text/') && !isHtml && !isMarkdown && !isExcel) ||
+		(item?.name && item.name.toLowerCase().endsWith('.txt'));
+
 	$: hasDocumentPreview =
-		isAudio || isPDF || isExcel || isHtml || isCode || isMarkdown || isDocx || isPptx;
+		isAudio || isPDF || isExcel || isHtml || isCode || isMarkdown || isDocx || isPptx || isText;
 
 	const loadExcelContent = async () => {
 		try {
@@ -264,7 +268,7 @@
 			if (isPptx) {
 				await loadPptxContent();
 			}
-			if (isHtml || isCode || isMarkdown) {
+			if (isHtml || isCode || isMarkdown || isText) {
 				await loadTextContent();
 			}
 
@@ -553,6 +557,25 @@
 							>
 								<Markdown content={textContent || item.file.data.content} id="markdown-viewer" />
 							</div>
+						{/if}
+					{:else if isText}
+						{#if textContentError}
+							<div class="text-red-500 text-sm p-4">{textContentError}</div>
+						{:else}
+							{@const rawContent = textContent || item?.file?.data?.content || ''}
+							{#if $settings?.renderMarkdownInPreviews ?? true}
+								<div
+									class="max-h-[60vh] overflow-scroll scrollbar-hidden text-sm prose dark:prose-invert max-w-full"
+								>
+									<Markdown content={rawContent || 'No content'} id="text-viewer" />
+								</div>
+							{:else}
+								<div
+									class="max-h-[60vh] overflow-scroll scrollbar-hidden text-xs whitespace-pre-wrap"
+								>
+									{rawContent || 'No content'}
+								</div>
+							{/if}
 						{/if}
 					{:else if isDocx}
 						{#if docxError}

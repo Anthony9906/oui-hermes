@@ -122,6 +122,14 @@ S3_KEY_PREFIX=open-webui
 
 仓库根目录存在 `.env` 时，`backend/dev.sh` 和 `backend/start.sh` 会自动加载它；Docker Compose 不参与本地非 Docker 启动。
 
+一键启动或重启前后端：
+
+```bash
+scripts/start-oui.sh
+```
+
+脚本会检查前端 `5173` 和后端 `8080` 端口；如果已有服务在运行会先停止再重启，没有运行则直接启动。日志写入 `logs/open-webui-frontend.log` 和 `logs/open-webui-backend.log`。
+
 ### 前端
 
 ```bash

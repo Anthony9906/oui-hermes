@@ -1550,7 +1550,7 @@
 																				}
 																			);
 
-																			await uploadFileHandler(file, true, { context: 'full' });
+																			await uploadFileHandler(file, false, { context: 'full' });
 																		}
 																	}
 																} else {

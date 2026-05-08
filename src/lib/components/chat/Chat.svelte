@@ -168,6 +168,19 @@
 		return '';
 	};
 
+	const getSuggestionExpertSkillName = (suggestion) => {
+		const title = suggestion?.title;
+		const primaryTitle = Array.isArray(title) ? title[0] : title;
+		const name = typeof primaryTitle === 'string' ? primaryTitle.trim() : '';
+
+		if (name) {
+			return name;
+		}
+
+		const content = typeof suggestion?.content === 'string' ? suggestion.content.trim() : '';
+		return content ? content.slice(0, 50) : $i18n.t('Expert Agent');
+	};
+
 	let navbarElement;
 
 	let showEventConfirmation = false;
@@ -292,10 +305,18 @@
 	};
 
 	const onSelect = async (e) => {
-		const { type, data } = e;
+		const { type, data, prompt: suggestion } = e;
 
 		if (type === 'prompt') {
-			// Handle prompt selection
+			if (suggestion) {
+				await startExpertAgentChat({
+					skill_name: getSuggestionExpertSkillName(suggestion),
+					prompt: data,
+					nonce: uuidv4()
+				});
+				return;
+			}
+
 			messageInput?.setText(data, async () => {
 				if (!($settings?.insertSuggestionPrompt ?? false)) {
 					await tick();
