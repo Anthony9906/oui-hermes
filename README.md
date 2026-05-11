@@ -61,7 +61,7 @@ OUI Hermes 是基于 Open WebUI 裁剪的 Hermes Agent 对话 UI。当前项目�
 
 - 图片附件直接以 `process=false` 上传；Open WebUI 用 `/api/v1/files/{id}/content` 预览，Hermes 收到模型可访问的图片 URL。
 - PDF、HTML、Markdown、TXT、JSON、CSV、YAML 等文档类附件直接上传，不走 Open WebUI RAG/vector processing。
-- 文档类附件会被注入到最新用户消息的 `<attached_files>` block，包含 URL、content type 和文件名；Hermes gateway 负责轻量下载、缓存和文本提取。
+- 文档类附件会被注入到最新用户消息的 `<attached_files>` block，包含 URL、content type、文件名，以及 Open WebUI 在转发路径中提取的轻量文本内容；不再依赖 Hermes gateway 自定义附件提取补丁。
 - PDF 预览使用现有 `PDFViewer`；Markdown 渲染为 Markdown；HTML 使用 sandboxed `iframe srcdoc` 预览；其他代码类文本仍使用代码预览。
 - Audio / video 仍保留现有 Open WebUI 媒体处理路径需要的 server processing。
 
@@ -85,6 +85,9 @@ ENABLE_CODE_EXECUTION=false
 ENABLE_CODE_INTERPRETER=false
 ENABLE_IMAGE_GENERATION=false
 VECTOR_DB=none
+
+ATTACHED_FILE_CONTENT_MAX_CHARS=20000
+ATTACHED_FILES_TOTAL_MAX_CHARS=60000
 ```
 
 S3-compatible / R2 附件存储：
@@ -117,6 +120,7 @@ S3_KEY_PREFIX=open-webui
 说明：
 
 - `R2_PUBLIC_BASE_URL` / `S3_PUBLIC_BASE_URL` 存在时，Open WebUI 会为 Hermes 生成模型可访问的公开附件 URL。
+- `ATTACHED_FILE_CONTENT_MAX_CHARS` 控制单个附件注入的最大文本量，`ATTACHED_FILES_TOTAL_MAX_CHARS` 控制单条消息所有附件的总注入文本量。
 - 不要提交真实 R2、S3、MinIO 密钥；本地密钥应放在未跟踪的 `.env` 或用户环境配置中。
 
 ## 本地开发启动

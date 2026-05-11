@@ -5,7 +5,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { SvelteFlowProvider } from '@xyflow/svelte';
-	import { slide } from 'svelte/transition';
+	import { fly } from 'svelte/transition';
 	import { Pane, PaneResizer } from 'paneforge';
 	import { v4 as uuidv4 } from 'uuid';
 
@@ -64,6 +64,8 @@
 	let dragged = false;
 	let minSize = 0;
 	let paneReady = false;
+	const defaultPaneWidth = 420;
+	const expertAgentPaneWidth = 580;
 
 	// Tab state for Controls+Files panel
 	let activeTab = savedTab;
@@ -102,6 +104,16 @@
 	$: if ($showExpertAgentDrawer) {
 		activeTab = 'expertAgents';
 		showControls.set(true);
+	}
+
+	$: if (paneReady && $showControls && pane && largeScreen) {
+		const container = document.getElementById('chat-container');
+		if (container) {
+			minSize = getMinPaneSize(container);
+			if (activeTab === 'expertAgents' && pane.isExpanded() && pane.getSize() < minSize) {
+				pane.resize(minSize);
+			}
+		}
 	}
 
 	// Auto-switch to Files tab when display_file is triggered
@@ -170,15 +182,25 @@
 	};
 
 	export const openPane = () => {
-		if (parseInt(localStorage?.chatControlsSize)) {
-			const container = document.getElementById('chat-container');
-			let size = Math.floor(
-				(parseInt(localStorage?.chatControlsSize) / container.clientWidth) * 100
-			);
+		const container = document.getElementById('chat-container');
+		if (!pane || !container) return;
+
+		const savedWidth = parseInt(localStorage?.chatControlsSize);
+		if (savedWidth) {
+			const targetWidth = Math.max(savedWidth, getPaneTargetWidth());
+			let size = Math.floor((targetWidth / container.clientWidth) * 100);
 			pane.resize(size);
 		} else {
 			pane.resize(minSize);
 		}
+	};
+
+	const getPaneTargetWidth = () =>
+		activeTab === 'expertAgents' ? expertAgentPaneWidth : defaultPaneWidth;
+
+	const getMinPaneSize = (container: HTMLElement) => {
+		const size = Math.floor((getPaneTargetWidth() / container.clientWidth) * 100);
+		return Math.min(size, 62);
 	};
 
 	const handleMediaQuery = async (e) => {
@@ -249,11 +271,11 @@
 			const container = document.getElementById('chat-container') as HTMLElement;
 			if (!container) return;
 
-			minSize = Math.floor((350 / container.clientWidth) * 100);
+			minSize = getMinPaneSize(container);
 			resizeObserver = new ResizeObserver((entries) => {
 				for (let entry of entries) {
 					const width = entry.contentRect.width;
-					minSize = Math.floor((350 / width) * 100);
+					minSize = Math.min(Math.floor((getPaneTargetWidth() / width) * 100), 62);
 					if ($showControls) {
 						if (pane && pane.isExpanded() && pane.getSize() < minSize) {
 							pane.resize(minSize);
@@ -439,7 +461,7 @@
 {:else}
 	{#if $showControls}
 		<PaneResizer
-			class="relative flex items-center justify-center group border-l border-gray-50 dark:border-gray-850/30 hover:border-gray-200 dark:hover:border-gray-800 transition z-20"
+			class="relative z-20 flex items-center justify-center border-l border-transparent transition hover:border-gray-200/80 dark:hover:border-gray-800"
 			id="controls-resizer"
 		>
 			<div
@@ -466,17 +488,20 @@
 			if (paneReady) closePanel();
 		}}
 		collapsible={true}
-		class="z-10 bg-white dark:bg-gray-850"
+		id="context-panel-pane"
+		class="z-10 bg-transparent {dragged
+			? ''
+			: 'transition-[flex-basis,width] duration-300 ease-out'}"
 	>
 		{#if $showControls}
-			<div class="flex max-h-full min-h-full">
+			<div class="flex h-full max-h-full min-h-0">
 				<div
-					class="w-full {specialPanel && !$showCallOverlay
+					in:fly={{ x: 56, duration: 320, opacity: 0.72 }}
+					out:fly={{ x: 44, duration: 220, opacity: 0.62 }}
+					class="context-panel-shell flex h-full min-h-0 w-full flex-col {specialPanel &&
+					!$showCallOverlay
 						? ' '
-						: 'bg-white dark:shadow-lg dark:bg-gray-850'} z-40 pointer-events-auto {activeTab ===
-					'files'
-						? ''
-						: 'overflow-y-auto'} scrollbar-hidden"
+						: ''} z-40 pointer-events-auto overflow-hidden"
 					id="controls-container"
 				>
 					{#if $showCallOverlay}
@@ -499,14 +524,18 @@
 						<!-- Controls + Files tabs -->
 						<div class="flex flex-col h-full min-h-0">
 							<!-- Tab bar -->
-							<div class="flex items-center justify-between px-2 pt-2 pb-2 shrink-0">
+							<div class="context-panel-header flex items-center justify-between shrink-0">
+								<div class="min-w-0 pr-2">
+									<div class="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400">
+										Context Panel
+									</div>
+								</div>
 								<div class="flex gap-1 min-w-0 overflow-x-auto scrollbar-hidden">
 									{#if showControlsTab}
 										<button
-											class="px-2.5 py-1 text-sm rounded-lg transition whitespace-nowrap {activeTab ===
-											'controls'
-												? 'bg-gray-100 dark:bg-gray-800 font-medium text-gray-900 dark:text-white'
-												: 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}"
+											class="context-panel-tab {activeTab === 'controls'
+												? 'context-panel-tab-active'
+												: 'context-panel-tab-idle'}"
 											on:click={() => (activeTab = 'controls')}
 										>
 											{$i18n.t('Controls')}
@@ -514,10 +543,9 @@
 									{/if}
 									{#if showFilesTab}
 										<button
-											class="px-2.5 py-1 text-sm rounded-lg transition whitespace-nowrap {activeTab ===
-											'files'
-												? 'bg-gray-100 dark:bg-gray-800 font-medium text-gray-900 dark:text-white'
-												: 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}"
+											class="context-panel-tab {activeTab === 'files'
+												? 'context-panel-tab-active'
+												: 'context-panel-tab-idle'}"
 											on:click={() => (activeTab = 'files')}
 										>
 											{$i18n.t('Files')}
@@ -525,10 +553,9 @@
 									{/if}
 									{#if showOverviewTab}
 										<button
-											class="px-2.5 py-1 text-sm rounded-lg transition whitespace-nowrap {activeTab ===
-											'overview'
-												? 'bg-gray-100 dark:bg-gray-800 font-medium text-gray-900 dark:text-white'
-												: 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}"
+											class="context-panel-tab {activeTab === 'overview'
+												? 'context-panel-tab-active'
+												: 'context-panel-tab-idle'}"
 											on:click={() => (activeTab = 'overview')}
 										>
 											{$i18n.t('Overview')}
@@ -536,10 +563,9 @@
 									{/if}
 									{#if showExpertAgentTab}
 										<button
-											class="px-2.5 py-1 text-sm rounded-lg transition whitespace-nowrap {activeTab ===
-											'expertAgents'
-												? 'bg-gray-100 dark:bg-gray-800 font-medium text-gray-900 dark:text-white'
-												: 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}"
+											class="context-panel-tab {activeTab === 'expertAgents'
+												? 'context-panel-tab-active'
+												: 'context-panel-tab-idle'}"
 											on:click={() => (activeTab = 'expertAgents')}
 										>
 											Expert Agent
@@ -547,7 +573,7 @@
 									{/if}
 								</div>
 								<button
-									class="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition text-gray-500 dark:text-gray-400"
+									class="context-panel-close"
 									on:click={closePanel}
 									aria-label={$i18n.t('Close')}
 								>
@@ -565,7 +591,7 @@
 							</div>
 
 							<div
-								class="flex-1 min-h-0 {activeTab === 'overview'
+								class="flex-1 min-h-0 overflow-hidden {activeTab === 'overview'
 									? 'h-full'
 									: activeTab === 'expertAgents'
 										? 'h-full'
@@ -610,3 +636,122 @@
 		{/if}
 	</Pane>
 {/if}
+
+<style>
+	.context-panel-shell {
+		height: 100%;
+		min-height: 0;
+		background: linear-gradient(
+			180deg,
+			rgba(245, 248, 252, 0.98) 0%,
+			rgba(238, 237, 242, 0.98) 100%
+		);
+		border-left: 1px solid rgba(213, 219, 231, 0.92);
+		box-shadow:
+			-24px 0 46px rgba(71, 79, 102, 0.1),
+			-1px 0 0 rgba(255, 255, 255, 0.86) inset;
+		overflow: hidden;
+	}
+
+	:global(#context-panel-pane) {
+		overflow: visible !important;
+		transition:
+			flex-basis 300ms cubic-bezier(0.22, 1, 0.36, 1),
+			width 300ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+	}
+
+	.context-panel-header {
+		gap: 0.75rem;
+		padding: 0.75rem 0.875rem 0.625rem 1rem;
+		border-bottom: 1px solid rgba(226, 231, 240, 0.92);
+		background: rgba(255, 255, 255, 0.72);
+		backdrop-filter: blur(18px);
+	}
+
+	.context-panel-tab {
+		white-space: nowrap;
+		border-radius: 0.625rem;
+		padding: 0.375rem 0.625rem;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		line-height: 1.125rem;
+		transition:
+			background-color 160ms ease,
+			color 160ms ease,
+			box-shadow 160ms ease;
+	}
+
+	.context-panel-tab-active {
+		background: #edf1f7;
+		color: #293246;
+		box-shadow: 0 1px 2px rgba(80, 90, 112, 0.08);
+	}
+
+	.context-panel-tab-idle {
+		color: #7a8498;
+	}
+
+	.context-panel-tab-idle:hover {
+		background: rgba(237, 241, 247, 0.72);
+		color: #445066;
+	}
+
+	.context-panel-close {
+		flex-shrink: 0;
+		border-radius: 0.625rem;
+		padding: 0.375rem;
+		color: #7a8498;
+		transition:
+			background-color 160ms ease,
+			color 160ms ease;
+	}
+
+	.context-panel-close:hover {
+		background: rgba(237, 241, 247, 0.82);
+		color: #293246;
+	}
+
+	:global(.dark) .context-panel-shell {
+		background: linear-gradient(180deg, rgba(22, 27, 39, 0.98) 0%, rgba(17, 22, 33, 0.98) 100%);
+		border-left-color: rgba(55, 65, 84, 0.9);
+		box-shadow:
+			-24px 0 46px rgba(0, 0, 0, 0.24),
+			-1px 0 0 rgba(255, 255, 255, 0.04) inset;
+	}
+
+	:global(.dark) .context-panel-header {
+		border-bottom-color: rgba(55, 65, 84, 0.84);
+		background: rgba(22, 27, 39, 0.78);
+	}
+
+	:global(.dark) .context-panel-tab-active {
+		background: rgba(55, 65, 84, 0.88);
+		color: #f4f6fb;
+	}
+
+	:global(.dark) .context-panel-tab-idle {
+		color: #9aa4b6;
+	}
+
+	:global(.dark) .context-panel-tab-idle:hover,
+	:global(.dark) .context-panel-close:hover {
+		background: rgba(55, 65, 84, 0.72);
+		color: #f4f6fb;
+	}
+
+	@media (min-width: 768px) {
+		:global(#chat-container:has(#context-panel-pane #controls-container)) {
+			margin-right: 0 !important;
+			max-width: calc(100vw - 20px) !important;
+			border-top-right-radius: 0 !important;
+			border-bottom-right-radius: 0 !important;
+		}
+
+		:global(
+			.app:has(#sidebar[data-state='true'])
+				#chat-container:has(#context-panel-pane #controls-container)
+		) {
+			max-width: calc(100vw - var(--sidebar-width) - 40px) !important;
+		}
+	}
+</style>

@@ -18,6 +18,7 @@ import re
 import ast
 
 from datetime import timedelta
+from html.parser import HTMLParser
 from urllib.parse import urlencode
 from uuid import uuid4
 from concurrent.futures import ThreadPoolExecutor
@@ -187,6 +188,9 @@ DEFAULT_REASONING_TAGS = [
 ]
 DEFAULT_SOLUTION_TAGS = [('<|begin_of_solution|>', '<|end_of_solution|>')]
 DEFAULT_CODE_INTERPRETER_TAGS = [('<code_interpreter>', '</code_interpreter>')]
+
+ATTACHED_FILE_CONTENT_MAX_CHARS = int(os.getenv('ATTACHED_FILE_CONTENT_MAX_CHARS', '20000'))
+ATTACHED_FILES_TOTAL_MAX_CHARS = int(os.getenv('ATTACHED_FILES_TOTAL_MAX_CHARS', '60000'))
 
 
 def output_id(prefix: str) -> str:
@@ -2348,13 +2352,17 @@ async def add_file_context(messages: list, chat_id: str, user) -> list:
     return messages
 
 
+def _extract_file_id(file: dict) -> str:
+    file_id = str(file.get('id') or file.get('url') or '').strip()
+    match = re.search(r'/api/v1/files/([^/]+)/content', file_id)
+    if match:
+        return match.group(1)
+    return file_id
+
+
 async def get_file_access_url(file: dict, request: Request) -> str:
     """Return a model-accessible URL for an uploaded file without RAG processing."""
-    file_id = file.get('id') or file.get('url') or ''
-    if isinstance(file_id, str):
-        match = re.search(r'/api/v1/files/([^/]+)/content', file_id)
-        if match:
-            file_id = match.group(1)
+    file_id = _extract_file_id(file)
 
     if not file_id:
         return ''
@@ -2394,12 +2402,190 @@ async def get_file_access_url(file: dict, request: Request) -> str:
     return f'{base_url}/api/v1/files/{file_id}/content/direct?{urlencode({"token": token})}'
 
 
+class _HTMLTextExtractor(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self._skip_depth = 0
+        self._parts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in {'script', 'style', 'noscript'}:
+            self._skip_depth += 1
+        elif tag in {'p', 'br', 'div', 'section', 'article', 'li', 'tr', 'h1', 'h2', 'h3', 'h4'}:
+            self._parts.append('\n')
+
+    def handle_endtag(self, tag):
+        if tag in {'script', 'style', 'noscript'} and self._skip_depth > 0:
+            self._skip_depth -= 1
+        elif tag in {'p', 'div', 'section', 'article', 'li', 'tr', 'h1', 'h2', 'h3', 'h4'}:
+            self._parts.append('\n')
+
+    def handle_data(self, data):
+        if self._skip_depth:
+            return
+        text = data.strip()
+        if text:
+            self._parts.append(text)
+
+    def text(self) -> str:
+        return re.sub(r'\n{3,}', '\n\n', re.sub(r'[ \t]+', ' ', ' '.join(self._parts))).strip()
+
+
+def _decode_text_bytes(raw: bytes) -> str:
+    for encoding in ('utf-8-sig', 'utf-8', 'latin-1'):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode('utf-8', errors='replace')
+
+
+def _truncate_attached_file_content(content: str, max_chars: int) -> tuple[str, bool]:
+    if max_chars <= 0:
+        return '', bool(content)
+    if len(content) <= max_chars:
+        return content, False
+    return content[:max_chars].rstrip(), True
+
+
+def _cdata(content: str) -> str:
+    return content.replace(']]>', ']]]]><![CDATA[>')
+
+
+def _extract_pdf_text(file_path, max_chars: int) -> tuple[str, bool]:
+    try:
+        from pypdf import PdfReader
+    except Exception as e:
+        log.debug(f'PDF text extraction is unavailable: {e}')
+        return '', False
+
+    text_parts = []
+    truncated = False
+    reader = PdfReader(str(file_path))
+    for page in reader.pages:
+        page_text = page.extract_text() or ''
+        if not page_text.strip():
+            continue
+        remaining = max_chars - sum(len(part) for part in text_parts)
+        if remaining <= 0:
+            truncated = True
+            break
+        if len(page_text) > remaining:
+            text_parts.append(page_text[:remaining])
+            truncated = True
+            break
+        text_parts.append(page_text)
+
+    return '\n\n'.join(part.strip() for part in text_parts if part.strip()).strip(), truncated
+
+
+def _extract_text_or_html(file_path, content_type: str, max_chars: int) -> tuple[str, bool]:
+    with open(file_path, 'rb') as f:
+        raw = f.read(max(max_chars * 4, 8192) + 1)
+
+    decoded = _decode_text_bytes(raw)
+    truncated_by_read = len(raw) > max(max_chars * 4, 8192)
+
+    if 'html' in content_type or str(file_path).lower().endswith(('.html', '.htm')):
+        parser = _HTMLTextExtractor()
+        parser.feed(decoded)
+        decoded = parser.text()
+
+    content, truncated_by_chars = _truncate_attached_file_content(decoded.strip(), max_chars)
+    return content, truncated_by_read or truncated_by_chars
+
+
+async def get_file_text_content(file: dict, request: Request, max_chars: int) -> tuple[str, bool]:
+    """Extract lightweight PDF/text/html content for model context."""
+    if max_chars <= 0:
+        return '', False
+
+    file_id = _extract_file_id(file)
+    if not file_id:
+        return '', False
+
+    try:
+        from pathlib import Path
+
+        from open_webui.models.files import Files
+        from open_webui.storage.provider import Storage
+
+        file_item = await Files.get_file_by_id(file_id)
+        if not file_item:
+            return '', False
+
+        content_type = (
+            file.get('content_type')
+            or (file.get('file') or {}).get('meta', {}).get('content_type')
+            or (file_item.meta or {}).get('content_type')
+            or mimetypes.guess_type(file_item.filename or '')[0]
+            or ''
+        ).lower()
+        filename = (
+            file.get('name')
+            or file.get('filename')
+            or (file_item.meta or {}).get('name')
+            or file_item.filename
+            or ''
+        )
+        filename_lower = filename.lower()
+
+        existing_content = (file_item.data or {}).get('content')
+        if isinstance(existing_content, str) and existing_content.strip():
+            return _truncate_attached_file_content(existing_content.strip(), max_chars)
+
+        supports_pdf = content_type == 'application/pdf' or filename_lower.endswith('.pdf')
+        supports_text = (
+            content_type.startswith('text/')
+            or any(token in content_type for token in ('json', 'xml', 'csv', 'markdown', 'javascript', 'html'))
+            or filename_lower.endswith(
+                (
+                    '.txt',
+                    '.md',
+                    '.markdown',
+                    '.csv',
+                    '.json',
+                    '.jsonl',
+                    '.xml',
+                    '.html',
+                    '.htm',
+                    '.py',
+                    '.js',
+                    '.ts',
+                    '.tsx',
+                    '.jsx',
+                    '.css',
+                    '.scss',
+                    '.yaml',
+                    '.yml',
+                    '.toml',
+                    '.ini',
+                    '.log',
+                )
+            )
+        )
+        if not supports_pdf and not supports_text:
+            return '', False
+
+        file_path = Path(await asyncio.to_thread(Storage.get_file, file_item.path))
+        if not file_path.is_file():
+            return '', False
+
+        if supports_pdf:
+            return await asyncio.to_thread(_extract_pdf_text, file_path, max_chars)
+        return await asyncio.to_thread(_extract_text_or_html, file_path, content_type, max_chars)
+    except Exception as e:
+        log.debug(f'Failed to extract attached file content for {file_id}: {e}')
+        return '', False
+
+
 async def add_direct_file_context(messages: list, files: list, request: Request) -> list:
-    """Inject uploaded file URLs into the latest user message for Hermes Agent."""
+    """Inject uploaded file URLs and lightweight extracted content into the latest user message."""
     if not messages or not files:
         return messages
 
     file_tags = []
+    remaining_chars = ATTACHED_FILES_TOTAL_MAX_CHARS
     for file in files:
         if not isinstance(file, dict):
             continue
@@ -2412,12 +2598,25 @@ async def add_direct_file_context(messages: list, files: list, request: Request)
 
         attrs = f'type="file" url="{html.escape(url, quote=True)}"'
         name = file.get('name') or file.get('filename')
-        content_type = file.get('content_type') or file.get('file', {}).get('meta', {}).get('content_type')
+        content_type = file.get('content_type') or (file.get('file') or {}).get('meta', {}).get('content_type')
         if content_type:
             attrs += f' content_type="{html.escape(str(content_type), quote=True)}"'
         if name:
             attrs += f' name="{html.escape(str(name), quote=True)}"'
-        file_tags.append(f'<file {attrs}/>')
+
+        content = ''
+        content_truncated = False
+        if remaining_chars > 0:
+            max_chars = min(ATTACHED_FILE_CONTENT_MAX_CHARS, remaining_chars)
+            content, content_truncated = await get_file_text_content(file, request, max_chars)
+            remaining_chars -= len(content)
+
+        if content:
+            if content_truncated:
+                attrs += ' content_truncated="true"'
+            file_tags.append(f'<file {attrs}>\n<content><![CDATA[{_cdata(content)}]]></content>\n</file>')
+        else:
+            file_tags.append(f'<file {attrs}/>')
 
     if not file_tags:
         return messages

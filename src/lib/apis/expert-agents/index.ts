@@ -3,11 +3,19 @@ import { WEBUI_API_BASE_URL } from '$lib/constants';
 export type ExpertSkillCard = {
 	skill_name: string;
 	description: string;
+	version?: string | null;
+	author?: string | null;
+	icon?: string | null;
+	icon_background?: string | null;
 };
 
 export type ExpertSkillDetail = {
 	name: string;
 	description: string;
+	version?: string | null;
+	author?: string | null;
+	icon?: string | null;
+	icon_background?: string | null;
 	content: string;
 	path?: string | null;
 	tags?: string[];
@@ -70,6 +78,46 @@ export const getExpertAgentDetail = async (
 		})
 		.catch((err) => {
 			error = err.detail ?? 'Failed to load expert skill detail';
+			console.error(err);
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
+export const updateExpertAgentDetail = async (
+	skillName: string,
+	payload: {
+		content: string;
+		icon?: string | null;
+		icon_background?: string | null;
+	},
+	token: string = ''
+): Promise<ExpertSkillDetail> => {
+	let error = null;
+
+	const res = await fetch(
+		`${WEBUI_API_BASE_URL}/expert-agents/${encodeURIComponent(skillName)}/update`,
+		{
+			method: 'POST',
+			headers: {
+				Accept: 'application/json',
+				'Content-Type': 'application/json',
+				authorization: `Bearer ${token}`
+			},
+			body: JSON.stringify(payload)
+		}
+	)
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			error = err.detail ?? 'Failed to save expert skill';
 			console.error(err);
 			return null;
 		});

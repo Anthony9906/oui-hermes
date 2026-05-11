@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -19,11 +20,80 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 EXCLUDED_SKILL_DIRS = frozenset((".git", ".github", ".hub", ".archive", "__pycache__"))
+EXPERT_AGENT_ICON_NAMES = frozenset(
+    (
+        "sparkles",
+        "book-open",
+        "bot",
+        "wrench",
+        "boxes",
+        "compass",
+        "workflow",
+        "drafting-compass",
+        "chart-no-axes-combined",
+        "database",
+        "file-text",
+        "lightbulb",
+        "hammer",
+        "cog",
+        "cpu",
+        "circuit-board",
+        "blocks",
+        "package",
+        "factory",
+        "ruler",
+        "pencil-ruler",
+        "scan-search",
+        "search",
+        "clipboard-list",
+        "table",
+        "presentation",
+        "code",
+        "terminal",
+        "rocket",
+        "shield-check",
+        "brain-circuit",
+        "messages-square",
+    )
+)
+EXPERT_AGENT_ICON_BACKGROUNDS = frozenset(
+    (
+        "#e6edf7",
+        "#ebeaf5",
+        "#e8eef2",
+        "#eef0e8",
+        "#f0ece7",
+        "#f1e9ee",
+        "#edeef1",
+        "#edf0e6",
+        "#eef4ff",
+        "#eef8f3",
+        "#fff3e8",
+        "#f3efff",
+        "#eef7fb",
+        "#fff1f2",
+        "#fef9c3",
+        "#ecfdf5",
+        "#dbeafe",
+        "#dcfce7",
+        "#ffedd5",
+        "#ede9fe",
+        "#e0f2fe",
+        "#ffe4e6",
+        "#fef08a",
+        "#ccfbf1",
+    )
+)
+EXPERT_AGENT_ICON_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 
 
 class ExpertAgentItem(BaseModel):
     skill_name: str
     description: str = ""
+    version: str | None = None
+    author: str | None = None
+    icon: str | None = None
+    icon_background: str | None = None
 
 
 class ExpertAgentListResponse(BaseModel):
@@ -33,6 +103,10 @@ class ExpertAgentListResponse(BaseModel):
 class ExpertAgentDetailResponse(BaseModel):
     name: str
     description: str = ""
+    version: str | None = None
+    author: str | None = None
+    icon: str | None = None
+    icon_background: str | None = None
     content: str
     path: str | None = None
     tags: list[str] = Field(default_factory=list)
@@ -42,6 +116,12 @@ class ExpertAgentDetailResponse(BaseModel):
     setup_needed: bool | None = None
     setup_note: str | None = None
     metadata: dict[str, Any] | None = None
+
+
+class ExpertAgentUpdateRequest(BaseModel):
+    content: str
+    icon: str | None = None
+    icon_background: str | None = None
 
 
 def _split_env_list(value: str) -> set[str]:
@@ -104,6 +184,180 @@ def _read_skill_frontmatter(content: str) -> dict[str, Any]:
     return {}
 
 
+def _split_skill_frontmatter(content: str) -> tuple[dict[str, Any], str]:
+    if not content.startswith("---"):
+        return {}, content
+
+    lines = content.splitlines(keepends=True)
+    if not lines or lines[0].strip() != "---":
+        return {}, content
+
+    for index, line in enumerate(lines[1:], start=1):
+        if line.strip() != "---":
+            continue
+
+        raw_frontmatter = "".join(lines[1:index])
+        body = "".join(lines[index + 1 :])
+        try:
+            parsed = yaml.safe_load(raw_frontmatter) or {}
+            return (parsed if isinstance(parsed, dict) else {}), body
+        except yaml.YAMLError as e:
+            log.warning("Failed to parse Hermes skill frontmatter for update: %s", e)
+            return {}, content
+
+    return {}, content
+
+
+def _format_skill_frontmatter(frontmatter: dict[str, Any], body: str) -> str:
+    serialized = yaml.safe_dump(
+        frontmatter,
+        allow_unicode=True,
+        default_flow_style=False,
+        sort_keys=False,
+    ).strip()
+    normalized_body = body.lstrip("\r\n")
+    return f"---\n{serialized}\n---\n\n{normalized_body}"
+
+
+def _line_indent(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
+
+
+def _find_yaml_block_end(lines: list[str], start: int, base_indent: int) -> int:
+    for index in range(start + 1, len(lines)):
+        line = lines[index]
+        if not line.strip():
+            continue
+        if _line_indent(line) <= base_indent:
+            return index
+    return len(lines)
+
+
+def _open_webui_frontmatter_block(icon: str, icon_background: str) -> list[str]:
+    return [
+        "  open_webui:",
+        "    expert_agent:",
+        f"      icon: {icon}",
+        f"      icon_background: '{icon_background}'",
+    ]
+
+
+def _normalize_metadata_key_spacing(raw_frontmatter: str) -> str:
+    return "\n".join(
+        re.sub(
+            r"^(\s*(?:tags|category|related_skills|icon|icon_background):)(\S)",
+            r"\1 \2",
+            line,
+        )
+        for line in raw_frontmatter.splitlines()
+    )
+
+
+def _normalize_skill_frontmatter_key_spacing(content: str) -> str:
+    match = re.match(
+        r"^(---\s*\r?\n)([\s\S]*?)(\r?\n---\s*(?:\r?\n)?)([\s\S]*)$",
+        content,
+    )
+    if not match:
+        return content
+
+    opening, raw_frontmatter, closing, body = match.groups()
+    return f"{opening}{_normalize_metadata_key_spacing(raw_frontmatter)}{closing}{body}"
+
+
+def _inject_open_webui_metadata(
+    raw_frontmatter: str, icon: str, icon_background: str
+) -> str:
+    lines = raw_frontmatter.splitlines()
+    metadata_index = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if re.match(r"^metadata:\s*(?:#.*)?$", line)
+        ),
+        -1,
+    )
+    block = _open_webui_frontmatter_block(icon, icon_background)
+
+    if metadata_index == -1:
+        if lines and lines[-1].strip():
+            lines.append("metadata:")
+        else:
+            while lines and not lines[-1].strip():
+                lines.pop()
+            lines.append("metadata:")
+        lines.extend(block)
+        return _normalize_metadata_key_spacing("\n".join(lines))
+
+    metadata_indent = _line_indent(lines[metadata_index])
+    metadata_end = _find_yaml_block_end(lines, metadata_index, metadata_indent)
+    open_webui_index = -1
+    for index in range(metadata_index + 1, metadata_end):
+        line = lines[index]
+        if (
+            line.strip().startswith("open_webui:")
+            and _line_indent(line) == metadata_indent + 2
+        ):
+            open_webui_index = index
+            break
+
+    if open_webui_index != -1:
+        open_webui_end = _find_yaml_block_end(
+            lines, open_webui_index, metadata_indent + 2
+        )
+        lines[open_webui_index:open_webui_end] = block
+    else:
+        lines[metadata_end:metadata_end] = block
+
+    return _normalize_metadata_key_spacing("\n".join(lines))
+
+
+def _expert_agent_ui_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    open_webui_metadata = (
+        metadata.get("open_webui")
+        if isinstance(metadata.get("open_webui"), dict)
+        else {}
+    )
+    expert_agent_metadata = (
+        open_webui_metadata.get("expert_agent")
+        if isinstance(open_webui_metadata.get("expert_agent"), dict)
+        else {}
+    )
+    return expert_agent_metadata
+
+
+def _apply_expert_agent_ui_metadata(
+    content: str, icon: str | None, icon_background: str | None
+) -> str:
+    if icon is not None:
+        if len(icon) > 64 or not EXPERT_AGENT_ICON_NAME_PATTERN.match(icon):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported expert skill icon",
+            )
+
+    if icon_background is not None:
+        if icon_background not in EXPERT_AGENT_ICON_BACKGROUNDS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported expert skill icon background",
+            )
+
+    if icon is None or icon_background is None:
+        return content
+
+    match = re.match(r"^(---\s*\r?\n)([\s\S]*?)(\r?\n---\s*(?:\r?\n)?)([\s\S]*)$", content)
+    if not match:
+        raw_frontmatter = _inject_open_webui_metadata("", icon, icon_background)
+        return f"---\n{raw_frontmatter}\n---\n\n{content.lstrip()}"
+
+    opening, raw_frontmatter, closing, body = match.groups()
+    updated_frontmatter = _inject_open_webui_metadata(
+        raw_frontmatter, icon, icon_background
+    )
+    return f"{opening}{updated_frontmatter}{closing}{body}"
+
+
 def _read_skill(skill_md: Path) -> dict[str, Any] | None:
     try:
         content = skill_md.read_text(encoding="utf-8")
@@ -120,10 +374,25 @@ def _read_skill(skill_md: Path) -> dict[str, Any] | None:
     hermes_metadata = (
         metadata.get("hermes") if isinstance(metadata.get("hermes"), dict) else {}
     )
+    expert_agent_metadata = _expert_agent_ui_metadata(metadata)
 
     return {
         "name": str(frontmatter.get("name") or skill_md.parent.name),
         "description": str(frontmatter.get("description") or ""),
+        "version": (
+            str(frontmatter.get("version")) if frontmatter.get("version") else None
+        ),
+        "author": str(frontmatter.get("author")) if frontmatter.get("author") else None,
+        "icon": (
+            str(expert_agent_metadata.get("icon"))
+            if expert_agent_metadata.get("icon")
+            else None
+        ),
+        "icon_background": (
+            str(expert_agent_metadata.get("icon_background"))
+            if expert_agent_metadata.get("icon_background")
+            else None
+        ),
         "content": content,
         "path": str(skill_md.parent),
         "tags": (
@@ -212,6 +481,10 @@ async def get_expert_agents(user=Depends(get_verified_user)):
         ExpertAgentItem(
             skill_name=skill["name"],
             description=skill.get("description") or "",
+            version=skill.get("version"),
+            author=skill.get("author"),
+            icon=skill.get("icon"),
+            icon_background=skill.get("icon_background"),
         )
         for skill in _load_visible_skills()
     ]
@@ -230,6 +503,10 @@ async def get_expert_agent_detail(skill_name: str, user=Depends(get_verified_use
     return ExpertAgentDetailResponse(
         name=skill["name"],
         description=skill.get("description") or "",
+        version=skill.get("version"),
+        author=skill.get("author"),
+        icon=skill.get("icon"),
+        icon_background=skill.get("icon_background"),
         content=skill.get("content") or "",
         path=skill.get("path"),
         tags=skill.get("tags") or [],
@@ -239,4 +516,82 @@ async def get_expert_agent_detail(skill_name: str, user=Depends(get_verified_use
         setup_needed=skill.get("setup_needed"),
         setup_note=skill.get("setup_note"),
         metadata=skill.get("metadata"),
+    )
+
+
+@router.patch("/{skill_name:path}", response_model=ExpertAgentDetailResponse)
+async def update_expert_agent_detail(
+    skill_name: str,
+    form_data: ExpertAgentUpdateRequest,
+    user=Depends(get_verified_user),
+):
+    return _update_expert_agent_detail(skill_name, form_data)
+
+
+@router.post("/{skill_name:path}/update", response_model=ExpertAgentDetailResponse)
+async def update_expert_agent_detail_post(
+    skill_name: str,
+    form_data: ExpertAgentUpdateRequest,
+    user=Depends(get_verified_user),
+):
+    return _update_expert_agent_detail(skill_name, form_data)
+
+
+def _update_expert_agent_detail(
+    skill_name: str, form_data: ExpertAgentUpdateRequest
+):
+    skill = _find_visible_skill(skill_name)
+    if not skill:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Expert skill not found",
+        )
+
+    content = form_data.content
+    if not content.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Expert skill markdown cannot be empty",
+        )
+
+    content = _apply_expert_agent_ui_metadata(
+        content,
+        form_data.icon,
+        form_data.icon_background,
+    )
+    content = _normalize_skill_frontmatter_key_spacing(content)
+
+    skill_md = skill["_skill_md"]
+    try:
+        skill_md.write_text(content, encoding="utf-8")
+    except OSError as e:
+        log.exception("Failed to update Hermes expert skill %s", skill_md)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update expert skill",
+        ) from e
+
+    updated_skill = _read_skill(skill_md)
+    if not updated_skill:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reload expert skill",
+        )
+
+    return ExpertAgentDetailResponse(
+        name=updated_skill["name"],
+        description=updated_skill.get("description") or "",
+        version=updated_skill.get("version"),
+        author=updated_skill.get("author"),
+        icon=updated_skill.get("icon"),
+        icon_background=updated_skill.get("icon_background"),
+        content=updated_skill.get("content") or "",
+        path=updated_skill.get("path"),
+        tags=updated_skill.get("tags") or [],
+        related_skills=updated_skill.get("related_skills") or [],
+        linked_files=updated_skill.get("linked_files"),
+        readiness_status=updated_skill.get("readiness_status"),
+        setup_needed=updated_skill.get("setup_needed"),
+        setup_note=updated_skill.get("setup_note"),
+        metadata=updated_skill.get("metadata"),
     )
