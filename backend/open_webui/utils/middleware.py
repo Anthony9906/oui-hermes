@@ -2237,7 +2237,10 @@ def get_images_from_messages(message_list):
 
 async def get_model_image_url_from_file(file: dict, request: Request) -> str:
     url = file.get('url') or ''
-    if url.startswith(('http://', 'https://', 'data:image/')):
+    if url.startswith('data:image/'):
+        log.warning('Skipping inline data image for model request; uploaded images must be stored as files first')
+        return ''
+    if url.startswith(('http://', 'https://')):
         return url
 
     file_id = url
@@ -2246,32 +2249,21 @@ async def get_model_image_url_from_file(file: dict, request: Request) -> str:
         file_id = match.group(1)
 
     try:
-        from pathlib import Path
-
         from open_webui.models.files import Files
-        from open_webui.storage.provider import Storage
+        from open_webui.storage.provider import get_public_url_for_path
 
         file_item = await Files.get_file_by_id(file_id)
         if file_item:
+            public_url = get_public_url_for_path(file_item.path)
+            if public_url:
+                return public_url
+
             if isinstance(file_item.path, str) and file_item.path.startswith('s3://'):
                 direct_url = await get_file_access_url({'id': file_id}, request)
                 if direct_url:
                     return direct_url
-
-            file_path = Path(await asyncio.to_thread(Storage.get_file, file_item.path))
-            if file_path.is_file():
-                with open(file_path, 'rb') as image_file:
-                    encoded = base64.b64encode(image_file.read()).decode('utf-8')
-
-                content_type = (
-                    file.get('content_type')
-                    or (file_item.meta or {}).get('content_type')
-                    or mimetypes.guess_type(file_path.name)[0]
-                    or 'image/png'
-                )
-                return f'data:{content_type};base64,{encoded}'
     except Exception as e:
-        log.debug(f'Failed to convert image file to data URL: {e}')
+        log.debug(f'Failed to resolve image file URL: {e}')
 
     base_url = str(request.app.state.config.WEBUI_URL or request.base_url).rstrip('/')
     if url.startswith('/'):
@@ -2369,20 +2361,26 @@ async def get_file_access_url(file: dict, request: Request) -> str:
 
     try:
         from open_webui.models.files import Files
-        from open_webui.storage.provider import Storage
+        from open_webui.storage.provider import get_public_url_for_path, get_storage_provider_for_path
 
         file_item = await Files.get_file_by_id(file_id)
+        if file_item:
+            public_url = get_public_url_for_path(file_item.path)
+            if public_url:
+                return public_url
+
         if file_item and isinstance(file_item.path, str) and file_item.path.startswith('s3://'):
-            s3_key = Storage._extract_s3_key(file_item.path)
-            if getattr(Storage, 'public_base_url', None):
-                public_url = Storage.get_public_url(file_item.path)
+            storage = get_storage_provider_for_path(file_item.path)
+            s3_key = storage._extract_s3_key(file_item.path)
+            if getattr(storage, 'public_base_url', None):
+                public_url = storage.get_public_url(file_item.path)
                 if public_url:
                     return public_url
 
             return await asyncio.to_thread(
-                Storage.s3_client.generate_presigned_url,
+                storage.s3_client.generate_presigned_url,
                 'get_object',
-                Params={'Bucket': Storage.bucket_name, 'Key': s3_key},
+                Params={'Bucket': storage.bucket_name, 'Key': s3_key},
                 ExpiresIn=3600,
             )
     except Exception as e:
@@ -2508,7 +2506,7 @@ async def get_file_text_content(file: dict, request: Request, max_chars: int) ->
         from pathlib import Path
 
         from open_webui.models.files import Files
-        from open_webui.storage.provider import Storage
+        from open_webui.storage.provider import get_storage_provider_for_path
 
         file_item = await Files.get_file_by_id(file_id)
         if not file_item:
@@ -2567,7 +2565,8 @@ async def get_file_text_content(file: dict, request: Request, max_chars: int) ->
         if not supports_pdf and not supports_text:
             return '', False
 
-        file_path = Path(await asyncio.to_thread(Storage.get_file, file_item.path))
+        storage = get_storage_provider_for_path(file_item.path)
+        file_path = Path(await asyncio.to_thread(storage.get_file, file_item.path))
         if not file_path.is_file():
             return '', False
 
@@ -2579,8 +2578,13 @@ async def get_file_text_content(file: dict, request: Request, max_chars: int) ->
         return '', False
 
 
-async def add_direct_file_context(messages: list, files: list, request: Request) -> list:
-    """Inject uploaded file URLs and lightweight extracted content into the latest user message."""
+async def add_direct_file_context(
+    messages: list,
+    files: list,
+    request: Request,
+    content_file_ids: set[str] | None = None,
+) -> list:
+    """Inject file URLs into the latest user message; extract text only for selected files."""
     if not messages or not files:
         return messages
 
@@ -2604,9 +2608,12 @@ async def add_direct_file_context(messages: list, files: list, request: Request)
         if name:
             attrs += f' name="{html.escape(str(name), quote=True)}"'
 
+        file_id = _extract_file_id(file)
+        should_extract_content = content_file_ids is None or file_id in content_file_ids
+
         content = ''
         content_truncated = False
-        if remaining_chars > 0:
+        if should_extract_content and remaining_chars > 0:
             max_chars = min(ATTACHED_FILE_CONTENT_MAX_CHARS, remaining_chars)
             content, content_truncated = await get_file_text_content(file, request, max_chars)
             remaining_chars -= len(content)
@@ -3155,14 +3162,21 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             system_message = get_system_message(form_data.get('messages', []))
             form_data['messages'] = [system_message, *db_messages] if system_message else db_messages
 
+            # Inject only the current user turn's images. Replaying older local
+            # artifact URLs in every request can block unrelated later turns.
+            last_user_message_index = None
+            for index, message in enumerate(form_data['messages']):
+                if message.get('role') == 'user':
+                    last_user_message_index = index
+
             # Inject image files into content as image_url parts (mirrors frontend logic)
-            for message in form_data['messages']:
+            for index, message in enumerate(form_data['messages']):
                 image_files = [
                     f
                     for f in message.get('files', [])
                     if f.get('type') == 'image' or (f.get('content_type') or '').startswith('image/')
                 ]
-                if message.get('role') == 'user' and image_files:
+                if index == last_user_message_index and message.get('role') == 'user' and image_files:
                     text_content = message.get('content', '')
                     if isinstance(text_content, str):
                         image_parts = []
@@ -3472,7 +3486,24 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     form_data['metadata'] = metadata
 
     if files:
-        form_data['messages'] = await add_direct_file_context(form_data.get('messages', []), files, request)
+        current_user_files = (metadata.get('user_message') or {}).get('files')
+        current_file_ids = None
+        if current_user_files is not None:
+            current_file_ids = {
+                file_id
+                for file_id in (
+                    _extract_file_id(file)
+                    for file in current_user_files
+                    if isinstance(file, dict) and file.get('type') == 'file'
+                )
+                if file_id
+            }
+        form_data['messages'] = await add_direct_file_context(
+            form_data.get('messages', []),
+            files,
+            request,
+            current_file_ids,
+        )
         metadata['direct_files'] = files
         metadata['files'] = []
         form_data['metadata'] = metadata

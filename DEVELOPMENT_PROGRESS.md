@@ -1,6 +1,6 @@
 # Development Progress
 
-Last updated: 2026-05-09
+Last updated: 2026-05-13
 
 This is the compact handoff log for Hermes-specific Open WebUI development. Keep it evidence-based: preserve current outcomes, active contracts, validation rules, and durable caveats. Do not append debugging chronology.
 
@@ -90,6 +90,17 @@ Status: patched and runtime verified
 - File IDs are resolved from either direct IDs or Open WebUI file-content URLs.
 - File preview remains UI-owned: PDF uses `PDFViewer`, Markdown renders as Markdown, HTML uses sandboxed `iframe srcdoc`, and other text/code files use source previews.
 - Runtime tests confirmed PDF, HTML, Markdown, and image attachments store in R2, inject attachment URLs into the Hermes request, and are parsed by the agent.
+
+### Attachment URL And Multimodal Boundary
+
+Status: patched and verified
+
+- Image attachments must not be forwarded to Hermes as `data:image/...base64`; the Open WebUI middleware now rejects inline data images and no longer falls back to reading local images into base64.
+- Stored image files are forwarded as model-accessible URLs when storage provides one. R2/S3 public URLs work for remote multimodal providers; local `localhost` artifact URLs are only suitable for local agent tools or browser/file previews, not direct provider `image_url` fetching.
+- Open WebUI's visible attachment URL (`/api/v1/files/{id}/content`) is a UI/download route and is not necessarily the model URL. Runtime verification showed successful image recognition used the R2 public URL in the Hermes session payload.
+- Historical image attachments are no longer re-injected into every later chat turn; only the current user turn's images are added as `image_url` parts, preventing old image URLs from breaking unrelated later document turns.
+- Non-image attachments continue to use the established `<attached_files>` path: Open WebUI sends URL, content type, name, and lightweight pre-extracted text when supported.
+- Hermes dashboard black screens on image sessions were not caused by Open WebUI re-sending base64 after the fix; the remaining cause was dashboard rendering code assuming `message.content` is always a string. The Hermes dashboard was updated to render OpenAI-style multimodal content arrays.
 
 ### Trimmed Open WebUI Surface
 
