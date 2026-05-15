@@ -189,6 +189,14 @@ Status: implemented and locally verified on 2026-05-15
 - Chat requests no longer merge or send `$settings.params`, persisted chat `params`, or stop tokens. Persisted chats/new chats also stop writing `system` and `params` fields from the chat UI path.
 - Verification: `npm run build` passed. Targeted static searches for chat-side `AdvancedParams`, `Allow Chat Controls`, `Advanced Parameters`, `System Prompt`, `bind:params`, `$settings?.params`, and chat-controls permission gates returned no active hits under the chat/admin permission surfaces.
 
+## User Context Injection Status
+
+Status: verified from current code on 2026-05-15
+
+- The original Open WebUI memory/user-context injection helper still exists as `chat_memory_handler()` in `backend/open_webui/utils/middleware.py`; it builds a `User Context:\n...` block from memory search results and appends it to the system message.
+- For normal persisted Hermes chats, this injection is currently bypassed. `process_chat_payload()` sets `hermes_session_delta = bool(chat_id)`, reduces the outgoing payload to the current user message, clears `form_data['features']`, and later only processes feature-based memory/web/search injections under `if features and not hermes_session_delta`.
+- This means the old memory-derived `User Context` block is not sent on normal Hermes chat turns after the Hermes session-delta cleanup. This is distinct from input-template variable replacement such as `{{USER_NAME}}`, `{{USER_EMAIL}}`, and `{{USER_LOCATION}}`, which still exists in `src/lib/components/chat/MessageInput.svelte`.
+
 ## Admin Extension Settings Visibility
 
 Status: implemented and locally verified on 2026-05-15
