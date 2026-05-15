@@ -3945,6 +3945,21 @@ async def get_system_oauth_token(request, user):
     return oauth_token
 
 
+def get_default_chat_title(messages: list[dict], max_length: int = 100) -> str:
+    title = get_last_user_message(messages) or ''
+    if not title:
+        for message in messages:
+            if message.get('role') == 'user':
+                title = message.get('content', '')
+                break
+
+    if not isinstance(title, str):
+        title = str(title or '')
+
+    title = re.sub(r'\s+', ' ', title).strip()
+    return title[:max_length].rstrip() + '...' if len(title) > max_length else title
+
+
 async def background_tasks_handler(ctx):
     request = ctx['request']
     form_data = ctx['form_data']
@@ -3952,9 +3967,6 @@ async def background_tasks_handler(ctx):
     metadata = ctx['metadata']
     tasks = ctx['tasks']
     event_emitter = ctx['event_emitter']
-
-    if metadata.get('hermes_session_delta'):
-        return
 
     message = None
     messages = []
@@ -4053,64 +4065,63 @@ async def background_tasks_handler(ctx):
 
             if not metadata.get('chat_id', '').startswith('local:'):  # Only update titles and tags for non-temp chats
                 if TASKS.TITLE_GENERATION in tasks:
-                    user_message = get_last_user_message(messages)
-                    if user_message and len(user_message) > 100:
-                        user_message = user_message[:100] + '...'
-
-                    title = None
+                    title = get_default_chat_title(messages)
                     if tasks[TASKS.TITLE_GENERATION]:
-                        res = await generate_title(
-                            request,
-                            {
-                                'model': message['model'],
-                                'messages': messages,
-                                'chat_id': metadata['chat_id'],
-                            },
-                            user,
-                        )
-
-                        if res and isinstance(res, dict):
-                            if len(res.get('choices', [])) == 1:
-                                response_message = res.get('choices', [])[0].get('message', {})
-
-                                title_string = (
-                                    response_message.get('content')
-                                    or response_message.get(
-                                        'reasoning_content',
-                                    )
-                                    or message.get('content', user_message)
-                                )
-                            else:
-                                title_string = ''
-
-                            title_string = title_string[title_string.find('{') : title_string.rfind('}') + 1]
-
-                            try:
-                                title = json.loads(title_string).get('title', user_message)
-                            except Exception as e:
-                                title = ''
-
-                            if not title:
-                                title = messages[0].get('content', user_message)
-
-                            await Chats.update_chat_title_by_id(metadata['chat_id'], title)
-
-                            await event_emitter(
+                        try:
+                            res = await generate_title(
+                                request,
                                 {
-                                    'type': 'chat:title',
-                                    'data': title,
-                                }
+                                    'model': message['model'],
+                                    'messages': messages,
+                                    'chat_id': metadata['chat_id'],
+                                },
+                                user,
                             )
 
-                    if title == None and len(messages) == 2 and (not messages_map or len(messages_map) <= 2):
-                        title = messages[0].get('content', user_message)
+                            if res and isinstance(res, dict):
+                                if len(res.get('choices', [])) == 1:
+                                    response_message = res.get('choices', [])[0].get('message', {})
+
+                                    title_string = (
+                                        response_message.get('content')
+                                        or response_message.get(
+                                            'reasoning_content',
+                                        )
+                                        or title
+                                    )
+                                else:
+                                    title_string = ''
+
+                                title_string = title_string[title_string.find('{') : title_string.rfind('}') + 1]
+
+                                try:
+                                    generated_title = json.loads(title_string).get('title', title)
+                                except Exception:
+                                    generated_title = ''
+
+                                if generated_title:
+                                    title = generated_title
+                        except Exception as e:
+                            log.debug(f'Error generating chat title: {e}')
+
+                    if title:
+                        await Chats.update_chat_title_by_id(metadata['chat_id'], title)
+
+                        await event_emitter(
+                            {
+                                'type': 'chat:title',
+                                'data': title,
+                            }
+                        )
+                    elif len(messages) == 2 and (not messages_map or len(messages_map) <= 2):
+                        title = get_default_chat_title(messages) or 'New Chat'
 
                         await Chats.update_chat_title_by_id(metadata['chat_id'], title)
 
                         await event_emitter(
                             {
                                 'type': 'chat:title',
-                                'data': message.get('content', user_message),
+                                'data': title,
                             }
                         )
 

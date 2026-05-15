@@ -2447,7 +2447,15 @@
 				parent_id: userMessage?.parentId ?? null,
 				user_message: userMessage,
 
-				background_tasks: {},
+				background_tasks: {
+					...(!_chatId && (userMessage?.parentId ?? null) === null
+						? {
+								title_generation: $settings?.title?.auto ?? true,
+								tags_generation: $settings?.autoTags ?? true
+							}
+						: {}),
+					follow_up_generation: $settings?.autoFollowUps ?? true
+				},
 
 				...(stream && (model.info?.meta?.capabilities?.usage ?? false)
 					? {
@@ -2752,14 +2760,35 @@
 		}
 	};
 
+	const getInitialChatTitle = (messages, maxLength = 100) => {
+		const userMessage = messages.find((message) => message.role === 'user');
+		let content = userMessage?.content ?? '';
+
+		if (Array.isArray(content)) {
+			content = content
+				.filter((part) => part?.type === 'text')
+				.map((part) => part.text ?? '')
+				.join(' ');
+		}
+
+		const title = String(content ?? '')
+			.replace(/\s+/g, ' ')
+			.trim();
+		return title.length > maxLength ? `${title.slice(0, maxLength).trimEnd()}...` : title;
+	};
+
 	const initChatHandler = async (history) => {
 		let _chatId = $chatId;
+		const initialTitle =
+			getInitialChatTitle(createMessagesList(history, history.currentId)) || $i18n.t('New Chat');
+
+		await chatTitle.set(initialTitle);
 
 		chat = await createNewChat(
 			localStorage.token,
 			{
 				id: _chatId,
-				title: $i18n.t('New Chat'),
+				title: initialTitle,
 				models: selectedModels,
 				history: history,
 				messages: createMessagesList(history, history.currentId),

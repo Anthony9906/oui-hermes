@@ -1461,6 +1461,22 @@ async def embeddings(request: Request, form_data: dict, user=Depends(get_verifie
     return await generate_embeddings(request, form_data, user)
 
 
+def get_initial_chat_title(user_message: Optional[dict], max_length: int = 100) -> str:
+    content = (user_message or {}).get('content', '')
+    if isinstance(content, list):
+        text_parts = []
+        for part in content:
+            if isinstance(part, dict) and part.get('type') == 'text':
+                text_parts.append(str(part.get('text', '')))
+        content = ' '.join(text_parts)
+
+    if not isinstance(content, str):
+        content = str(content or '')
+
+    title = re.sub(r'\s+', ' ', content).strip()
+    return title[:max_length].rstrip() + '...' if len(title) > max_length else title
+
+
 @app.post('/api/chat/completions')
 @app.post('/api/v1/chat/completions')  # Experimental: Compatibility with OpenAI API
 async def chat_completion(
@@ -1592,6 +1608,7 @@ async def chat_completion(
                     # Build the full history upfront with ALL assistant placeholders
                     user_message = metadata.get('user_message') or {}
                     user_message_id = user_message.get('id') if user_message else None
+                    initial_title = get_initial_chat_title(user_message) or 'New Chat'
 
                     history_messages = {}
                     all_assistant_ids = [assistant_id for assistant_id in message_ids.values() if assistant_id]
@@ -1619,7 +1636,7 @@ async def chat_completion(
                         ChatForm(
                             chat={
                                 'id': chat_id,
-                                'title': 'New Chat',
+                                'title': initial_title,
                                 'models': list(message_ids.keys()),
                                 'history': {
                                     'currentId': all_assistant_ids[0] if all_assistant_ids else user_message_id,
