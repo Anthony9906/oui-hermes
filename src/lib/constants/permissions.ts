@@ -30,10 +30,10 @@ export const DEFAULT_PERMISSIONS = {
 		allow_users: true
 	},
 	chat: {
-		controls: true,
-		valves: true,
-		system_prompt: true,
-		params: true,
+		controls: false,
+		valves: false,
+		system_prompt: false,
+		params: false,
 		file_upload: true,
 		web_upload: true,
 		delete: true,

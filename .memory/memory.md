@@ -170,7 +170,26 @@ Status: revised after user retest on 2026-05-15
 - Additional correction: OUI background model tasks were still able to send full chat context after the main answer for title/tags/follow-up generation. Frontend now sends `background_tasks: {}` for chat completions, and backend `background_tasks_handler` returns immediately when `metadata.hermes_session_delta` is set.
 - Verification after revision: `python3 -m py_compile backend/open_webui/socket/main.py backend/open_webui/utils/middleware.py backend/open_webui/utils/hermes.py backend/open_webui/routers/openai.py` passed. `npm run build` passed and rewrote repo-root `build/`. Backend was restarted; `curl http://127.0.0.1:8080/health` returned `{"status":true}` and `lsof` showed Python PID `38704` listening on TCP 8080.
 - Remaining caveat: no authenticated end-to-end browser chat was executed by Codex in this step; the user should hard-refresh `http://localhost:8080/` and test a send. If streaming is still absent, the next evidence to collect is browser console socket logs plus one backend `events` payload for the affected chat/message ids.
-- Build warning note: project-source unused import warnings seen during this step were removed. One remaining warning originates from installed dependency `node_modules/@xyflow/svelte/dist/lib/components/KeyHandler/KeyHandler.svelte` reporting `isInputDOMNode` as unused despite the dependency source using it in markup; ordinary Vite/Svelte warning hooks did not suppress it. Do not treat that as a project-source warning without either patching/upgrading the dependency or adding a reproducible dependency patch.
+- Superseded build warning note: the previous remaining `@xyflow/svelte` `isInputDOMNode` unused-import warning was fixed on 2026-05-15 by adding `scripts/patch-xyflow-svelte.mjs` and running it from `postinstall`, `prebuild`, and `prebuild:bigmem`.
+
+## Chat Advanced Settings Removal
+
+Status: implemented and locally verified on 2026-05-15
+
+- User-facing chat advanced controls were removed for Hermes-only behavior. The navbar no longer exposes the Controls/knobs button, `ChatControls.svelte` no longer has a Controls tab or fallback, and the old `src/lib/components/chat/Controls/Controls.svelte` component was deleted.
+- Chat/user settings no longer show or save per-user System Prompt / Advanced Parameters. This matches the Hermes boundary: Hermes owns system/agent prompt and model behavior; OUI should not expose per-chat/per-user prompt or generation params for Hermes sessions.
+- Group/admin permissions no longer show `Allow Chat Controls`, `Allow Chat Valves`, `Allow Chat System Prompt`, or `Allow Chat Params`; default permissions for those fields are now false.
+- Chat requests no longer merge or send `$settings.params`, persisted chat `params`, or stop tokens. Persisted chats/new chats also stop writing `system` and `params` fields from the chat UI path.
+- Verification: `npm run build` passed. Targeted static searches for chat-side `AdvancedParams`, `Allow Chat Controls`, `Advanced Parameters`, `System Prompt`, `bind:params`, `$settings?.params`, and chat-controls permission gates returned no active hits under the chat/admin permission surfaces.
+
+## Xyflow Build Warning Patch
+
+Status: implemented and locally verified on 2026-05-15
+
+- `@xyflow/svelte@0.1.39` ships `dist/lib/components/KeyHandler/KeyHandler.svelte` with `isInputDOMNode` imported from `@xyflow/system`; Svelte/Rollup reports it as unused even though the dependency uses it in markup.
+- Added `scripts/patch-xyflow-svelte.mjs`, which idempotently patches the installed dependency by removing the imported `isInputDOMNode` and injecting an equivalent local helper copied from `@xyflow/system` behavior.
+- Added `postinstall`, `prebuild`, and `prebuild:bigmem` hooks so the patch survives fresh installs and is applied automatically before production builds.
+- Verification: `npm run build` passed without the previous `@xyflow/svelte` warning.
 
 ## Attachment Storage / R2
 

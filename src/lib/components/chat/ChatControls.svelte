@@ -1,5 +1,5 @@
 <script context="module" lang="ts">
-	let savedTab: 'controls' | 'files' | 'overview' | 'expertAgents' = 'controls';
+	let savedTab: 'files' | 'overview' | 'expertAgents' = 'overview';
 </script>
 
 <script lang="ts">
@@ -28,7 +28,6 @@
 	import type { ExpertSkillCard } from '$lib/apis/expert-agents';
 	import { toast } from 'svelte-sonner';
 
-	import Controls from './Controls/Controls.svelte';
 	import CallOverlay from './MessageInput/CallOverlay.svelte';
 	import Drawer from '../common/Drawer.svelte';
 	import Artifacts from './Artifacts.svelte';
@@ -41,12 +40,11 @@
 	const i18n = getContext('i18n');
 
 	export let history;
-	export let models = [];
 
 	export let chatId = null;
 
 	export let chatFiles = [];
-	export let params = {};
+	$: void chatFiles;
 
 	export let eventTarget: EventTarget;
 	export let submitPrompt: Function;
@@ -66,7 +64,7 @@
 	const defaultPaneWidth = 420;
 	const expertAgentPaneWidth = 580;
 
-	// Tab state for Controls+Files panel
+	// Tab state for the Hermes context panel
 	let activeTab = savedTab;
 	// svelte-ignore reactive_declaration_module_script_dependency
 	$: {
@@ -75,7 +73,6 @@
 
 	$: hasMessages = history?.messages && Object.keys(history.messages).length > 0;
 
-	$: showControlsTab = $user?.role === 'admin' || ($user?.permissions?.chat?.controls ?? true);
 	$: showFilesTab =
 		($selectedTerminalId &&
 			(($terminalServers ?? []).some((t) => t.id && t.id === $selectedTerminalId) ||
@@ -85,18 +82,30 @@
 	$: showOverviewTab = hasMessages;
 	$: showExpertAgentTab = $showExpertAgentDrawer;
 
-	// Tab fallback: if active tab becomes hidden, switch to next available
-	$: if (!showOverviewTab && activeTab === 'overview') activeTab = 'controls';
-	$: if (!showFilesTab && activeTab === 'files') activeTab = 'controls';
-	$: if (!showExpertAgentTab && activeTab === 'expertAgents') activeTab = 'controls';
-	$: if (!showControlsTab && activeTab === 'controls') {
+	const firstVisibleTab = () => {
 		if (showFilesTab) activeTab = 'files';
 		else if (showOverviewTab) activeTab = 'overview';
 		else if (showExpertAgentTab) activeTab = 'expertAgents';
+	};
+
+	// Tab fallback: if active tab becomes hidden, switch to a visible Hermes context tab.
+	$: if (
+		(activeTab === 'overview' && !showOverviewTab) ||
+		(activeTab === 'files' && !showFilesTab) ||
+		(activeTab === 'expertAgents' && !showExpertAgentTab)
+	) {
+		firstVisibleTab();
 	}
 
-	// Auto-close if there are no visible tabs
-	$: if (!showControlsTab && !showFilesTab && !showOverviewTab && !showExpertAgentTab) {
+	// Auto-close if there are no visible context tabs and no full-screen panel is active.
+	$: if (
+		!$showCallOverlay &&
+		!$showArtifacts &&
+		!$showEmbeds &&
+		!showFilesTab &&
+		!showOverviewTab &&
+		!showExpertAgentTab
+	) {
 		closePanel();
 	}
 
@@ -350,22 +359,11 @@
 				{:else if $showArtifacts}
 					<Artifacts {history} />
 				{:else}
-					<!-- Controls + Files tabs -->
+					<!-- Hermes context tabs -->
 					<div class="flex flex-col h-full min-h-0">
 						<!-- Tab bar -->
 						<div class="flex items-center justify-between px-2 pt-2 pb-2 shrink-0">
 							<div class="flex gap-1 min-w-0 overflow-x-auto scrollbar-hidden">
-								{#if showControlsTab}
-									<button
-										class="px-2.5 py-1 text-sm rounded-lg transition whitespace-nowrap {activeTab ===
-										'controls'
-											? 'bg-gray-100 dark:bg-gray-800 font-medium text-gray-900 dark:text-white'
-											: 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}"
-										on:click={() => (activeTab = 'controls')}
-									>
-										{$i18n.t('Controls')}
-									</button>
-								{/if}
 								{#if showFilesTab}
 									<button
 										class="px-2.5 py-1 text-sm rounded-lg transition whitespace-nowrap {activeTab ===
@@ -423,9 +421,7 @@
 								? 'h-full'
 								: activeTab === 'expertAgents'
 									? 'h-full'
-									: activeTab === 'controls'
-										? 'h-full min-h-0 px-3 pt-1'
-										: ''}"
+									: ''}"
 						>
 							{#if activeTab === 'overview'}
 								<Overview
@@ -446,8 +442,6 @@
 								/>
 							{:else if activeTab === 'files' && $selectedTerminalId}
 								<FileNav onAttach={handleTerminalAttach} {chatId} />
-							{:else}
-								<Controls embed={true} {models} bind:chatFiles bind:params />
 							{/if}
 						</div>
 					</div>
@@ -518,7 +512,7 @@
 					{:else if $showArtifacts}
 						<Artifacts {history} overlay={dragged} />
 					{:else}
-						<!-- Controls + Files tabs -->
+						<!-- Hermes context tabs -->
 						<div class="flex flex-col h-full min-h-0">
 							<!-- Tab bar -->
 							<div class="context-panel-header flex items-center justify-between shrink-0">
@@ -528,16 +522,6 @@
 									</div>
 								</div>
 								<div class="flex gap-1 min-w-0 overflow-x-auto scrollbar-hidden">
-									{#if showControlsTab}
-										<button
-											class="context-panel-tab {activeTab === 'controls'
-												? 'context-panel-tab-active'
-												: 'context-panel-tab-idle'}"
-											on:click={() => (activeTab = 'controls')}
-										>
-											{$i18n.t('Controls')}
-										</button>
-									{/if}
 									{#if showFilesTab}
 										<button
 											class="context-panel-tab {activeTab === 'files'
@@ -592,9 +576,7 @@
 									? 'h-full'
 									: activeTab === 'expertAgents'
 										? 'h-full'
-										: activeTab === 'controls'
-											? 'h-full min-h-0 px-3 pt-1'
-											: ''}"
+										: ''}"
 							>
 								{#if activeTab === 'overview'}
 									<Overview
@@ -620,8 +602,6 @@
 									/>
 								{:else if activeTab === 'files' && $selectedTerminalId}
 									<FileNav onAttach={handleTerminalAttach} overlay={dragged} {chatId} />
-								{:else}
-									<Controls embed={true} {models} bind:chatFiles bind:params />
 								{/if}
 							</div>
 						</div>

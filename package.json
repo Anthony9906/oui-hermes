@@ -5,7 +5,10 @@
 	"scripts": {
 		"dev": "vite dev --host",
 		"dev:5050": "vite dev --port 5050",
+		"postinstall": "node scripts/patch-xyflow-svelte.mjs",
+		"prebuild": "node scripts/patch-xyflow-svelte.mjs",
 		"build": "vite build",
+		"prebuild:bigmem": "node scripts/patch-xyflow-svelte.mjs",
 		"build:bigmem": "NODE_OPTIONS=--max-old-space-size=8192 vite build",
 		"build:watch": "vite build --watch",
 		"preview": "vite preview",

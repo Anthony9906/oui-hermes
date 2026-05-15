@@ -258,7 +258,6 @@
 	let prompt = '';
 	let chatFiles = [];
 	let files = [];
-	let params = {};
 
 	$: if (chatIdProp) {
 		navigateHandler();
@@ -1351,7 +1350,6 @@
 		};
 
 		chatFiles = [];
-		params = {};
 		taskIds = null;
 		chatTasks = [];
 
@@ -1516,7 +1514,6 @@
 
 				chatTitle.set(chatContent.title);
 
-				params = chatContent?.params ?? {};
 				chatFiles = chatContent?.files ?? [];
 
 				// Load tasks from chat-level DB field
@@ -1664,7 +1661,6 @@
 					models: selectedModels,
 					messages: messages,
 					history: history,
-					params: params,
 					files: chatFiles,
 					meta: buildChatMeta()
 				});
@@ -2298,17 +2294,6 @@
 		return features;
 	};
 
-	const getStopTokens = () => {
-		const stop = params?.stop ?? $settings?.params?.stop;
-		if (!stop) return undefined;
-
-		const tokens = Array.isArray(stop) ? stop : stop.split(',').map((s) => s.trim());
-
-		return tokens
-			.filter(Boolean)
-			.map((token) => decodeURIComponent(JSON.parse(`"${token.replace(/"/g, '\\"')}"`)));
-	};
-
 	const sendMessageSocket = async (
 		model,
 		_messages,
@@ -2356,11 +2341,7 @@
 			});
 		}
 
-		const stream =
-			model?.info?.params?.stream_response ??
-			$settings?.params?.stream_response ??
-			params?.stream_response ??
-			true;
+		const stream = model?.info?.params?.stream_response ?? true;
 		let messages = [
 			{
 				role: 'user',
@@ -2433,11 +2414,6 @@
 				stream: stream,
 				model: model.id,
 				...(messages.length > 0 ? { messages } : {}),
-				params: {
-					...$settings?.params,
-					...params,
-					stop: getStopTokens()
-				},
 
 				files: (files?.length ?? 0) > 0 ? files : undefined,
 
@@ -2785,8 +2761,6 @@
 				id: _chatId,
 				title: $i18n.t('New Chat'),
 				models: selectedModels,
-				system: $settings.system ?? undefined,
-				params: params,
 				history: history,
 				messages: createMessagesList(history, history.currentId),
 				meta: buildChatMeta(),
@@ -2819,7 +2793,6 @@
 					models: selectedModels,
 					history: history,
 					messages: createMessagesList(history, history.currentId),
-					params: params,
 					files: chatFiles,
 					meta: buildChatMeta()
 				});
@@ -2960,8 +2933,6 @@
 							chat: {
 								title: $chatTitle,
 								models: selectedModels,
-								system: $settings.system ?? undefined,
-								params: params,
 								history: history,
 								timestamp: Date.now()
 							}
@@ -2989,7 +2960,6 @@
 										id: uuidv4(),
 										title: title.length > 50 ? `${title.slice(0, 50)}...` : title,
 										models: selectedModels,
-										params: params,
 										history: history,
 										messages: messages,
 										meta: buildChatMeta(),
@@ -3193,18 +3163,10 @@
 					bind:this={controlPaneComponent}
 					bind:history
 					bind:chatFiles
-					bind:params
 					bind:files
 					bind:pane={controlPane}
 					chatId={$chatId}
 					modelId={selectedModelIds?.at(0) ?? null}
-					models={selectedModelIds.reduce((a, e, i, arr) => {
-						const model = $models.find((m) => m.id === e);
-						if (model) {
-							return [...a, model];
-						}
-						return a;
-					}, [])}
 					submitPrompt={submitHandler}
 					{stopResponse}
 					{showMessage}
