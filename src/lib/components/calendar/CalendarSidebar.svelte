@@ -205,7 +205,7 @@
 					</span>
 
 					{#if isDeletable(cal)}
-						<!-- svelte-ignore a11y-click-events-have-key-events -->
+						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<span
 							class="shrink-0 p-0.5 rounded opacity-0 group-hover:opacity-100
 								transition-all duration-150"

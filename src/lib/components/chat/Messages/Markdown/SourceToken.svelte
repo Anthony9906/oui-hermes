@@ -4,6 +4,7 @@
 	import Source from './Source.svelte';
 
 	export let id;
+	$: void id;
 	export let token;
 	export let sourceIds = [];
 	export let onClick: Function = () => {};

@@ -250,6 +250,7 @@
 										</div>
 										<div class=" absolute -top-1 -right-1">
 											<button
+												aria-label="Remove attachment"
 												class=" bg-white text-black border border-white rounded-full {($settings?.highContrastMode ??
 												false)
 													? ''
@@ -326,7 +327,7 @@
 									document.getElementById('confirm-edit-message-button')?.click();
 								}
 							}}
-						/>
+						></textarea>
 					</div>
 
 					<div class=" mt-2 mb-1 flex justify-between text-sm font-medium">
@@ -398,6 +399,7 @@
 						{#if siblings.length > 1}
 							<div class="flex self-center" dir="ltr">
 								<button
+									aria-label="Previous message"
 									class="self-center p-1 hover:bg-black/5 dark:hover:bg-white/5 dark:hover:text-white hover:text-black rounded-md transition"
 									on:click={() => {
 										showPreviousMessage(message);
@@ -446,7 +448,7 @@
 										/>/{siblings.length}
 									</div>
 								{:else}
-									<!-- svelte-ignore a11y-no-static-element-interactions -->
+									<!-- svelte-ignore a11y_no_static_element_interactions -->
 									<div
 										class="text-sm tracking-widest font-semibold self-center dark:text-gray-100 min-w-fit"
 										on:dblclick={async () => {
@@ -465,6 +467,7 @@
 								{/if}
 
 								<button
+									aria-label="Next message"
 									class="self-center p-1 hover:bg-black/5 dark:hover:bg-white/5 dark:hover:text-white hover:text-black rounded-md transition"
 									on:click={() => {
 										showNextMessage(message);
@@ -491,6 +494,7 @@
 					{#if !readOnly}
 						<Tooltip content={$i18n.t('Edit')} placement="bottom">
 							<button
+								aria-label="Edit message"
 								class="{($settings?.highContrastMode ?? false)
 									? ''
 									: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition edit-user-message-button"
@@ -519,6 +523,7 @@
 					{#if message?.content}
 						<Tooltip content={$i18n.t('Copy')} placement="bottom">
 							<button
+								aria-label="Copy message"
 								class="{($settings?.highContrastMode ?? false)
 									? ''
 									: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition"
@@ -548,6 +553,7 @@
 						{#if !readOnly && (!isFirstMessage || siblings.length > 1)}
 							<Tooltip content={$i18n.t('Delete')} placement="bottom">
 								<button
+									aria-label="Delete message"
 									class="{($settings?.highContrastMode ?? false)
 										? ''
 										: 'invisible group-hover:visible'} p-1 rounded-sm dark:hover:text-white hover:text-black transition"
@@ -582,6 +588,7 @@
 						{#if siblings.length > 1}
 							<div class="flex self-center" dir="ltr">
 								<button
+									aria-label="Previous message"
 									class="self-center p-1 hover:bg-black/5 dark:hover:bg-white/5 dark:hover:text-white hover:text-black rounded-md transition"
 									on:click={() => {
 										showPreviousMessage(message);
@@ -630,7 +637,7 @@
 										/>/{siblings.length}
 									</div>
 								{:else}
-									<!-- svelte-ignore a11y-no-static-element-interactions -->
+									<!-- svelte-ignore a11y_no_static_element_interactions -->
 									<div
 										class="text-sm tracking-widest font-semibold self-center dark:text-gray-100 min-w-fit"
 										on:dblclick={async () => {
@@ -649,6 +656,7 @@
 								{/if}
 
 								<button
+									aria-label="Next message"
 									class="self-center p-1 hover:bg-black/5 dark:hover:bg-white/5 dark:hover:text-white hover:text-black rounded-md transition"
 									on:click={() => {
 										showNextMessage(message);

@@ -247,7 +247,7 @@
 				</svg>
 			{/if}
 			{#if renaming}
-				<!-- svelte-ignore a11y-click-events-have-key-events -->
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
 				<input
 					bind:this={renameInput}
 					bind:value={renameValue}

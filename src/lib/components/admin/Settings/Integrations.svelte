@@ -32,6 +32,7 @@
 	} from '$lib/apis/configs';
 
 	export let saveSettings: Function;
+	$: void saveSettings;
 
 	let servers = null;
 	let showConnectionModal = false;

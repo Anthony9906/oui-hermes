@@ -12,6 +12,7 @@
 	import Textarea from '$lib/components/common/Textarea.svelte';
 	export let saveSettings: Function;
 	export let getModels: Function;
+	$: void getModels;
 
 	// General
 	let themes = ['dark', 'light', 'oled-dark'];

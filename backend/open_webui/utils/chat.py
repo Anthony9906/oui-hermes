@@ -206,6 +206,8 @@ async def generate_chat_completion(
         # Arena model — sub-model was already resolved by process_chat_payload.
         # Inject selected_model_id into the response for the frontend.
         metadata = form_data.get('metadata', {})
+        if metadata.get('hermes_session_delta'):
+            bypass_system_prompt = True
         selected_model_id = metadata.pop('selected_model_id', None)
         # Also clear from request.state.metadata to prevent the merge at
         # lines 177-179 from re-adding it on the recursive call.

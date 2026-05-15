@@ -10,8 +10,8 @@
 	export let done = true;
 </script>
 
-<!-- svelte-ignore a11y-click-events-have-key-events -->
-<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <code
 	class="codespan cursor-pointer {!done ? 'fade-in-token' : ''}"
 	on:click={() => {

@@ -7,6 +7,7 @@
 
 	export let name = '';
 	export let color = '';
+	$: void color;
 	export let description = '';
 	export let data = {};
 

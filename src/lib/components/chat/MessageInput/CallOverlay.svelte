@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { config, models, settings, showCallOverlay, TTSWorker } from '$lib/stores';
+	import { config, models, settings, showCallOverlay } from '$lib/stores';
 	import { onMount, tick, getContext, onDestroy, createEventDispatcher } from 'svelte';
 
 	const dispatch = createEventDispatcher();
@@ -12,7 +12,6 @@
 
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import VideoInputMenu from './CallOverlay/VideoInputMenu.svelte';
-	import { KokoroWorker } from '$lib/workers/KokoroWorker';
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
 
 	const i18n = getContext('i18n');
@@ -361,7 +360,6 @@
 
 	let finishedMessages = {};
 	let currentMessageId = null;
-	let currentUtterance = null;
 
 	// Get voice: model-specific > user settings > config default
 	const getVoiceId = () => {
@@ -374,38 +372,6 @@
 			return $settings?.audio?.tts?.voice ?? $config?.audio?.tts?.voice;
 		}
 		return $config?.audio?.tts?.voice;
-	};
-
-	const speakSpeechSynthesisHandler = (content) => {
-		if ($showCallOverlay) {
-			return new Promise((resolve) => {
-				let voices = [];
-				const getVoicesLoop = setInterval(async () => {
-					voices = await speechSynthesis.getVoices();
-					if (voices.length > 0) {
-						clearInterval(getVoicesLoop);
-
-						const voiceId = getVoiceId();
-						const voice = voices?.filter((v) => v.voiceURI === voiceId)?.at(0) ?? undefined;
-
-						currentUtterance = new SpeechSynthesisUtterance(content);
-						currentUtterance.rate = $settings.audio?.tts?.playbackRate ?? 1;
-
-						if (voice) {
-							currentUtterance.voice = voice;
-						}
-
-						speechSynthesis.speak(currentUtterance);
-						currentUtterance.onend = async (e) => {
-							await new Promise((r) => setTimeout(r, 200));
-							resolve(e);
-						};
-					}
-				}, 100);
-			});
-		} else {
-			return Promise.resolve();
-		}
 	};
 
 	const playAudio = (audio) => {
@@ -446,11 +412,6 @@
 			stopResponse();
 		}
 
-		if (currentUtterance) {
-			speechSynthesis.cancel();
-			currentUtterance = null;
-		}
-
 		const audioElement = document.getElementById('audioElement');
 		if (audioElement) {
 			audioElement.muted = true;
@@ -466,6 +427,10 @@
 	const emojiCache = new Map();
 
 	const fetchAudio = async (content) => {
+		if ($config.audio.tts.engine === '') {
+			return null;
+		}
+
 		if (!audioCache.has(content)) {
 			try {
 				// Set the emoji for the content if needed
@@ -476,35 +441,17 @@
 					}
 				}
 
-				if ($settings.audio?.tts?.engine === 'browser-kokoro') {
-					const url = await $TTSWorker
-						.generate({
-							text: content,
-							voice: getVoiceId()
-						})
-						.catch((error) => {
-							console.error(error);
-							toast.error(`${error}`);
-						});
-
-					if (url) {
-						audioCache.set(content, new Audio(url));
+				const res = await synthesizeOpenAISpeech(localStorage.token, getVoiceId(), content).catch(
+					(error) => {
+						console.error(error);
+						return null;
 					}
-				} else if ($config.audio.tts.engine !== '') {
-					const res = await synthesizeOpenAISpeech(localStorage.token, getVoiceId(), content).catch(
-						(error) => {
-							console.error(error);
-							return null;
-						}
-					);
+				);
 
-					if (res) {
-						const blob = await res.blob();
-						const blobUrl = URL.createObjectURL(blob);
-						audioCache.set(content, new Audio(blobUrl));
-					}
-				} else {
-					audioCache.set(content, true);
+				if (res) {
+					const blob = await res.blob();
+					const blobUrl = URL.createObjectURL(blob);
+					audioCache.set(content, new Audio(blobUrl));
 				}
 			} catch (error) {
 				console.error('Error synthesizing speech:', error);
@@ -532,23 +479,24 @@
 						emoji = null;
 					}
 
-					if ($config.audio.tts.engine !== '') {
-						try {
-							console.log(
-								'%c%s',
-								'color: red; font-size: 20px;',
-								`Playing audio for content: ${content}`
-							);
+					if ($config.audio.tts.engine === '') {
+						assistantSpeaking = false;
+						break;
+					}
 
-							const audio = audioCache.get(content);
-							await playAudio(audio); // Here ensure that playAudio is indeed correct method to execute
-							console.log(`Played audio for content: ${content}`);
-							await new Promise((resolve) => setTimeout(resolve, 200)); // Wait before retrying to reduce tight loop
-						} catch (error) {
-							console.error('Error playing audio:', error);
-						}
-					} else {
-						await speakSpeechSynthesisHandler(content);
+					try {
+						console.log(
+							'%c%s',
+							'color: red; font-size: 20px;',
+							`Playing audio for content: ${content}`
+						);
+
+						const audio = audioCache.get(content);
+						await playAudio(audio); // Here ensure that playAudio is indeed correct method to execute
+						console.log(`Played audio for content: ${content}`);
+						await new Promise((resolve) => setTimeout(resolve, 200)); // Wait before retrying to reduce tight loop
+					} catch (error) {
+						console.error('Error playing audio:', error);
 					}
 				} else {
 					// If not available in the cache, push it back to the queue and delay
@@ -767,7 +715,7 @@
 									? 'size-14'
 									: 'size-12'}  transition-all rounded-full bg-cover bg-center bg-no-repeat"
 						style={`background-image: url('${WEBUI_API_BASE_URL}/models/model/profile/image?id=${model?.id}&lang=${$i18n.language}&voice=true');`}
-					/>
+					></div>
 				{/if}
 				<!-- navbar -->
 			</button>
@@ -843,7 +791,7 @@
 										? 'size-44'
 										: 'size-40'} transition-all rounded-full bg-cover bg-center bg-no-repeat"
 							style={`background-image: url('${WEBUI_API_BASE_URL}/models/model/profile/image?id=${model?.id}&lang=${$i18n.language}&voice=true');`}
-						/>
+						></div>
 					{/if}
 				</button>
 			{:else}
@@ -854,12 +802,13 @@
 						autoplay
 						class="rounded-2xl h-full min-w-full object-cover object-center"
 						playsinline
-					/>
+					></video>
 
-					<canvas id="camera-canvas" style="display:none;" />
+					<canvas id="camera-canvas" style="display:none;"></canvas>
 
 					<div class=" absolute top-4 md:top-8 left-4">
 						<button
+							aria-label="Close camera preview"
 							type="button"
 							class="p-1.5 text-white cursor-pointer backdrop-blur-xl bg-black/10 rounded-full"
 							on:click={() => {
@@ -894,7 +843,11 @@
 							await startVideoStream();
 						}}
 					>
-						<button class=" p-3 rounded-full bg-gray-50 dark:bg-gray-900" type="button">
+						<button
+							aria-label="Select video input"
+							class=" p-3 rounded-full bg-gray-50 dark:bg-gray-900"
+							type="button"
+						>
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
 								viewBox="0 0 20 20"
@@ -912,6 +865,7 @@
 				{:else}
 					<Tooltip content={$i18n.t('Camera')}>
 						<button
+							aria-label="Start camera"
 							class=" p-3 rounded-full bg-gray-50 dark:bg-gray-900"
 							type="button"
 							on:click={async () => {
@@ -966,6 +920,7 @@
 
 			<div>
 				<button
+					aria-label="End call"
 					class=" p-3 rounded-full bg-gray-50 dark:bg-gray-900"
 					on:click={async () => {
 						await stopAudioStream();

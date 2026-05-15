@@ -15,7 +15,6 @@
 		config,
 		user,
 		models as _models,
-		temporaryChatEnabled,
 		selectedFolder,
 		chats,
 		currentChatPage
@@ -25,7 +24,6 @@
 
 	import Suggestions from './Suggestions.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
-	import EyeSlash from '$lib/components/icons/EyeSlash.svelte';
 	import MessageInput from './MessageInput.svelte';
 	import FolderPlaceholder from './Placeholder/FolderPlaceholder.svelte';
 	import FolderTitle from './Placeholder/FolderTitle.svelte';
@@ -75,18 +73,6 @@
 </script>
 
 <div class="m-auto w-full max-w-6xl px-2 @2xl:px-20 translate-y-6 py-24 text-center">
-	{#if $temporaryChatEnabled}
-		<Tooltip
-			content={$i18n.t("This chat won't appear in history and your messages will not be saved.")}
-			className="w-full flex justify-center mb-0.5"
-			placement="top"
-		>
-			<div class="flex items-center gap-2 text-gray-500 text-base my-2 w-fit">
-				<EyeSlash strokeWidth="2.5" className="size-4" />{$i18n.t('Temporary Chat')}
-			</div>
-		</Tooltip>
-	{/if}
-
 	<div
 		class="w-full text-3xl text-gray-800 dark:text-gray-100 text-center flex items-center gap-4 font-primary"
 	>
@@ -126,6 +112,7 @@
 										}}
 									>
 										<img
+											alt=""
 											src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${model?.id}&lang=${$i18n.language}`}
 											class=" size-9 @sm:size-10 rounded-full border-[1px] border-gray-100 dark:border-none"
 											aria-hidden="true"

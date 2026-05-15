@@ -7,6 +7,7 @@
 
 	export let tags = [];
 	export let suggestionTags = [];
+	$: void suggestionTags;
 	export let disabled = false;
 
 	let inputValue = '';

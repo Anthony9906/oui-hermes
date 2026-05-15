@@ -25,7 +25,9 @@
 	} = {};
 
 	export let open = false;
+	$: void open;
 	export let grouped = false;
+	$: void grouped;
 	export let className = '';
 
 	const HEADER_PREVIEW_LIMIT = 128;

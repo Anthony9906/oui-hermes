@@ -82,7 +82,6 @@ from open_webui.utils.misc import parse_duration
 from open_webui.utils.auth import get_password_hash, create_token
 from open_webui.utils.webhook import post_webhook
 from open_webui.utils.groups import apply_default_group_assignment
-from open_webui.retrieval.web.utils import validate_url
 
 from mcp.shared.auth import (
     OAuthClientMetadata as MCPOAuthClientMetadata,
@@ -112,6 +111,13 @@ from open_webui.env import GLOBAL_LOG_LEVEL
 
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)
+
+
+def validate_url(url: str) -> bool:
+    parsed_url = urllib.parse.urlparse(url)
+    if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+        raise ValueError(ERROR_MESSAGES.INVALID_URL)
+    return True
 
 auth_manager_config = AppConfig()
 auth_manager_config.DEFAULT_USER_ROLE = DEFAULT_USER_ROLE

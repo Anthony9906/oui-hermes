@@ -3,7 +3,7 @@
 	import { toast } from 'svelte-sonner';
 	import { PaneGroup, Pane, PaneResizer } from 'paneforge';
 
-	import { getContext, onDestroy, onMount, tick } from 'svelte';
+	import { getContext, onMount, tick } from 'svelte';
 	import { fade } from 'svelte/transition';
 	const i18n: Writable<i18nType> = getContext('i18n');
 
@@ -211,6 +211,7 @@
 
 	let showCommands = false;
 	let processingExpertAgentStart = false;
+	let activeEventsSocket: any = null;
 
 	let generating = false;
 	let dragged = false;
@@ -224,6 +225,31 @@
 	let history = {
 		messages: {},
 		currentId: null
+	};
+
+	const bindChatEventSocket = (nextSocket) => {
+		if (activeEventsSocket === nextSocket) {
+			return;
+		}
+
+		activeEventsSocket?.off('events', chatEventHandler);
+		activeEventsSocket = nextSocket;
+		activeEventsSocket?.on('events', chatEventHandler);
+	};
+
+	const adoptChatIdFromEvent = async (eventChatId) => {
+		if (!eventChatId || $chatId || $temporaryChatEnabled || eventChatId.startsWith('local:')) {
+			return;
+		}
+
+		await chatId.set(eventChatId);
+
+		if (window.location.pathname === '/') {
+			window.history.replaceState(history.state, '', `/c/${eventChatId}`);
+		}
+
+		currentChatPage.set(1);
+		await chats.set(await getChatList(localStorage.token, $currentChatPage));
 	};
 
 	let taskIds = null;
@@ -509,9 +535,17 @@
 	const chatEventHandler = async (event, cb) => {
 		console.log(event);
 
-		if (event.chat_id === $chatId) {
+		const eventMessage = event?.message_id ? history.messages[event.message_id] : null;
+		const isCurrentChatEvent = event.chat_id === $chatId;
+		const isKnownLocalMessageEvent = eventMessage && event.chat_id;
+
+		if (isCurrentChatEvent || isKnownLocalMessageEvent) {
+			if (!isCurrentChatEvent) {
+				await adoptChatIdFromEvent(event.chat_id);
+			}
+
 			await tick();
-			let message = history.messages[event.message_id];
+			let message = eventMessage ?? history.messages[event.message_id];
 
 			if (message) {
 				const type = event?.data?.type ?? null;
@@ -757,7 +791,6 @@
 
 	const stopAudio = () => {
 		try {
-			speechSynthesis.cancel();
 			$audioQueue?.stop();
 		} catch {}
 	};
@@ -823,7 +856,7 @@
 		loading = true;
 		console.log('mounted');
 		window.addEventListener('message', onMessageHandler);
-		$socket?.on('events', chatEventHandler);
+		const socketSubscribe = socket.subscribe(bindChatEventSocket);
 
 		$audioQueue?.destroy();
 
@@ -944,7 +977,9 @@
 				selectedFolderSubscribe();
 				expertAgentStartSubscribe();
 				window.removeEventListener('message', onMessageHandler);
-				$socket?.off('events', chatEventHandler);
+				socketSubscribe();
+				activeEventsSocket?.off('events', chatEventHandler);
+				activeEventsSocket = null;
 				audioQueueInstance?.destroy();
 				audioQueue.set(null);
 			} catch (e) {
@@ -1208,23 +1243,7 @@
 	const initNewChat = async () => {
 		console.log('initNewChat');
 		activeExpertSkillName = '';
-
-		if ($user?.role !== 'admin' && $user?.permissions?.chat?.temporary_enforced) {
-			await temporaryChatEnabled.set(true);
-		}
-
-		if ($settings?.temporaryChatByDefault ?? false) {
-			if ($temporaryChatEnabled === false) {
-				await temporaryChatEnabled.set(true);
-			} else if ($temporaryChatEnabled === null) {
-				// if set to null set to false; refer to temp chat toggle click handler
-				await temporaryChatEnabled.set(false);
-			}
-		}
-
-		if ($user?.role !== 'admin' && !$user?.permissions?.chat?.temporary) {
-			await temporaryChatEnabled.set(false);
-		}
+		await temporaryChatEnabled.set(false);
 
 		const availableModels = $models
 			.filter((m) => !(m?.info?.meta?.hidden ?? false))
@@ -2182,10 +2201,6 @@
 
 		// New chat — backend generates the chat_id on first request
 		if (!_chatId) {
-			if ($temporaryChatEnabled) {
-				_chatId = `local:${$socket?.id}`;
-				await chatId.set(_chatId);
-			}
 			await tick();
 		}
 
@@ -2315,13 +2330,10 @@
 			return fileExists;
 		});
 
-		let files = structuredClone(chatFiles);
-		files.push(
-			...(userMessage?.files ?? []).filter(
-				(item) =>
-					['doc', 'text', 'note', 'chat', 'collection'].includes(item.type) ||
-					(item.type === 'file' && !(item?.content_type ?? '').startsWith('image/'))
-			)
+		let files = (userMessage?.files ?? []).filter(
+			(item) =>
+				['doc', 'text', 'note', 'chat', 'collection'].includes(item.type) ||
+				(item.type === 'file' && !(item?.content_type ?? '').startsWith('image/'))
 		);
 		// Remove duplicates
 		files = files.filter((item, index, array) => array.findIndex((i) => equal(i, item)) === index);
@@ -2349,54 +2361,13 @@
 			$settings?.params?.stream_response ??
 			params?.stream_response ??
 			true;
-		// Always include system prompt — backend extracts it and prepends to DB messages.
-		// Only temp chats need conversation messages (persisted chats load from DB).
 		let messages = [
-			params?.system || $settings.system
-				? { role: 'system', content: `${params?.system ?? $settings?.system ?? ''}` }
-				: undefined
-		].filter(Boolean);
-		if ($temporaryChatEnabled) {
-			messages = [
-				...messages,
-				..._messages.map((message) => ({
-					...message,
-					content: processDetails(message.content),
-					...(message.output ? { output: message.output } : {})
-				}))
-			].filter((message) => message);
-
-			messages = messages
-				.map((message, idx, arr) => {
-					const imageFiles = (message?.files ?? []).filter(
-						(file) => file.type === 'image' || (file?.content_type ?? '').startsWith('image/')
-					);
-
-					return {
-						role: message.role,
-						...(message.output ? { output: message.output } : {}),
-						...(message.role === 'user' && imageFiles.length > 0
-							? {
-									content: [
-										{
-											type: 'text',
-											text: message?.merged?.content ?? message.content
-										},
-										...imageFiles.map((file) => ({
-											type: 'image_url',
-											image_url: {
-												url: file.url
-											}
-										}))
-									]
-								}
-							: {
-									content: message?.merged?.content ?? message.content
-								})
-					};
-				})
-				.filter((message) => message?.role === 'user' || message?.content?.trim());
-		}
+			{
+				role: 'user',
+				content: processDetails(userMessage?.merged?.content ?? userMessage?.content ?? ''),
+				...(userMessage?.files ? { files: userMessage.files } : {})
+			}
+		];
 
 		const toolIds = [];
 		const toolServerIds = [];
@@ -2500,15 +2471,7 @@
 				parent_id: userMessage?.parentId ?? null,
 				user_message: userMessage,
 
-				background_tasks: {
-					...(!$temporaryChatEnabled && !_chatId && (userMessage?.parentId ?? null) === null
-						? {
-								title_generation: $settings?.title?.auto ?? true,
-								tags_generation: $settings?.autoTags ?? true
-							}
-						: {}),
-					follow_up_generation: $settings?.autoFollowUps ?? true
-				},
+				background_tasks: {},
 
 				...(stream && (model.info?.meta?.capabilities?.usage ?? false)
 					? {
@@ -2816,39 +2779,34 @@
 	const initChatHandler = async (history) => {
 		let _chatId = $chatId;
 
-		if (!$temporaryChatEnabled) {
-			chat = await createNewChat(
-				localStorage.token,
-				{
-					id: _chatId,
-					title: $i18n.t('New Chat'),
-					models: selectedModels,
-					system: $settings.system ?? undefined,
-					params: params,
-					history: history,
-					messages: createMessagesList(history, history.currentId),
-					meta: buildChatMeta(),
-					tags: [],
-					timestamp: Date.now()
-				},
-				$selectedFolder?.id
-			);
+		chat = await createNewChat(
+			localStorage.token,
+			{
+				id: _chatId,
+				title: $i18n.t('New Chat'),
+				models: selectedModels,
+				system: $settings.system ?? undefined,
+				params: params,
+				history: history,
+				messages: createMessagesList(history, history.currentId),
+				meta: buildChatMeta(),
+				tags: [],
+				timestamp: Date.now()
+			},
+			$selectedFolder?.id
+		);
 
-			_chatId = chat.id;
-			await chatId.set(_chatId);
+		_chatId = chat.id;
+		await chatId.set(_chatId);
 
-			window.history.replaceState(history.state, '', `/c/${_chatId}`);
+		window.history.replaceState(history.state, '', `/c/${_chatId}`);
 
-			await tick();
+		await tick();
 
-			await chats.set(await getChatList(localStorage.token, $currentChatPage));
-			currentChatPage.set(1);
+		await chats.set(await getChatList(localStorage.token, $currentChatPage));
+		currentChatPage.set(1);
 
-			selectedFolder.set(null);
-		} else {
-			_chatId = `local:${$socket?.id}`; // Use socket id for temporary chat
-			await chatId.set(_chatId);
-		}
+		selectedFolder.set(null);
 		await tick();
 
 		return _chatId;
@@ -2975,21 +2933,21 @@
 				<div
 					class="absolute top-0 left-0 w-full h-full bg-cover bg-center bg-no-repeat"
 					style="background-image: url({$selectedFolder?.meta?.background_image_url})  "
-				/>
+				></div>
 
 				<div
 					class="absolute top-0 left-0 w-full h-full bg-linear-to-t from-white to-white/85 dark:from-gray-900 dark:to-gray-900/90 z-0"
-				/>
+				></div>
 			{:else if $settings?.backgroundImageUrl ?? $config?.license_metadata?.background_image_url ?? null}
 				<div
 					class="absolute top-0 left-0 w-full h-full bg-cover bg-center bg-no-repeat"
 					style="background-image: url({$settings?.backgroundImageUrl ??
 						$config?.license_metadata?.background_image_url})  "
-				/>
+				></div>
 
 				<div
 					class="absolute top-0 left-0 w-full h-full bg-linear-to-t from-white to-white/85 dark:from-gray-900 dark:to-gray-900/90 z-0"
-				/>
+				></div>
 			{/if}
 
 			<PaneGroup direction="horizontal" class="w-full h-full">

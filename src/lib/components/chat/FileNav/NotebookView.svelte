@@ -289,7 +289,7 @@
 						}}
 					></textarea>
 				{:else}
-					<!-- svelte-ignore a11y-click-events-have-key-events -->
+					<!-- svelte-ignore a11y_click_events_have_key_events -->
 					<div
 						class="nb-markdown prose dark:prose-invert max-w-full text-sm cursor-text"
 						role="textbox"
@@ -347,7 +347,7 @@
 								on:cancel={() => cancelEditing(i)}
 							/>
 						{:else}
-							<!-- svelte-ignore a11y-click-events-have-key-events -->
+							<!-- svelte-ignore a11y_click_events_have_key_events -->
 							<div
 								class="nb-code-source-clickable"
 								role="textbox"

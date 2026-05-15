@@ -50,8 +50,6 @@ export const shortCodesToEmojis = writable(
 	}, {})
 );
 
-export const TTSWorker = writable(null);
-
 export const chatId = writable('');
 export const chatTitle = writable('');
 
@@ -76,8 +74,6 @@ export const functions = writable(null);
 export const toolServers = writable([]);
 export const terminalServers = writable([]);
 
-// Persistent Pyodide worker for code interpreter FS
-export const pyodideWorker: Writable<Worker | null> = writable(null);
 
 export const banners: Writable<Banner[]> = writable([]);
 
@@ -112,7 +108,13 @@ export const artifactContents = writable(null);
 
 export const embed = writable(null);
 
-export const temporaryChatEnabled = writable(false);
+const disabledTemporaryChatStore = writable(false);
+
+export const temporaryChatEnabled = {
+	subscribe: disabledTemporaryChatStore.subscribe,
+	set: (_value: boolean | null) => disabledTemporaryChatStore.set(false),
+	update: (_updater: (value: boolean) => boolean | null) => disabledTemporaryChatStore.set(false)
+};
 
 // Transient one-shot event from the desktop shell (Spotlight, drag-and-drop, etc.).
 // Set by +layout.svelte, consumed and cleared by Chat.svelte.
@@ -213,7 +215,6 @@ type Settings = {
 	iframeSandboxAllowForms?: boolean;
 	iframeSandboxAllowSameOrigin?: boolean;
 	scrollOnBranchChange?: boolean;
-	directConnections?: null;
 	chatBubble?: boolean;
 	copyFormatted?: boolean;
 	models?: string[];
@@ -297,7 +298,6 @@ type Config = {
 		enable_community_sharing: boolean;
 		enable_memories: boolean;
 		enable_autocomplete_generation: boolean;
-		enable_direct_connections: boolean;
 		enable_version_update_check: boolean;
 		folder_max_file_count?: number;
 	};

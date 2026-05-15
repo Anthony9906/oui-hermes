@@ -27,8 +27,8 @@
 
 {#if isExpandable}
 	<div class="json-node" class:json-root={root}>
-		<!-- svelte-ignore a11y-click-events-have-key-events -->
-		<!-- svelte-ignore a11y-no-static-element-interactions -->
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<span class="json-toggle" on:click={toggle}>
 			<span class="json-arrow" class:json-expanded={expanded}>▶</span>
 			{#if key !== null}<span class="json-key">{key}</span><span class="json-colon">: </span>{/if}

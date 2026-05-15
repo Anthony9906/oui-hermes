@@ -7,6 +7,7 @@
 
 	export let count: number = 0;
 	export let hasFiles: boolean = false;
+	$: void hasFiles;
 
 	export let onDelete: () => void = () => {};
 	export let onDownload: () => void = () => {};

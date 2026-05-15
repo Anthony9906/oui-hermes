@@ -260,8 +260,8 @@
 						>
 							{#each Object.keys(groupedMessageIds) as modelIdx}
 								{#if groupedMessageIdsIdx[modelIdx] !== undefined && (groupedMessageIds[modelIdx]?.messageIds ?? []).length > 0}
-									<!-- svelte-ignore a11y-no-static-element-interactions -->
-									<!-- svelte-ignore a11y-click-events-have-key-events -->
+									<!-- svelte-ignore a11y_no_static_element_interactions -->
+									<!-- svelte-ignore a11y_click_events_have_key_events -->
 
 									{@const _messageId =
 										groupedMessageIds[modelIdx].messageIds[groupedMessageIdsIdx[modelIdx]]}
@@ -330,12 +330,14 @@
 			{:else}
 				{#each Object.keys(groupedMessageIds) as modelIdx}
 					{#if groupedMessageIdsIdx[modelIdx] !== undefined && groupedMessageIds[modelIdx].messageIds.length > 0}
-						<!-- svelte-ignore a11y-no-static-element-interactions -->
-						<!-- svelte-ignore a11y-click-events-have-key-events -->
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
+						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						{@const _messageId =
 							groupedMessageIds[modelIdx].messageIds[groupedMessageIdsIdx[modelIdx]]}
 
 						<div
+							role="button"
+							tabindex="0"
 							class=" snap-center w-full max-w-full m-1 border {history.messages[messageId]
 								?.modelIdx == modelIdx
 								? `bg-gray-50 dark:bg-gray-850 border-gray-100 dark:border-gray-800 border-2 ${
@@ -346,6 +348,12 @@
 									}`} transition-all p-5 rounded-2xl"
 							on:click={async () => {
 								onGroupClick(_messageId, modelIdx);
+							}}
+							on:keydown={(e) => {
+								if (e.key === 'Enter' || e.key === ' ') {
+									e.preventDefault();
+									onGroupClick(_messageId, modelIdx);
+								}
 							}}
 						>
 							{#key history.currentId}

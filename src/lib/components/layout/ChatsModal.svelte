@@ -31,6 +31,7 @@
 
 	export let title = 'Chats';
 	export let emptyPlaceholder = '';
+	$: void emptyPlaceholder;
 	export let shareUrl = false;
 	export let showUserInfo = false;
 	export let showSearch = true;
@@ -92,6 +93,7 @@
 		<div class=" flex justify-between dark:text-gray-300 px-5 pt-4 pb-1">
 			<div class=" text-lg font-medium self-center">{title}</div>
 			<button
+				aria-label={$i18n.t('Close')}
 				class="self-center"
 				on:click={() => {
 					show = false;
@@ -297,6 +299,7 @@
 												{#if unarchiveHandler}
 													<Tooltip content={$i18n.t('Unarchive Chat')}>
 														<button
+															aria-label={$i18n.t('Unarchive Chat')}
 															class="self-center w-fit px-1 text-sm rounded-xl"
 															on:click={async (e) => {
 																e.stopImmediatePropagation();

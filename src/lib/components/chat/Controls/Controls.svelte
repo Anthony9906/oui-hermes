@@ -10,6 +10,7 @@
 
 	import { user, settings } from '$lib/stores';
 	export let models = [];
+	$: void models;
 	export let chatFiles = [];
 	export let params = {};
 	export let embed = false;
@@ -98,7 +99,7 @@
 									: 'py-1.5 bg-transparent'}"
 								rows="4"
 								placeholder={$i18n.t('Enter system prompt')}
-							/>
+							></textarea>
 						</div>
 					</Collapsible>
 

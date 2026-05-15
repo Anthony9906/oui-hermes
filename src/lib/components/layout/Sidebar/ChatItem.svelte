@@ -495,7 +495,7 @@
 			<div class="flex self-center flex-1 w-full min-w-0">
 				{#if unread}
 					<div class="shrink-0 self-center pr-2.5 flex transition-opacity duration-300">
-						<div class="size-1.5 bg-sky-500 rounded-full" />
+						<div class="size-1.5 bg-sky-500 rounded-full"></div>
 					</div>
 				{/if}
 				<div
@@ -517,7 +517,7 @@
 		</a>
 	{/if}
 
-	<!-- svelte-ignore a11y-no-static-element-interactions -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		id="sidebar-chat-item-menu"
 		class="
@@ -631,6 +631,7 @@
 				{#if id === $chatId}
 					<!-- Shortcut support using "delete-chat-button" id -->
 					<button
+						aria-label="Delete chat"
 						id="delete-chat-button"
 						class="hidden"
 						on:click={() => {

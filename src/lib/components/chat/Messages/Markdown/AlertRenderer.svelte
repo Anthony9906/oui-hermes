@@ -72,6 +72,7 @@
 	import type { ComponentType } from 'svelte';
 
 	export let token: Token;
+	$: void token;
 	export let alert: AlertData;
 	export let id = '';
 	export let tokenIdx = 0;

@@ -61,9 +61,6 @@ fpdf2==2.8.7
 
 # Audio only
 pydub==0.25.1
-soundfile==0.13.1
-faster-whisper==1.2.1
-av==14.0.1
 
 # Optional auth integrations kept for existing settings compatibility
 ldap3==2.9.1

@@ -197,12 +197,7 @@
 			}
 		});
 
-		_models.set(
-			await getModels(
-				localStorage.token,
-				$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-			)
-		);
+		_models.set(await getModels(localStorage.token, null));
 	};
 
 	const upsertModelHandler = async (model, overrides = {}, showToast = true) => {
@@ -254,12 +249,7 @@
 		}
 
 		// await init();
-		_models.set(
-			await getModels(
-				localStorage.token,
-				$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-			)
-		);
+		_models.set(await getModels(localStorage.token, null));
 	};
 
 	const hideModelHandler = async (model) => {
@@ -672,6 +662,7 @@
 									</Tooltip>
 								{:else}
 									<button
+										aria-label="Open model details"
 										class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
 										type="button"
 										on:click={() => {

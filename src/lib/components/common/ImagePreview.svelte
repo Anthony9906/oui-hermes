@@ -46,8 +46,8 @@
 </script>
 
 {#if show}
-	<!-- svelte-ignore a11y-click-events-have-key-events -->
-	<!-- svelte-ignore a11y-no-static-element-interactions -->
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		bind:this={previewElement}
 		class="modal fixed top-0 right-0 left-0 bottom-0 bg-black text-white w-full min-h-screen h-screen flex justify-center z-9999 overflow-hidden overscroll-contain"
@@ -71,6 +71,7 @@
 
 			<div>
 				<button
+					aria-label="Download image"
 					class=" p-5 z-999"
 					on:click={() => {
 						if (src.startsWith('data:image/')) {

@@ -186,7 +186,7 @@
 								/>
 							{/each}
 							{#if dayEvents.length > 3}
-								<!-- svelte-ignore a11y-click-events-have-key-events --><!-- svelte-ignore a11y-no-static-element-interactions -->
+								<!-- svelte-ignore a11y_click_events_have_key_events --><!-- svelte-ignore a11y_no_static_element_interactions -->
 								<div
 									class="text-[10px] text-gray-400 dark:text-gray-500 px-1 mt-auto hover:text-gray-700 dark:hover:text-gray-200 text-left w-full truncate z-10"
 									on:click|stopPropagation={() => goToDayView(day)}
@@ -263,7 +263,7 @@
 													/>
 												{/each}
 												{#if hourEvents.length > 3}
-													<!-- svelte-ignore a11y-click-events-have-key-events --><!-- svelte-ignore a11y-no-static-element-interactions -->
+													<!-- svelte-ignore a11y_click_events_have_key_events --><!-- svelte-ignore a11y_no_static_element_interactions -->
 													<div
 														class="text-[10px] text-gray-400 dark:text-gray-500 px-1 mt-auto hover:text-gray-700 dark:hover:text-gray-200 text-left w-full truncate z-10"
 														on:click|stopPropagation={() => goToDayView(day)}

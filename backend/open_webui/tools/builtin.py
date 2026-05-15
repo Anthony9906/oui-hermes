@@ -452,37 +452,8 @@ async def execute_code(
             )
             code = blocking_code + '\n' + code
 
-        engine = getattr(__request__.app.state.config, 'CODE_INTERPRETER_ENGINE', 'pyodide')
-        if engine == 'pyodide':
-            # Execute via frontend pyodide using bidirectional event call
-            if __event_call__ is None:
-                return json.dumps(
-                    {'error': 'Event call not available. WebSocket connection required for pyodide execution.'}
-                )
-
-            output = await __event_call__(
-                {
-                    'type': 'execute:python',
-                    'data': {
-                        'id': str(uuid4()),
-                        'code': code,
-                        'session_id': (__metadata__.get('session_id') if __metadata__ else None),
-                        'files': (__metadata__.get('files', []) if __metadata__ else []),
-                    },
-                }
-            )
-
-            # Parse the output - pyodide returns dict with stdout, stderr, result
-            if isinstance(output, dict):
-                stdout = output.get('stdout', '')
-                stderr = output.get('stderr', '')
-                result = output.get('result', '')
-            else:
-                stdout = ''
-                stderr = ''
-                result = str(output) if output else ''
-
-        elif engine == 'jupyter':
+        engine = getattr(__request__.app.state.config, 'CODE_INTERPRETER_ENGINE', 'disabled')
+        if engine == 'jupyter':
             from open_webui.utils.code_interpreter import execute_code_jupyter
 
             output = await execute_code_jupyter(
@@ -506,7 +477,7 @@ async def execute_code(
             result = output.get('result', '')
 
         else:
-            return json.dumps({'error': f'Unknown code interpreter engine: {engine}'})
+            return json.dumps({'error': 'Code interpreter is disabled for Hermes.'})
 
         # Handle image outputs (base64 encoded) - replace with uploaded URLs
         # Get actual user object for image upload (upload_image requires user.id attribute)

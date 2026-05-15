@@ -912,7 +912,7 @@
 									value={JSON.stringify(info, null, 2)}
 									disabled
 									readonly
-								/>
+								></textarea>
 							</div>
 						{/if}
 					</div>

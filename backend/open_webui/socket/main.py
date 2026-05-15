@@ -837,16 +837,18 @@ async def get_event_emitter(request_info, update_db=True):
         user_id = request_info['user_id']
         chat_id = request_info['chat_id']
         message_id = request_info['message_id']
+        session_id = request_info.get('session_id')
 
-        await sio.emit(
-            'events',
-            {
-                'chat_id': chat_id,
-                'message_id': message_id,
-                'data': event_data,
-            },
-            room=f'user:{user_id}',
-        )
+        payload = {
+            'chat_id': chat_id,
+            'message_id': message_id,
+            'data': event_data,
+        }
+
+        if session_id:
+            await sio.emit('events', payload, to=session_id)
+        else:
+            await sio.emit('events', payload, room=f'user:{user_id}')
 
         if update_db and message_id and not request_info.get('chat_id', '').startswith('local:'):
             event_type = event_data.get('type')

@@ -151,11 +151,11 @@ async def process_uploaded_file(
     db: Optional[AsyncSession] = None,
 ):
     from open_webui.routers.audio import transcribe
-    from open_webui.routers.retrieval import ProcessFileForm, process_file
 
     async def _process_handler(db_session):
         try:
             content_type = file.content_type
+            content = ''
 
             # Detect mis-labeled text files (e.g. .ts → video/mp2t)
             if content_type and content_type.startswith(('image/', 'video/')):
@@ -168,32 +168,18 @@ async def process_uploaded_file(
                 if strict_match_mime_type(stt_supported_content_types, content_type):
                     file_path_processed = await asyncio.to_thread(Storage.get_file, file_path)
                     result = transcribe(request, file_path_processed, file_metadata, user)
-
-                    await process_file(
-                        request,
-                        ProcessFileForm(file_id=file_item.id, content=result.get('text', '')),
-                        user=user,
-                        db=db_session,
-                    )
-                elif (not content_type.startswith(('image/', 'video/'))) or (
-                    request.app.state.config.CONTENT_EXTRACTION_ENGINE == 'external'
-                ):
-                    await process_file(
-                        request,
-                        ProcessFileForm(file_id=file_item.id),
-                        user=user,
-                        db=db_session,
-                    )
-                else:
-                    raise Exception(f'File type {content_type} is not supported for processing')
+                    content = result.get('text', '')
             else:
-                log.info(f'File type {file.content_type} is not provided, but trying to process anyway')
-                await process_file(
-                    request,
-                    ProcessFileForm(file_id=file_item.id),
-                    user=user,
-                    db=db_session,
-                )
+                log.info(f'File type {file.content_type} is not provided; storing as an attachment without retrieval')
+
+            await Files.update_file_data_by_id(
+                file_item.id,
+                {
+                    'status': 'completed',
+                    'content': content,
+                },
+                db=db_session,
+            )
 
         except Exception as e:
             log.error(f'Error processing file: {file_item.id}')
@@ -603,39 +589,15 @@ async def update_file_data_content_by_id(
         )
 
     if file.user_id == user.id or user.role == 'admin' or await has_access_to_file(id, 'write', user, db=db):
-        try:
-            from open_webui.routers.retrieval import ProcessFileForm, process_file
-
-            await process_file(
-                request,
-                ProcessFileForm(file_id=id, content=form_data.content),
-                user=user,
-                db=db,
-            )
-            file = await Files.get_file_by_id(id=id, db=db)
-        except Exception as e:
-            log.exception(e)
-            log.error(f'Error processing file: {file.id}')
-
-        # Propagate content change to all knowledge collections referencing
-        # this file.  Without this the old embeddings remain in the knowledge
-        # collection and RAG returns both stale and current data (#20558).
-        knowledges = await Knowledges.get_knowledges_by_file_id(id, db=db)
-        for knowledge in knowledges:
-            try:
-                from open_webui.retrieval.vector.async_client import ASYNC_VECTOR_DB_CLIENT
-
-                # Remove old embeddings for this file from the KB collection
-                await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge.id, filter={'file_id': id})
-                # Re-add from the now-updated file-{file_id} collection
-                await process_file(
-                    request,
-                    ProcessFileForm(file_id=id, collection_name=knowledge.id),
-                    user=user,
-                    db=db,
-                )
-            except Exception as e:
-                log.warning(f'Failed to update knowledge {knowledge.id} after content change for file {id}: {e}')
+        await Files.update_file_data_by_id(
+            id,
+            {
+                'content': form_data.content,
+                'status': 'completed',
+            },
+            db=db,
+        )
+        file = await Files.get_file_by_id(id=id, db=db)
 
         return {'content': file.data.get('content', '')}
     else:

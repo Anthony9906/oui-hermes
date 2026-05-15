@@ -97,6 +97,11 @@ from open_webui.utils.code_interpreter import execute_code_jupyter
 from open_webui.utils.payload import apply_system_prompt_to_body
 from open_webui.utils.response import normalize_usage
 from open_webui.utils.mcp.client import MCPClient
+from open_webui.utils.hermes import (
+    apply_hermes_session_header,
+    extract_current_user_message,
+    is_temporary_chat_id,
+)
 
 
 class _DisabledForm:
@@ -2643,6 +2648,33 @@ async def add_direct_file_context(
     return messages
 
 
+async def add_current_turn_image_context(message: dict, request: Request) -> dict:
+    image_files = [
+        file
+        for file in message.get('files', []) or []
+        if isinstance(file, dict)
+        and (file.get('type') == 'image' or (file.get('content_type') or '').startswith('image/'))
+    ]
+    if not image_files:
+        return message
+
+    image_parts = []
+    for file in image_files:
+        image_url = await get_model_image_url_from_file(file, request)
+        if image_url:
+            image_parts.append({'type': 'image_url', 'image_url': {'url': image_url}})
+
+    if not image_parts:
+        return message
+
+    content = message.get('content', '')
+    if isinstance(content, list):
+        message['content'] = [*content, *image_parts]
+    else:
+        message['content'] = [{'type': 'text', 'text': str(content or '')}, *image_parts]
+    return message
+
+
 async def chat_image_generation_handler(request: Request, form_data: dict, extra_params: dict, user):
     metadata = extra_params.get('__metadata__', {})
     chat_id = metadata.get('chat_id', None)
@@ -3151,63 +3183,55 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     form_data = apply_params_to_form_data(form_data, model)
     log.debug(f'form_data: {form_data}')
 
-    # Load messages from DB when available — DB preserves structured 'output' items
-    # which the frontend strips, causing tool calls to be merged into content.
     chat_id = metadata.get('chat_id')
     user_message_id = metadata.get('user_message_id')
+    if is_temporary_chat_id(chat_id):
+        raise HTTPException(status_code=400, detail='Temporary chats are disabled for Hermes sessions.')
 
-    if chat_id and user_message_id and not chat_id.startswith('local:'):
-        db_messages = await load_messages_from_db(chat_id, user_message_id)
-        if db_messages:
-            system_message = get_system_message(form_data.get('messages', []))
-            form_data['messages'] = [system_message, *db_messages] if system_message else db_messages
+    hermes_session_delta = bool(chat_id)
+    if hermes_session_delta:
+        current_user_message = extract_current_user_message(form_data, metadata)
+        if not current_user_message:
+            raise HTTPException(status_code=400, detail='Hermes session requests require a current user message.')
+        current_user_message = await add_current_turn_image_context(current_user_message, request)
+        current_user_message.pop('files', None)
+        form_data['messages'] = [current_user_message]
+        metadata['hermes_session_delta'] = True
+        metadata['tool_ids'] = []
+        metadata['filter_ids'] = []
+        form_data['features'] = {}
+        form_data.pop('tools', None)
+        form_data.pop('tool_choice', None)
+    else:
+        # Load messages from DB when available — DB preserves structured
+        # output items which the frontend strips. The Hermes session path
+        # above deliberately skips this because Hermes owns history.
+        if chat_id and user_message_id:
+            db_messages = await load_messages_from_db(chat_id, user_message_id)
+            if db_messages:
+                system_message = get_system_message(form_data.get('messages', []))
+                form_data['messages'] = [system_message, *db_messages] if system_message else db_messages
 
-            # Inject only the current user turn's images. Replaying older local
-            # artifact URLs in every request can block unrelated later turns.
-            last_user_message_index = None
-            for index, message in enumerate(form_data['messages']):
-                if message.get('role') == 'user':
-                    last_user_message_index = index
+                last_user_message_index = None
+                for index, message in enumerate(form_data['messages']):
+                    if message.get('role') == 'user':
+                        last_user_message_index = index
 
-            # Inject image files into content as image_url parts (mirrors frontend logic)
-            for index, message in enumerate(form_data['messages']):
-                image_files = [
-                    f
-                    for f in message.get('files', [])
-                    if f.get('type') == 'image' or (f.get('content_type') or '').startswith('image/')
-                ]
-                if index == last_user_message_index and message.get('role') == 'user' and image_files:
-                    text_content = message.get('content', '')
-                    if isinstance(text_content, str):
-                        image_parts = []
-                        for file in image_files:
-                            image_url = await get_model_image_url_from_file(file, request)
-                            if image_url:
-                                image_parts.append(
-                                    {
-                                        'type': 'image_url',
-                                        'image_url': {'url': image_url},
-                                    }
-                                )
+                for index, message in enumerate(form_data['messages']):
+                    if index == last_user_message_index and message.get('role') == 'user':
+                        message = await add_current_turn_image_context(message, request)
+                    message.pop('files', None)
 
-                        message['content'] = [
-                            {'type': 'text', 'text': text_content},
-                            *image_parts,
-                        ]
-                # Strip files field — it's been incorporated into content
-                message.pop('files', None)
+        form_data['messages'] = process_messages_with_output(form_data.get('messages', []))
 
-    # Process messages with OR-aligned output items for clean LLM messages
-    form_data['messages'] = process_messages_with_output(form_data.get('messages', []))
-
-    system_message = get_system_message(form_data.get('messages', []))
-    if system_message:  # Chat Controls/User Settings
-        try:
-            form_data = apply_system_prompt_to_body(
-                system_message.get('content'), form_data, metadata, user, replace=True
-            )  # Required to handle system prompt variables
-        except Exception:
-            pass
+        system_message = get_system_message(form_data.get('messages', []))
+        if system_message:  # Chat Controls/User Settings
+            try:
+                form_data = apply_system_prompt_to_body(
+                    system_message.get('content'), form_data, metadata, user, replace=True
+                )  # Required to handle system prompt variables
+            except Exception:
+                pass
 
     form_data = await convert_url_images_to_base64(form_data)
 
@@ -3256,7 +3280,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     if not folder_id:
         folder_id = metadata.get('folder_id', None)
 
-    if folder_id and user:
+    if folder_id and user and not hermes_session_delta:
         folder = await Folders.get_folder_by_id_and_user_id(folder_id, user.id)
 
         if folder and folder.data:
@@ -3277,7 +3301,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     user_message = get_last_user_message(form_data['messages'])
     model_knowledge = model.get('info', {}).get('meta', {}).get('knowledge', False)
 
-    if model_knowledge and metadata.get('params', {}).get('function_calling') != 'native':
+    if model_knowledge and not hermes_session_delta and metadata.get('params', {}).get('function_calling') != 'native':
         await event_emitter(
             {
                 'type': 'status',
@@ -3317,29 +3341,30 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
     variables = form_data.pop('variables', None)
 
-    # Process the form_data through the pipeline
-    try:
-        form_data = await process_pipeline_inlet_filter(request, form_data, user, models)
-    except Exception as e:
-        raise e
+    if not hermes_session_delta:
+        # Process the form_data through the pipeline
+        try:
+            form_data = await process_pipeline_inlet_filter(request, form_data, user, models)
+        except Exception as e:
+            raise e
 
-    try:
-        filter_ids = await get_sorted_filter_ids(request, model, metadata.get('filter_ids', []))
-        filter_functions = await Functions.get_functions_by_ids(filter_ids)
+        try:
+            filter_ids = await get_sorted_filter_ids(request, model, metadata.get('filter_ids', []))
+            filter_functions = await Functions.get_functions_by_ids(filter_ids)
 
-        form_data, flags = await process_filter_functions(
-            request=request,
-            filter_functions=filter_functions,
-            filter_type='inlet',
-            form_data=form_data,
-            extra_params=extra_params,
-        )
-    except Exception as e:
-        raise Exception(f'{e}')
+            form_data, flags = await process_filter_functions(
+                request=request,
+                filter_functions=filter_functions,
+                filter_type='inlet',
+                form_data=form_data,
+                extra_params=extra_params,
+            )
+        except Exception as e:
+            raise Exception(f'{e}')
 
     features = form_data.pop('features', None) or {}
     extra_params['__features__'] = features
-    if features:
+    if features and not hermes_session_delta:
         if 'voice' in features and features['voice']:
             if request.app.state.config.VOICE_MODE_PROMPT_TEMPLATE != None:
                 if request.app.state.config.VOICE_MODE_PROMPT_TEMPLATE != '':
@@ -3368,7 +3393,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 form_data = await chat_image_generation_handler(request, form_data, extra_params, user)
 
         if 'code_interpreter' in features and features['code_interpreter']:
-            engine = getattr(request.app.state.config, 'CODE_INTERPRETER_ENGINE', 'pyodide')
+            engine = getattr(request.app.state.config, 'CODE_INTERPRETER_ENGINE', 'disabled')
 
             # Skip XML-tag prompt injection when native FC is enabled —
             # execute_code will be injected as a builtin tool instead
@@ -3379,7 +3404,6 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                     else DEFAULT_CODE_INTERPRETER_PROMPT
                 )
 
-                # Append filesystem awareness only for pyodide engine
                 if engine != 'jupyter':
                     prompt += CODE_INTERPRETER_PYODIDE_PROMPT
 
@@ -3388,12 +3412,6 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                     form_data['messages'],
                 )
             else:
-                # Native FC: tool docstring can't be dynamic, so inject
-                # filesystem context into the system message for pyodide
-                # engine.  Appending to the system prompt (instead of the
-                # user message) keeps it in the stable cached prefix so
-                # providers with prefix caching don't re-bill the full
-                # conversation on every turn.
                 if engine != 'jupyter':
                     form_data['messages'] = add_or_update_system_message(
                         CODE_INTERPRETER_PYODIDE_PROMPT,
@@ -3405,6 +3423,10 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     terminal_id = form_data.pop('terminal_id', None)
     files = form_data.pop('files', None)
     form_data.pop('folder_id', None)
+    if hermes_session_delta:
+        tool_ids = None
+        terminal_id = None
+        form_data.pop('skill_ids', None)
 
     # Caller-provided OpenAI-style tools take precedence over server-side
     # tool resolution (tool_ids, MCP servers, builtin tools).
@@ -3416,7 +3438,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     user_skill_ids |= extract_skill_ids_from_messages(form_data.get('messages', []))
     model_skill_ids = set(model.get('info', {}).get('meta', {}).get('skillIds', []))
 
-    all_skill_ids = user_skill_ids | model_skill_ids
+    all_skill_ids = set() if hermes_session_delta else user_skill_ids | model_skill_ids
     available_skills = []
     if all_skill_ids:
         from open_webui.models.skills import Skills as SkillsModel
@@ -3512,7 +3534,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     # When the caller provides an explicit OpenAI-style `tools` array in the
     # request body, skip all server-side tool resolution and pass the caller's
     # tools through to the model unchanged.
-    if not payload_tools:
+    if not payload_tools and not hermes_session_delta:
         # Server side tools
         tool_ids = metadata.get('tool_ids', None)
         # Client side tools
@@ -3590,6 +3612,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                                 headers[FORWARD_SESSION_INFO_HEADER_CHAT_ID] = metadata.get('chat_id')
                             if metadata and metadata.get('message_id'):
                                 headers[FORWARD_SESSION_INFO_HEADER_MESSAGE_ID] = metadata.get('message_id')
+                        apply_hermes_session_header(headers, metadata)
 
                         mcp_clients[server_id] = MCPClient()
                         await mcp_clients[server_id].connect(
@@ -3754,7 +3777,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     # Check if file context extraction is enabled for this model (default True)
     file_context_enabled = (model.get('info', {}).get('meta', {}).get('capabilities') or {}).get('file_context', True)
 
-    if file_context_enabled:
+    if file_context_enabled and not hermes_session_delta:
         try:
             form_data, flags = await chat_completion_files_handler(request, form_data, extra_params, user)
             sources.extend(flags.get('sources', []))
@@ -3764,13 +3787,13 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     # Save the pre-RAG message state so the native tool call loop can
     # restore to the true original (before file-source injection) rather
     # than a snapshot that already has the RAG template baked in.
-    system_message = get_system_message(form_data['messages'])
-    metadata['system_prompt'] = get_content_from_message(system_message) if system_message else None
+    system_message = None if hermes_session_delta else get_system_message(form_data['messages'])
+    metadata['system_prompt'] = None if hermes_session_delta else get_content_from_message(system_message) if system_message else None
     metadata['user_prompt'] = get_last_user_message(form_data['messages'])
     metadata['sources'] = sources[:] if sources else []
 
     # If context is not empty, insert it into the messages
-    if sources and prompt:
+    if sources and prompt and not hermes_session_delta:
         form_data['messages'] = apply_source_context_to_messages(request, form_data['messages'], sources, prompt)
 
     # If there are citations, add them to the data_items
@@ -3802,7 +3825,8 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
     # Merge any duplicate system messages into a single message at position 0
     # to prevent template parsing errors with strict chat templates (e.g. Qwen)
-    form_data['messages'] = merge_system_messages(form_data.get('messages', []))
+    if not hermes_session_delta:
+        form_data['messages'] = merge_system_messages(form_data.get('messages', []))
 
     return form_data, metadata, events
 
@@ -3818,7 +3842,7 @@ async def get_event_emitter_and_caller(metadata):
         event_emitter = await get_event_emitter(metadata)
 
     # event_caller needs session_id — it calls back to a specific
-    # websocket session (used by direct tools, pyodide code interpreter).
+    # websocket session used by direct tools.
     if metadata.get('session_id') and metadata.get('chat_id') and metadata.get('message_id'):
         event_caller = await get_event_call(metadata)
 
@@ -3928,6 +3952,9 @@ async def background_tasks_handler(ctx):
     metadata = ctx['metadata']
     tasks = ctx['tasks']
     event_emitter = ctx['event_emitter']
+
+    if metadata.get('hermes_session_delta'):
+        return
 
     message = None
     messages = []
@@ -4437,7 +4464,7 @@ async def streaming_chat_response_handler(response, ctx):
 
     # Standard streaming response handler
     # event_caller is optional — only needed for direct (client-side) tools
-    # and pyodide code interpreter. Server-side tools work without it.
+    # Server-side tools work without it.
     if event_emitter:
         task_id = str(uuid4())  # Create a unique task ID.
         model_id = form_data.get('model', '')
@@ -5809,19 +5836,7 @@ async def streaming_chat_response_handler(response, ctx):
                                     )
                                     code = blocking_code + '\n' + code
 
-                                if request.app.state.config.CODE_INTERPRETER_ENGINE == 'pyodide':
-                                    ci_output = await event_caller(
-                                        {
-                                            'type': 'execute:python',
-                                            'data': {
-                                                'id': str(uuid4()),
-                                                'code': code,
-                                                'session_id': metadata.get('session_id', None),
-                                                'files': metadata.get('files', []),
-                                            },
-                                        }
-                                    )
-                                elif request.app.state.config.CODE_INTERPRETER_ENGINE == 'jupyter':
+                                if request.app.state.config.CODE_INTERPRETER_ENGINE == 'jupyter':
                                     ci_output = await execute_code_jupyter(
                                         request.app.state.config.CODE_INTERPRETER_JUPYTER_URL,
                                         code,

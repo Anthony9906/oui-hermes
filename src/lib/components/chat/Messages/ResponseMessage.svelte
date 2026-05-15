@@ -15,15 +15,7 @@
 	import { getChatById } from '$lib/apis/chats';
 	import { generateTags } from '$lib/apis';
 
-	import {
-		audioQueue,
-		config,
-		models,
-		settings,
-		temporaryChatEnabled,
-		TTSWorker,
-		user
-	} from '$lib/stores';
+	import { audioQueue, config, models, settings, temporaryChatEnabled, user } from '$lib/stores';
 	import { synthesizeOpenAISpeech } from '$lib/apis/audio';
 	import { imageGenerations } from '$lib/apis/images';
 	import {
@@ -55,7 +47,6 @@
 	import Citations from './Citations.svelte';
 	import CodeExecutions from './CodeExecutions.svelte';
 	import ContentRenderer from './ContentRenderer.svelte';
-	import { KokoroWorker } from '$lib/workers/KokoroWorker';
 	import FileItem from '$lib/components/common/FileItem.svelte';
 	import FollowUps from './ResponseMessage/FollowUps.svelte';
 	import { fade } from 'svelte/transition';
@@ -119,6 +110,7 @@
 	export let history;
 	export let messageId;
 	export let selectedModels = [];
+	$: void selectedModels;
 
 	let message: MessageType = structuredClone(history.messages[messageId]);
 	$: if (history.messages) {
@@ -146,6 +138,7 @@
 	export let editMessage: Function;
 	export let saveMessage: Function;
 	export let rateMessage: Function;
+	$: void rateMessage;
 	export let actionMessage: Function;
 	export let deleteMessage: Function;
 
@@ -154,6 +147,7 @@
 	export let regenerateResponse: Function;
 
 	export let addMessages: Function;
+	$: void addMessages;
 
 	export let isLastMessage = true;
 	export let readOnly = false;
@@ -207,7 +201,6 @@
 		speakAbort = null;
 
 		try {
-			speechSynthesis.cancel();
 			$audioQueue?.stop();
 		} catch {}
 
@@ -237,31 +230,12 @@
 		const content = removeAllDetails(message.content);
 
 		if ($config.audio.tts.engine === '') {
-			let voices = [];
-			const getVoicesLoop = setInterval(() => {
-				voices = speechSynthesis.getVoices();
-				if (voices.length > 0) {
-					clearInterval(getVoicesLoop);
+			toast.error($i18n.t('Text-to-speech is disabled'));
+			speaking = false;
+			return;
+		}
 
-					const voice = voices.find((v) => v.voiceURI === getVoiceId());
-					const speech = new SpeechSynthesisUtterance(content);
-					speech.rate = $settings.audio?.tts?.playbackRate ?? 1;
-
-					speech.onend = () => {
-						speaking = false;
-						if ($settings.conversationMode) {
-							document.getElementById('voice-input-button')?.click();
-						}
-					};
-
-					if (voice) {
-						speech.voice = voice;
-					}
-
-					speechSynthesis.speak(speech);
-				}
-			}, 100);
-		} else {
+		{
 			$audioQueue.setId(`${message.id}`);
 			$audioQueue.setPlaybackRate($settings.audio?.tts?.playbackRate ?? 1);
 			$audioQueue.onStopped = () => {
@@ -285,57 +259,25 @@
 			const voiceId = getVoiceId();
 			console.debug('Prepared message content for TTS', messageContentParts, 'voice:', voiceId);
 
-			if ($settings.audio?.tts?.engine === 'browser-kokoro') {
-				if (!$TTSWorker) {
-					await TTSWorker.set(
-						new KokoroWorker({
-							dtype: $settings.audio?.tts?.engineConfig?.dtype ?? 'fp32'
-						})
-					);
+			for (const [, sentence] of messageContentParts.entries()) {
+				if (signal.aborted) return;
 
-					await $TTSWorker.init();
-				}
-
-				for (const [, sentence] of messageContentParts.entries()) {
-					if (signal.aborted) return;
-
-					const url = await $TTSWorker
-						.generate({ text: sentence, voice: voiceId })
-						.catch((error) => {
-							console.error(error);
-							toast.error(`${error}`);
-							speaking = false;
-							loadingSpeech = false;
-						});
-
-					if (signal.aborted) return;
-
-					if (url && speaking) {
-						$audioQueue.enqueue(url);
+				const res = await synthesizeOpenAISpeech(localStorage.token, voiceId, sentence).catch(
+					(error) => {
+						console.error(error);
+						toast.error(`${error}`);
+						speaking = false;
 						loadingSpeech = false;
 					}
-				}
-			} else {
-				for (const [, sentence] of messageContentParts.entries()) {
-					if (signal.aborted) return;
+				);
 
-					const res = await synthesizeOpenAISpeech(localStorage.token, voiceId, sentence).catch(
-						(error) => {
-							console.error(error);
-							toast.error(`${error}`);
-							speaking = false;
-							loadingSpeech = false;
-						}
-					);
+				if (signal.aborted) return;
 
-					if (signal.aborted) return;
-
-					if (res && speaking) {
-						const blob = await res.blob();
-						const url = URL.createObjectURL(blob);
-						$audioQueue.enqueue(url);
-						loadingSpeech = false;
-					}
+				if (res && speaking) {
+					const blob = await res.blob();
+					const url = URL.createObjectURL(blob);
+					$audioQueue.enqueue(url);
+					loadingSpeech = false;
 				}
 			}
 		}
@@ -736,7 +678,7 @@
 											document.getElementById('confirm-edit-message-button')?.click();
 										}
 									}}
-								/>
+								></textarea>
 
 								<div class=" mt-2 mb-1 flex justify-between text-sm font-medium">
 									<div>
@@ -904,7 +846,7 @@
 											/>/{siblings.length}
 										</div>
 									{:else}
-										<!-- svelte-ignore a11y-no-static-element-interactions -->
+										<!-- svelte-ignore a11y_no_static_element_interactions -->
 										<div
 											class="text-sm tracking-widest font-semibold self-center dark:text-gray-100 min-w-fit"
 											on:dblclick={async () => {
@@ -1261,6 +1203,7 @@
 										{#if $settings?.regenerateMenu ?? true}
 											<button
 												type="button"
+												aria-label={$i18n.t('Regenerate')}
 												class="hidden regenerate-response-button"
 												on:click={() => {
 													showRateComment = false;
@@ -1278,7 +1221,7 @@
 														});
 													});
 												}}
-											/>
+											></button>
 
 											<RegenerateMenu
 												onRegenerate={(prompt = null) => {

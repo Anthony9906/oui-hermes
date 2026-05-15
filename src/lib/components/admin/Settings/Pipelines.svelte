@@ -63,12 +63,7 @@
 			if (res) {
 				toast.success($i18n.t('Valves updated successfully'));
 				setPipelines();
-				models.set(
-					await getModels(
-						localStorage.token,
-						$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-					)
-				);
+				models.set(await getModels(localStorage.token, null));
 				saveHandler();
 			}
 		} else {
@@ -130,12 +125,7 @@
 		if (res) {
 			toast.success($i18n.t('Pipeline downloaded successfully'));
 			setPipelines();
-			models.set(
-				await getModels(
-					localStorage.token,
-					$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-				)
-			);
+			models.set(await getModels(localStorage.token, null));
 		}
 
 		downloading = false;
@@ -160,12 +150,7 @@
 			if (res) {
 				toast.success($i18n.t('Pipeline downloaded successfully'));
 				setPipelines();
-				models.set(
-					await getModels(
-						localStorage.token,
-						$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-					)
-				);
+				models.set(await getModels(localStorage.token, null));
 			}
 		} else {
 			toast.error($i18n.t('No file selected'));
@@ -194,12 +179,7 @@
 		if (res) {
 			toast.success($i18n.t('Pipeline deleted successfully'));
 			setPipelines();
-			models.set(
-				await getModels(
-					localStorage.token,
-					$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-				)
-			);
+			models.set(await getModels(localStorage.token, null));
 		}
 	};
 
@@ -449,6 +429,7 @@
 									</div>
 
 									<button
+										aria-label="Delete pipeline"
 										class="px-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-850 dark:hover:bg-gray-800 dark:text-gray-100 rounded-lg transition"
 										on:click={() => {
 											deletePipelineHandler();

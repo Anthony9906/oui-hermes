@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
-	import { saveAs } from 'file-saver';
 	import { toast } from 'svelte-sonner';
 	import Plus from '$lib/components/icons/Plus.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
@@ -155,11 +154,12 @@
 								placeholder={$i18n.t('Prompt')}
 								rows="2"
 								bind:value={prompt.content}
-							/>
+							></textarea>
 						</Tooltip>
 					</div>
 
 					<button
+						aria-label="Remove prompt suggestion"
 						class="p-1 self-start"
 						type="button"
 						on:click={() => {

@@ -6,6 +6,7 @@
 	import { settings } from '$lib/stores';
 
 	export let id: string;
+	$: void id;
 	export let token: Token;
 
 	let html: string | null = null;

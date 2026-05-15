@@ -19,9 +19,12 @@
 	export let content;
 
 	export let history;
+	$: void history;
 	export let messageId;
+	$: void messageId;
 
 	export let selectedModels = [];
+	$: void selectedModels;
 
 	export let done = true;
 	export let model = null;

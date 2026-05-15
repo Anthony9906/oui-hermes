@@ -82,7 +82,7 @@
 		await models.set(
 			await getModels(
 				localStorage.token,
-				$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
+				null
 			)
 		);
 		await chatId.set($page.params.id);

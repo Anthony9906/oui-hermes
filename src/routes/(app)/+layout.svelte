@@ -107,12 +107,7 @@
 	};
 
 	const setModels = async () => {
-		models.set(
-			await getModels(
-				localStorage.token,
-				$config?.features?.enable_direct_connections ? ($settings?.directConnections ?? null) : null
-			)
-		);
+		models.set(await getModels(localStorage.token, null));
 	};
 
 	const setToolServers = async () => {
@@ -278,18 +273,6 @@
 					console.log('Shortcut triggered: OPEN_MODEL_SELECTOR');
 					event.preventDefault();
 					document.getElementById('model-selector-0-button')?.click();
-				} else if (isShortcutMatch(event, shortcuts[Shortcut.NEW_TEMPORARY_CHAT])) {
-					console.log('Shortcut triggered: NEW_TEMPORARY_CHAT');
-					event.preventDefault();
-					if ($user?.role !== 'admin' && $user?.permissions?.chat?.temporary_enforced) {
-						temporaryChatEnabled.set(true);
-					} else {
-						temporaryChatEnabled.set(!$temporaryChatEnabled);
-					}
-					await goto('/');
-					setTimeout(() => {
-						document.getElementById('new-chat-button')?.click();
-					}, 0);
 				} else if (isShortcutMatch(event, shortcuts[Shortcut.GENERATE_MESSAGE_PAIR])) {
 					console.log('Shortcut triggered: GENERATE_MESSAGE_PAIR');
 					event.preventDefault();
@@ -310,15 +293,7 @@
 			showChangelog.set($settings?.version !== $config.version);
 		}
 
-		if ($user?.role === 'admin' || ($user?.permissions?.chat?.temporary ?? true)) {
-			if ($page.url.searchParams.get('temporary-chat') === 'true') {
-				temporaryChatEnabled.set(true);
-			}
-
-			if ($user?.role !== 'admin' && $user?.permissions?.chat?.temporary_enforced) {
-				temporaryChatEnabled.set(true);
-			}
-		}
+		temporaryChatEnabled.set(false);
 
 		// Check for version updates
 		if ($user?.role === 'admin' && $config?.features?.enable_version_update_check) {

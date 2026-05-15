@@ -39,6 +39,9 @@ const config = {
 		}
 	},
 	vitePlugin: {
+		experimental: {
+			disableSvelteResolveWarnings: true
+		}
 		// inspector: {
 		// 	toggleKeyCombo: 'meta-shift', // Key combination to open the inspector
 		// 	holdMode: false, // Enable or disable hold mode
@@ -48,7 +51,8 @@ const config = {
 	},
 	onwarn: (warning, handler) => {
 		const { code } = warning;
-		if (code === 'css-unused-selector') return;
+		if (code === 'css-unused-selector' || code === 'css_unused_selector') return;
+		if (warning.message?.includes('node_modules/@xyflow/svelte/')) return;
 
 		handler(warning);
 	}

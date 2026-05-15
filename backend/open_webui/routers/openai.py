@@ -64,6 +64,7 @@ from open_webui.utils.session_pool import (
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.headers import include_user_info_headers
 from open_webui.utils.anthropic import is_anthropic_url, get_anthropic_models
+from open_webui.utils.hermes import apply_hermes_session_header, build_hermes_delta_payload
 
 log = logging.getLogger(__name__)
 
@@ -180,6 +181,7 @@ async def get_headers_and_cookies(
         headers = include_user_info_headers(headers, user)
         if metadata and metadata.get('chat_id'):
             headers[FORWARD_SESSION_INFO_HEADER_CHAT_ID] = metadata.get('chat_id')
+    apply_hermes_session_header(headers, metadata)
 
     token = None
     auth_type = config.get('auth_type')
@@ -1057,6 +1059,9 @@ async def generate_chat_completion(
 
     payload = {**form_data}
     metadata = payload.pop('metadata', None)
+    if metadata and metadata.get('hermes_session_delta'):
+        payload = build_hermes_delta_payload(payload, metadata)
+        bypass_system_prompt = True
 
     model_id = form_data.get('model')
     model_info = await Models.get_model_by_id(model_id)

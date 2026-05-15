@@ -118,8 +118,6 @@ from open_webui.config import (
     OPENAI_API_BASE_URLS,
     OPENAI_API_KEYS,
     OPENAI_API_CONFIGS,
-    # Direct Connections
-    ENABLE_DIRECT_CONNECTIONS,
     # Model list
     ENABLE_BASE_MODELS_CACHE,
     # Thread pool size for FastAPI/AnyIO
@@ -214,12 +212,7 @@ from open_webui.config import (
     WEB_LOADER_ENGINE,
     WEB_LOADER_CONCURRENT_REQUESTS,
     WEB_LOADER_TIMEOUT,
-    WHISPER_MODEL,
-    WHISPER_VAD_FILTER,
-    WHISPER_LANGUAGE,
     DEEPGRAM_API_KEY,
-    WHISPER_MODEL_AUTO_UPDATE,
-    WHISPER_MODEL_DIR,
     # Retrieval
     RAG_TEMPLATE,
     DEFAULT_RAG_TEMPLATE,
@@ -819,14 +812,6 @@ app.state.TERMINAL_SERVERS = []
 
 ########################################
 #
-# DIRECT CONNECTIONS
-#
-########################################
-
-app.state.config.ENABLE_DIRECT_CONNECTIONS = ENABLE_DIRECT_CONNECTIONS
-
-########################################
-#
 # SCIM
 #
 ########################################
@@ -1220,13 +1205,14 @@ app.state.config.IMAGES_EDIT_COMFYUI_WORKFLOW_NODES = IMAGES_EDIT_COMFYUI_WORKFL
 ########################################
 
 app.state.config.STT_ENGINE = AUDIO_STT_ENGINE
+if app.state.config.STT_ENGINE not in {'', 'openai', 'deepgram', 'azure', 'mistral'}:
+    app.state.config.STT_ENGINE = ''
 app.state.config.STT_MODEL = AUDIO_STT_MODEL
 app.state.config.STT_SUPPORTED_CONTENT_TYPES = AUDIO_STT_SUPPORTED_CONTENT_TYPES
 
 app.state.config.STT_OPENAI_API_BASE_URL = AUDIO_STT_OPENAI_API_BASE_URL
 app.state.config.STT_OPENAI_API_KEY = AUDIO_STT_OPENAI_API_KEY
 
-app.state.config.WHISPER_MODEL = WHISPER_MODEL
 app.state.config.DEEPGRAM_API_KEY = DEEPGRAM_API_KEY
 
 app.state.config.AUDIO_STT_AZURE_API_KEY = AUDIO_STT_AZURE_API_KEY
@@ -1240,6 +1226,8 @@ app.state.config.AUDIO_STT_MISTRAL_API_BASE_URL = AUDIO_STT_MISTRAL_API_BASE_URL
 app.state.config.AUDIO_STT_MISTRAL_USE_CHAT_COMPLETIONS = AUDIO_STT_MISTRAL_USE_CHAT_COMPLETIONS
 
 app.state.config.TTS_ENGINE = AUDIO_TTS_ENGINE
+if app.state.config.TTS_ENGINE not in {'', 'openai', 'elevenlabs', 'azure', 'mistral'}:
+    app.state.config.TTS_ENGINE = ''
 
 app.state.config.TTS_MODEL = AUDIO_TTS_MODEL
 app.state.config.TTS_VOICE = AUDIO_TTS_VOICE
@@ -1258,11 +1246,6 @@ app.state.config.TTS_AZURE_SPEECH_OUTPUT_FORMAT = AUDIO_TTS_AZURE_SPEECH_OUTPUT_
 
 app.state.config.TTS_MISTRAL_API_KEY = AUDIO_TTS_MISTRAL_API_KEY
 app.state.config.TTS_MISTRAL_API_BASE_URL = AUDIO_TTS_MISTRAL_API_BASE_URL
-
-
-app.state.faster_whisper_model = None
-app.state.speech_synthesiser = None
-app.state.speech_speaker_embeddings_dataset = None
 
 
 ########################################
@@ -2163,7 +2146,6 @@ async def get_app_config(request: Request):
             'enable_easter_eggs': ENABLE_EASTER_EGGS,
             **(
                 {
-                    'enable_direct_connections': app.state.config.ENABLE_DIRECT_CONNECTIONS,
                     'enable_folders': app.state.config.ENABLE_FOLDERS,
                     'folder_max_file_count': app.state.config.FOLDER_MAX_FILE_COUNT,
                     'enable_channels': app.state.config.ENABLE_CHANNELS,

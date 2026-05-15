@@ -1,6 +1,6 @@
 <script context="module">
 	// Persists across mount/unmount cycles (module-level, not per-instance)
-	let savedPath = '/';
+	const savedState = { path: '/' };
 </script>
 
 <script lang="ts">
@@ -48,6 +48,7 @@
 	const i18n = getContext('i18n');
 
 	export let onAttach: ((blob: Blob, name: string, contentType: string) => void) | null = null;
+	$: void onAttach;
 	export let overlay = false;
 	export let chatId: string | null = null;
 
@@ -87,7 +88,7 @@
 	};
 
 	// ── Directory state ──────────────────────────────────────────────────
-	let currentPath = savedPath;
+	let currentPath = savedState.path;
 	let entries: FileEntry[] = [];
 	let loading = false;
 	let error: string | null = null;
@@ -238,7 +239,7 @@
 			if (chatChanged && chatId && !oldChatId) {
 				// Chat just got created (null → real ID): persist the current
 				// browsed path as the new session's cwd — don't re-fetch.
-				setCwd(terminal.url, terminal.key, savedPath, chatId);
+				setCwd(terminal.url, terminal.key, savedState.path, chatId);
 			} else if (terminalChanged || chatChanged) {
 				// Terminal switched, new chat started, or switched between
 				// existing chats — re-fetch the session cwd.
@@ -254,7 +255,7 @@
 					const rawCwd = await getCwd(terminal.url, terminal.key, chatId ?? undefined);
 					const cwd = rawCwd ? normalizePath(rawCwd) : null;
 					const dir = cwd ? (cwd.endsWith('/') ? cwd : cwd + '/') : '/';
-					savedPath = dir;
+					savedState.path = dir;
 					loadDir(dir);
 				})();
 			}
@@ -327,7 +328,7 @@
 		clearFilePreview();
 		clearSelection();
 		currentPath = path;
-		savedPath = path;
+		savedState.path = path;
 		pushNavHistory(path);
 
 		const result = await listFiles(terminal.url, terminal.key, path, chatId ?? undefined);
@@ -806,13 +807,13 @@
 			const config = await getTerminalConfig(terminal.url, terminal.key);
 			terminalEnabled = config?.features?.terminal !== false;
 
-			if (chatId || savedPath === '/') {
+			if (chatId || savedState.path === '/') {
 				// Fetch session-specific cwd from the server (or global default for new chats)
 				const rawCwd = await getCwd(terminal.url, terminal.key, chatId ?? undefined);
 				const cwd = rawCwd ? normalizePath(rawCwd) : null;
-				if (cwd) savedPath = cwd.endsWith('/') ? cwd : cwd + '/';
+				if (cwd) savedState.path = cwd.endsWith('/') ? cwd : cwd + '/';
 			}
-			loadDir(savedPath);
+			loadDir(savedState.path);
 		}
 
 		mounted = true;
@@ -1214,6 +1215,8 @@
 		{/if}
 
 		<!-- Content -->
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
 			class="flex-1 overflow-y-auto min-h-0 min-w-0"
 			on:click={(e) => {
@@ -1383,12 +1386,12 @@
 			<div class="shrink-0 border-t border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-850">
 				{#if terminalExpanded}
 					<!-- Drag handle (at top of panel) -->
-					<!-- svelte-ignore a11y-no-static-element-interactions -->
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<div class="relative cursor-row-resize group" on:mousedown={onHandleMouseDown}>
 						<div
 							class="h-px bg-transparent group-hover:bg-black/10 dark:group-hover:bg-white/10 transition"
-						/>
-						<div class="absolute inset-x-0 -top-1.5 -bottom-1.5" />
+						></div>
+						<div class="absolute inset-x-0 -top-1.5 -bottom-1.5"></div>
 					</div>
 				{/if}
 
@@ -1418,7 +1421,7 @@
 								: terminalConnecting
 									? 'bg-yellow-500 animate-pulse'
 									: 'bg-gray-400'}"
-						/>
+						></div>
 					{/if}
 
 					<svg

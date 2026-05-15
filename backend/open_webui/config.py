@@ -1054,16 +1054,6 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 ####################################
-# DIRECT CONNECTIONS
-####################################
-
-ENABLE_DIRECT_CONNECTIONS = PersistentConfig(
-    'ENABLE_DIRECT_CONNECTIONS',
-    'direct.enable',
-    os.environ.get('ENABLE_DIRECT_CONNECTIONS', 'False').lower() == 'true',
-)
-
-####################################
 # OLLAMA_BASE_URL
 ####################################
 
@@ -2163,7 +2153,7 @@ ENABLE_CODE_EXECUTION = PersistentConfig(
 CODE_EXECUTION_ENGINE = PersistentConfig(
     'CODE_EXECUTION_ENGINE',
     'code_execution.engine',
-    os.environ.get('CODE_EXECUTION_ENGINE', 'pyodide'),
+    os.environ.get('CODE_EXECUTION_ENGINE', 'disabled'),
 )
 
 CODE_EXECUTION_JUPYTER_URL = PersistentConfig(
@@ -2212,7 +2202,7 @@ ENABLE_MEMORIES = PersistentConfig(
 CODE_INTERPRETER_ENGINE = PersistentConfig(
     'CODE_INTERPRETER_ENGINE',
     'code_interpreter.engine',
-    os.environ.get('CODE_INTERPRETER_ENGINE', 'pyodide'),
+    os.environ.get('CODE_INTERPRETER_ENGINE', 'disabled'),
 )
 
 CODE_INTERPRETER_PROMPT_TEMPLATE = PersistentConfig(
@@ -2270,37 +2260,8 @@ CODE_INTERPRETER_BLOCKED_MODULES = [
     library.strip() for library in os.environ.get('CODE_INTERPRETER_BLOCKED_MODULES', '').split(',') if library.strip()
 ]
 
-DEFAULT_CODE_INTERPRETER_PROMPT = """
-#### Code Interpreter
-
-You have access to a Python code interpreter via: `<code_interpreter type="code" lang="python"></code_interpreter>`
-
-- The Python shell runs directly in the user's browser for fast execution of analysis, calculations, or problem-solving. Use it in this response.
-- You can use a wide array of libraries for data manipulation, visualization, API calls, or any computational task. Think outside the box and harness Python's full potential.
-- **You must enclose your code within `<code_interpreter type="code" lang="python">` XML tags** and stop right away. If you don't, the code won't execute.
-- Do NOT use triple backticks (```py ... ```) inside the XML tags — that is markdown formatting, not executable Python code.
-- **Always print meaningful outputs** (results, tables, summaries, visuals). Avoid implicit outputs; use explicit print statements.
-- After obtaining output, **provide a concise analysis, interpretation, or next steps** to help the user understand the findings.
-- If results are unclear or unexpected, refine the code and re-execute. Iterate until you deliver meaningful insights.
-- **If a link to an image, audio, or any file appears in the output, display it exactly as-is** in your response so the user can access it. Do not modify the link.
-- Respond in the chat's primary language. Default to English if multilingual.
-
-Ensure the code interpreter is effectively utilized to achieve the highest-quality analysis for the user."""
-
-# Appended to the code interpreter prompt only when engine is pyodide (not jupyter)
-CODE_INTERPRETER_PYODIDE_PROMPT = """
-
-##### Pyodide Environment
-
-- This Python environment runs via Pyodide in the browser. **Do not install packages** — `pip install`, `subprocess`, and `micropip.install()` are not available.
-- If a required library is unavailable, use an alternative approach with available modules. Do not attempt to install anything.
-
-##### Persistent File System
-
-- User-uploaded files are available at `/mnt/uploads/`. When the user asks you to work with their files, read from this directory.
-- You can also write output files to `/mnt/uploads/` so the user can access and download them from the file browser.
-- The file system persists across code executions within the same session.
-- Use `import os; os.listdir('/mnt/uploads')` to discover available files."""
+DEFAULT_CODE_INTERPRETER_PROMPT = ''
+CODE_INTERPRETER_PYODIDE_PROMPT = ''
 
 
 ####################################
@@ -3917,23 +3878,6 @@ IMAGES_EDIT_COMFYUI_WORKFLOW_NODES = PersistentConfig(
 ####################################
 # Audio
 ####################################
-
-# Transcription
-WHISPER_MODEL = PersistentConfig(
-    'WHISPER_MODEL',
-    'audio.stt.whisper_model',
-    os.getenv('WHISPER_MODEL', 'base'),
-)
-
-WHISPER_COMPUTE_TYPE = os.getenv('WHISPER_COMPUTE_TYPE', 'int8')
-WHISPER_MODEL_DIR = os.getenv('WHISPER_MODEL_DIR', f'{CACHE_DIR}/whisper/models')
-WHISPER_MODEL_AUTO_UPDATE = not OFFLINE_MODE and os.environ.get('WHISPER_MODEL_AUTO_UPDATE', '').lower() == 'true'
-
-WHISPER_VAD_FILTER = os.getenv('WHISPER_VAD_FILTER', 'False').lower() == 'true'
-
-WHISPER_MULTILINGUAL = os.getenv('WHISPER_MULTILINGUAL', 'False').lower() == 'true'
-
-WHISPER_LANGUAGE = os.getenv('WHISPER_LANGUAGE', '').lower() or None
 
 # Add Deepgram configuration
 DEEPGRAM_API_KEY = PersistentConfig(

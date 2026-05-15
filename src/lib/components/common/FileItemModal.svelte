@@ -30,6 +30,7 @@
 	export let item;
 	export let show = false;
 	export let edit = false;
+	$: void edit;
 
 	let loading = false;
 
@@ -289,10 +290,10 @@
 			<div class="flex items-start justify-between">
 				<div>
 					<div class=" font-medium text-lg dark:text-gray-100">
-						<a
-							href="#"
+						<button
+							type="button"
 							class="hover:underline line-clamp-1"
-							on:click|preventDefault={() => {
+							on:click={() => {
 								if (!isPDF && item.url) {
 									window.open(
 										item.type === 'file'
@@ -306,7 +307,7 @@
 							}}
 						>
 							{item?.name ?? 'File'}
-						</a>
+						</button>
 					</div>
 				</div>
 
@@ -484,7 +485,7 @@
 							class="w-full border-0 rounded-lg mb-2"
 							controls
 							playsinline
-						/>
+						></audio>
 					{:else if isPDF}
 						<PDFViewer
 							url={`${WEBUI_API_BASE_URL}/files/${item.id}/content`}
@@ -531,7 +532,7 @@
 								srcdoc={textContent || item.file.data.content}
 								sandbox="allow-scripts allow-forms allow-popups allow-modals"
 								class="w-full h-[70vh] border-0 rounded-lg bg-white"
-							/>
+							></iframe>
 						{/if}
 					{:else if isCode}
 						{#if textContentError}
@@ -605,6 +606,7 @@
 								{#if pptxSlides.length > 1}
 									<div class="flex items-center justify-center gap-3 pb-3 text-sm text-gray-500">
 										<button
+											aria-label={$i18n.t('Previous Slide')}
 											class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30"
 											disabled={pptxCurrentSlide === 0}
 											on:click={() => (pptxCurrentSlide = Math.max(0, pptxCurrentSlide - 1))}
@@ -624,6 +626,7 @@
 										</button>
 										<span>{pptxCurrentSlide + 1} / {pptxSlides.length}</span>
 										<button
+											aria-label={$i18n.t('Next Slide')}
 											class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30"
 											disabled={pptxCurrentSlide === pptxSlides.length - 1}
 											on:click={() =>

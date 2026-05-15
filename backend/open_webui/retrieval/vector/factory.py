@@ -1,10 +1,52 @@
-from open_webui.retrieval.vector.main import VectorDBBase
+from typing import Optional
+
+from open_webui.retrieval.vector.main import GetResult, SearchResult, VectorDBBase, VectorItem
 from open_webui.retrieval.vector.type import VectorType
 from open_webui.config import (
     VECTOR_DB,
     ENABLE_QDRANT_MULTITENANCY_MODE,
     ENABLE_MILVUS_MULTITENANCY_MODE,
 )
+
+
+class NoopVectorClient(VectorDBBase):
+    def has_collection(self, collection_name: str) -> bool:
+        return False
+
+    def delete_collection(self, collection_name: str) -> None:
+        return None
+
+    def insert(self, collection_name: str, items: list[VectorItem]) -> None:
+        return None
+
+    def upsert(self, collection_name: str, items: list[VectorItem]) -> None:
+        return None
+
+    def search(
+        self,
+        collection_name: str,
+        vectors: list[list[float | int]],
+        filter: Optional[dict] = None,
+        limit: int = 10,
+    ) -> Optional[SearchResult]:
+        return SearchResult(ids=[[]], documents=[[]], metadatas=[[]], distances=[[]])
+
+    def query(self, collection_name: str, filter: dict, limit: Optional[int] = None) -> Optional[GetResult]:
+        return GetResult(ids=[[]], documents=[[]], metadatas=[[]])
+
+    def get(self, collection_name: str) -> Optional[GetResult]:
+        return GetResult(ids=[[]], documents=[[]], metadatas=[[]])
+
+    def delete(
+        self,
+        collection_name: str,
+        ids: Optional[list[str]] = None,
+        filter: Optional[dict] = None,
+    ) -> None:
+        return None
+
+    def reset(self) -> None:
+        return None
 
 
 class Vector:
@@ -14,6 +56,8 @@ class Vector:
         get vector db instance by vector type
         """
         match vector_type:
+            case None | '' | 'none':
+                return NoopVectorClient()
             case VectorType.MILVUS:
                 if ENABLE_MILVUS_MULTITENANCY_MODE:
                     from open_webui.retrieval.vector.dbs.milvus_multitenancy import (

@@ -34,7 +34,6 @@
 	import Artifacts from './Artifacts.svelte';
 	import Embeds from './ChatControls/Embeds.svelte';
 	import FileNav from './FileNav.svelte';
-	import PyodideFileNav from './PyodideFileNav.svelte';
 	import Overview from './Overview.svelte';
 	import ExpertAgentDrawer from '$lib/components/expert-agents/ExpertAgentDrawer.svelte';
 	import { closeExpertAgentDrawer, showExpertAgentDrawer } from '$lib/stores/expertAgents';
@@ -447,8 +446,6 @@
 								/>
 							{:else if activeTab === 'files' && $selectedTerminalId}
 								<FileNav onAttach={handleTerminalAttach} {chatId} />
-							{:else if activeTab === 'files' && codeInterpreterEnabled}
-								<PyodideFileNav />
 							{:else}
 								<Controls embed={true} {models} bind:chatFiles bind:params />
 							{/if}
@@ -466,7 +463,7 @@
 		>
 			<div
 				class="absolute -left-1.5 -right-1.5 -top-0 -bottom-0 z-20 cursor-col-resize bg-transparent"
-			/>
+			></div>
 		</PaneResizer>
 	{/if}
 
@@ -623,8 +620,6 @@
 									/>
 								{:else if activeTab === 'files' && $selectedTerminalId}
 									<FileNav onAttach={handleTerminalAttach} overlay={dragged} {chatId} />
-								{:else if activeTab === 'files' && codeInterpreterEnabled}
-									<PyodideFileNav overlay={dragged} />
 								{:else}
 									<Controls embed={true} {models} bind:chatFiles bind:params />
 								{/if}

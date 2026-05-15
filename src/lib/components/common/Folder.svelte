@@ -147,7 +147,7 @@
 					localStorage.setItem(`${id}-folder-state`, `${state}`);
 				}}
 			>
-				<!-- svelte-ignore a11y-no-static-element-interactions -->
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
 				<div
 					id="sidebar-folder-button"
 					class=" w-full group rounded-xl relative flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-900 transition {buttonClassName}"

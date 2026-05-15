@@ -638,11 +638,7 @@
 		selectedChatId = null;
 		selectedFolder.set(null);
 
-		if ($user?.role !== 'admin' && $user?.permissions?.chat?.temporary_enforced) {
-			await temporaryChatEnabled.set(true);
-		} else {
-			await temporaryChatEnabled.set(false);
-		}
+		await temporaryChatEnabled.set(false);
 
 		setTimeout(() => {
 			if ($mobile) {
@@ -738,7 +734,7 @@
 	}}
 />
 
-<!-- svelte-ignore a11y-no-static-element-interactions -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 
 {#if $showSidebar}
 	<div
@@ -748,7 +744,7 @@
 		on:mousedown={() => {
 			showSidebar.set(!$showSidebar);
 		}}
-	/>
+	></div>
 {/if}
 
 <SearchModal
@@ -761,13 +757,14 @@
 />
 
 <button
+	aria-label={$i18n.t('New Chat')}
 	id="sidebar-new-chat-button"
 	class="hidden"
 	on:click={() => {
 		goto('/');
 		newChatHandler();
 	}}
-/>
+></button>
 
 <svelte:window
 	on:mousemove={(e) => {
@@ -1703,11 +1700,24 @@
 			class="relative flex items-center justify-center group border-l border-gray-50 dark:border-gray-850/30 hover:border-gray-200 dark:hover:border-gray-800 transition z-20"
 			id="sidebar-resizer"
 			on:mousedown={resizeStartHandler}
-			role="separator"
+			on:keydown={(e) => {
+				if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+					e.preventDefault();
+					const delta = e.key === 'ArrowLeft' ? -10 : 10;
+					sidebarWidth.set(Math.min(500, Math.max(200, ($sidebarWidth ?? 260) + delta)));
+				}
+			}}
+			role="slider"
+			tabindex="0"
+			aria-label={$i18n.t('Resize Sidebar')}
+			aria-orientation="vertical"
+			aria-valuemin="200"
+			aria-valuemax="500"
+			aria-valuenow={$sidebarWidth ?? 260}
 		>
 			<div
 				class=" absolute -left-1.5 -right-1.5 -top-0 -bottom-0 z-20 cursor-col-resize bg-transparent"
-			/>
+			></div>
 		</div>
 	{/if}
 {/if}

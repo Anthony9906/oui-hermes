@@ -45,6 +45,7 @@
 	export let initNewChat: Function;
 	export let shareEnabled: boolean = false;
 	export let scrollTop = 0;
+	$: void scrollTop;
 
 	export let chat;
 	export let history;
@@ -52,6 +53,7 @@
 	export let showModelSelector = true;
 
 	export let onSaveTempChat: () => {};
+	$: void onSaveTempChat;
 	export let archiveChatHandler: (id: string) => void;
 	export let moveChatHandler: (id: string, folderId: string) => void;
 
@@ -70,7 +72,7 @@
 		initNewChat();
 	}}
 	aria-label="New Chat"
-/>
+></button>
 
 <nav
 	class="sticky top-0 z-30 w-full {chat?.id
@@ -118,58 +120,6 @@
 
 				<div class="self-start flex flex-none items-center text-gray-600 dark:text-gray-400">
 					<!-- <div class="md:hidden flex self-center w-[1px] h-5 mx-2 bg-gray-300 dark:bg-stone-700" /> -->
-
-					{#if $user?.role === 'user' ? ($user?.permissions?.chat?.temporary ?? true) && !($user?.permissions?.chat?.temporary_enforced ?? false) : true}
-						{#if !chat?.id}
-							<Tooltip content={$i18n.t(`Temporary Chat`)}>
-								<button
-									class="flex cursor-pointer px-2 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-850 transition"
-									id="temporary-chat-button"
-									on:click={async () => {
-										if (($settings?.temporaryChatByDefault ?? false) && $temporaryChatEnabled) {
-											// for proper initNewChat handling
-											await temporaryChatEnabled.set(null);
-										} else {
-											await temporaryChatEnabled.set(!$temporaryChatEnabled);
-										}
-
-										if ($page.url.pathname !== '/') {
-											await goto('/');
-										}
-
-										// add 'temporary-chat=true' to the URL
-										if ($temporaryChatEnabled) {
-											window.history.replaceState(null, '', '?temporary-chat=true');
-										} else {
-											window.history.replaceState(null, '', location.pathname);
-										}
-									}}
-								>
-									<div class=" m-auto self-center">
-										{#if $temporaryChatEnabled}
-											<ChatBubbleDottedChecked className=" size-4.5" strokeWidth="1.5" />
-										{:else}
-											<ChatBubbleDotted className=" size-4.5" strokeWidth="1.5" />
-										{/if}
-									</div>
-								</button>
-							</Tooltip>
-						{:else if $temporaryChatEnabled}
-							<Tooltip content={$i18n.t(`Save Chat`)}>
-								<button
-									class="flex cursor-pointer px-2 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-850 transition"
-									id="save-temporary-chat-button"
-									on:click={async () => {
-										onSaveTempChat();
-									}}
-								>
-									<div class=" m-auto self-center">
-										<ChatCheck className=" size-4.5" strokeWidth="1.5" />
-									</div>
-								</button>
-							</Tooltip>
-						{/if}
-					{/if}
 
 					{#if $mobile && !$temporaryChatEnabled && chat && chat.id}
 						<Tooltip content={$i18n.t('New Chat')}>
@@ -258,12 +208,6 @@
 			</div>
 		</div>
 	</div>
-
-	{#if $temporaryChatEnabled && ($chatId ?? '').startsWith('local:')}
-		<div class=" w-full z-30 text-center">
-			<div class="text-xs text-gray-500">{$i18n.t('Temporary Chat')}</div>
-		</div>
-	{/if}
 
 	<div class="absolute top-[100%] left-0 right-0 h-fit">
 		{#if !history.currentId && !$chatId && ($banners.length > 0 || ($config?.license_metadata?.type ?? null) === 'trial' || (($config?.license_metadata?.seats ?? null) !== null && $config?.user_count > $config?.license_metadata?.seats))}

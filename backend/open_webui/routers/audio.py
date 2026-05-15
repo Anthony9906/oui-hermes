@@ -37,13 +37,7 @@ from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.access_control import has_permission
 from open_webui.utils.headers import include_user_info_headers
 from open_webui.config import (
-    WHISPER_MODEL_AUTO_UPDATE,
-    WHISPER_COMPUTE_TYPE,
-    WHISPER_MODEL_DIR,
-    WHISPER_VAD_FILTER,
     CACHE_DIR,
-    WHISPER_LANGUAGE,
-    WHISPER_MULTILINGUAL,
     ELEVENLABS_API_BASE_URL,
 )
 
@@ -54,11 +48,12 @@ from open_webui.env import (
     AIOHTTP_CLIENT_TIMEOUT,
     AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST,
     BYPASS_PYDUB_PREPROCESSING,
-    DEVICE_TYPE,
     ENABLE_FORWARD_USER_INFO_HEADERS,
 )
 
 router = APIRouter()
+REMOTE_STT_ENGINES = {'', 'openai', 'deepgram', 'azure', 'mistral'}
+REMOTE_TTS_ENGINES = {'', 'openai', 'elevenlabs', 'azure', 'mistral'}
 
 # Constants
 MAX_FILE_SIZE_MB = 20
@@ -127,28 +122,6 @@ def convert_audio_to_mp3(file_path):
         return None
 
 
-def set_faster_whisper_model(model: str, auto_update: bool = False):
-    whisper_model = None
-    if model:
-        from faster_whisper import WhisperModel
-
-        faster_whisper_kwargs = {
-            'model_size_or_path': model,
-            'device': DEVICE_TYPE if DEVICE_TYPE and DEVICE_TYPE == 'cuda' else 'cpu',
-            'compute_type': WHISPER_COMPUTE_TYPE,
-            'download_root': WHISPER_MODEL_DIR,
-            'local_files_only': not auto_update,
-        }
-
-        try:
-            whisper_model = WhisperModel(**faster_whisper_kwargs)
-        except Exception:
-            log.warning('WhisperModel initialization failed, attempting download with local_files_only=False')
-            faster_whisper_kwargs['local_files_only'] = False
-            whisper_model = WhisperModel(**faster_whisper_kwargs)
-    return whisper_model
-
-
 ##########################################
 #
 # Audio API
@@ -178,7 +151,6 @@ class STTConfigForm(BaseModel):
     ENGINE: str
     MODEL: str
     SUPPORTED_CONTENT_TYPES: list[str] = []
-    WHISPER_MODEL: str
     DEEPGRAM_API_KEY: str
     AZURE_API_KEY: str
     AZURE_REGION: str
@@ -219,7 +191,6 @@ async def get_audio_config(request: Request, user=Depends(get_admin_user)):
             'ENGINE': request.app.state.config.STT_ENGINE,
             'MODEL': request.app.state.config.STT_MODEL,
             'SUPPORTED_CONTENT_TYPES': request.app.state.config.STT_SUPPORTED_CONTENT_TYPES,
-            'WHISPER_MODEL': request.app.state.config.WHISPER_MODEL,
             'DEEPGRAM_API_KEY': request.app.state.config.DEEPGRAM_API_KEY,
             'AZURE_API_KEY': request.app.state.config.AUDIO_STT_AZURE_API_KEY,
             'AZURE_REGION': request.app.state.config.AUDIO_STT_AZURE_REGION,
@@ -235,6 +206,11 @@ async def get_audio_config(request: Request, user=Depends(get_admin_user)):
 
 @router.post('/config/update')
 async def update_audio_config(request: Request, form_data: AudioConfigUpdateForm, user=Depends(get_admin_user)):
+    if form_data.tts.ENGINE not in REMOTE_TTS_ENGINES:
+        raise HTTPException(status_code=400, detail='Unsupported TTS engine')
+    if form_data.stt.ENGINE not in REMOTE_STT_ENGINES:
+        raise HTTPException(status_code=400, detail='Unsupported STT engine')
+
     request.app.state.config.TTS_OPENAI_API_BASE_URL = form_data.tts.OPENAI_API_BASE_URL
     request.app.state.config.TTS_OPENAI_API_KEY = form_data.tts.OPENAI_API_KEY
     request.app.state.config.TTS_OPENAI_PARAMS = form_data.tts.OPENAI_PARAMS
@@ -255,7 +231,6 @@ async def update_audio_config(request: Request, form_data: AudioConfigUpdateForm
     request.app.state.config.STT_MODEL = form_data.stt.MODEL
     request.app.state.config.STT_SUPPORTED_CONTENT_TYPES = form_data.stt.SUPPORTED_CONTENT_TYPES
 
-    request.app.state.config.WHISPER_MODEL = form_data.stt.WHISPER_MODEL
     request.app.state.config.DEEPGRAM_API_KEY = form_data.stt.DEEPGRAM_API_KEY
     request.app.state.config.AUDIO_STT_AZURE_API_KEY = form_data.stt.AZURE_API_KEY
     request.app.state.config.AUDIO_STT_AZURE_REGION = form_data.stt.AZURE_REGION
@@ -265,13 +240,6 @@ async def update_audio_config(request: Request, form_data: AudioConfigUpdateForm
     request.app.state.config.AUDIO_STT_MISTRAL_API_KEY = form_data.stt.MISTRAL_API_KEY
     request.app.state.config.AUDIO_STT_MISTRAL_API_BASE_URL = form_data.stt.MISTRAL_API_BASE_URL
     request.app.state.config.AUDIO_STT_MISTRAL_USE_CHAT_COMPLETIONS = form_data.stt.MISTRAL_USE_CHAT_COMPLETIONS
-
-    if request.app.state.config.STT_ENGINE == '':
-        request.app.state.faster_whisper_model = set_faster_whisper_model(
-            form_data.stt.WHISPER_MODEL, WHISPER_MODEL_AUTO_UPDATE
-        )
-    else:
-        request.app.state.faster_whisper_model = None
 
     return {
         'tts': {
@@ -295,7 +263,6 @@ async def update_audio_config(request: Request, form_data: AudioConfigUpdateForm
             'ENGINE': request.app.state.config.STT_ENGINE,
             'MODEL': request.app.state.config.STT_MODEL,
             'SUPPORTED_CONTENT_TYPES': request.app.state.config.STT_SUPPORTED_CONTENT_TYPES,
-            'WHISPER_MODEL': request.app.state.config.WHISPER_MODEL,
             'DEEPGRAM_API_KEY': request.app.state.config.DEEPGRAM_API_KEY,
             'AZURE_API_KEY': request.app.state.config.AUDIO_STT_AZURE_API_KEY,
             'AZURE_REGION': request.app.state.config.AUDIO_STT_AZURE_REGION,
@@ -307,19 +274,6 @@ async def update_audio_config(request: Request, form_data: AudioConfigUpdateForm
             'MISTRAL_USE_CHAT_COMPLETIONS': request.app.state.config.AUDIO_STT_MISTRAL_USE_CHAT_COMPLETIONS,
         },
     }
-
-
-def load_speech_pipeline(request):
-    from transformers import pipeline
-    from datasets import load_dataset
-
-    if request.app.state.speech_synthesiser is None:
-        request.app.state.speech_synthesiser = pipeline('text-to-speech', 'microsoft/speecht5_tts')
-
-    if request.app.state.speech_speaker_embeddings_dataset is None:
-        request.app.state.speech_speaker_embeddings_dataset = load_dataset(
-            'Matthijs/cmu-arctic-xvectors', split='validation'
-        )
 
 
 @router.post('/speech')
@@ -526,41 +480,6 @@ async def speech(request: Request, user=Depends(get_verified_user)):
                 detail=detail if detail else 'Open WebUI: Server Connection Error',
             )
 
-    elif request.app.state.config.TTS_ENGINE == 'transformers':
-        payload = None
-        try:
-            payload = json.loads(body.decode('utf-8'))
-        except Exception as e:
-            log.exception(e)
-            raise HTTPException(status_code=400, detail='Invalid JSON payload')
-
-        import torch
-        import soundfile as sf
-
-        load_speech_pipeline(request)
-
-        embeddings_dataset = request.app.state.speech_speaker_embeddings_dataset
-
-        speaker_index = 6799
-        try:
-            speaker_index = embeddings_dataset['filename'].index(request.app.state.config.TTS_MODEL)
-        except Exception:
-            pass
-
-        speaker_embedding = torch.tensor(embeddings_dataset[speaker_index]['xvector']).unsqueeze(0)
-
-        speech = request.app.state.speech_synthesiser(
-            payload['input'],
-            forward_params={'speaker_embeddings': speaker_embedding},
-        )
-
-        sf.write(file_path, speech['audio'], samplerate=speech['sampling_rate'])
-
-        async with aiofiles.open(file_body_path, 'w') as f:
-            await f.write(json.dumps(payload))
-
-        return FileResponse(file_path)
-
     elif request.app.state.config.TTS_ENGINE == 'mistral':
         api_key = request.app.state.config.TTS_MISTRAL_API_KEY
         api_base_url = request.app.state.config.TTS_MISTRAL_API_BASE_URL or 'https://api.mistral.ai/v1'
@@ -640,35 +559,10 @@ def transcription_handler(request, file_path, metadata, user=None):
 
     metadata = metadata or {}
 
-    languages = [
-        metadata.get('language', None) if not WHISPER_LANGUAGE else WHISPER_LANGUAGE,
-        None,  # Always fallback to None in case transcription fails
-    ]
+    languages = [metadata.get('language', None), None]
 
     if request.app.state.config.STT_ENGINE == '':
-        if request.app.state.faster_whisper_model is None:
-            request.app.state.faster_whisper_model = set_faster_whisper_model(request.app.state.config.WHISPER_MODEL)
-
-        model = request.app.state.faster_whisper_model
-        segments, info = model.transcribe(
-            file_path,
-            beam_size=5,
-            vad_filter=WHISPER_VAD_FILTER,
-            language=languages[0],
-            multilingual=WHISPER_MULTILINGUAL,
-        )
-        log.info("Detected language '%s' with probability %f" % (info.language, info.language_probability))
-
-        transcript = ''.join([segment.text for segment in list(segments)])
-        data = {'text': transcript.strip()}
-
-        # save the transcript to a json file
-        transcript_file = os.path.join(file_dir, f'{id}.json')
-        with open(transcript_file, 'w') as f:
-            json.dump(data, f)
-
-        log.debug(data)
-        return data
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
     elif request.app.state.config.STT_ENGINE == 'openai':
         r = None
         try:
@@ -1311,8 +1205,7 @@ async def get_available_models(request: Request) -> list[dict]:
                         available_models = data.get('models', [])
                 except Exception as e:
                     log.debug(f'/audio/models not available, trying /models fallback: {str(e)}')
-                    # Fallback to standard OpenAI-compatible /models endpoint
-                    # (used by KokoroTTS and similar custom TTS servers)
+                    # Fallback to standard OpenAI-compatible /models endpoint.
                     try:
                         async with session.get(
                             f'{request.app.state.config.TTS_OPENAI_API_BASE_URL}/models',

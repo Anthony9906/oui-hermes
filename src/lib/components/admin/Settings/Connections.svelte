@@ -23,7 +23,7 @@
 	const getModels = async () => {
 		const models = await _getModels(
 			localStorage.token,
-			$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null),
+			null,
 			false,
 			true
 		);
@@ -229,31 +229,6 @@
 						{/if}
 					</div>
 				</div>
-
-				<div class="my-2">
-					<div class="flex justify-between items-center text-sm">
-						<div class="  font-medium">{$i18n.t('Direct Connections')}</div>
-
-						<div class="flex items-center">
-							<div class="">
-								<Switch
-									bind:state={connectionsConfig.ENABLE_DIRECT_CONNECTIONS}
-									on:change={async () => {
-										updateConnectionsHandler();
-									}}
-								/>
-							</div>
-						</div>
-					</div>
-
-					<div class="mt-1 text-xs text-gray-400 dark:text-gray-500">
-						{$i18n.t(
-							'Direct Connections allow users to connect to their own OpenAI compatible API endpoints.'
-						)}
-					</div>
-				</div>
-
-				<hr class=" border-gray-100/30 dark:border-gray-850/30 my-2" />
 
 				<div class="my-2">
 					<div class="flex justify-between items-center text-sm">

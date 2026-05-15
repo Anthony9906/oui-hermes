@@ -19,8 +19,10 @@
 	export let onClose = () => {};
 	export let onSubmit = (name) => {};
 	export let side = 'top';
+	$: void side;
 	export let align = 'start';
 	export let user = null;
+	$: void user;
 	export let selected = null;
 
 	const MAX_RECENT = 30;

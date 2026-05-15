@@ -15,7 +15,6 @@
 
 	import { createPicker, getAuthToken } from '$lib/utils/google-drive-picker';
 	import { pickAndDownloadFile } from '$lib/utils/onedrive-file-picker';
-	import { KokoroWorker } from '$lib/workers/KokoroWorker';
 
 	const dispatch = createEventDispatcher();
 
@@ -33,7 +32,6 @@
 		showControls,
 		showSettings,
 		selectedTerminalId,
-		TTSWorker,
 		temporaryChatEnabled
 	} from '$lib/stores';
 
@@ -121,6 +119,7 @@
 
 	export let history;
 	export let taskIds = null;
+	$: void taskIds;
 
 	$: isActive =
 		(history.currentId && history.messages[history.currentId]?.done != true) || generating;
@@ -1130,6 +1129,7 @@
 							class=" absolute -top-12 left-0 right-0 flex justify-center z-30 pointer-events-none"
 						>
 							<button
+								aria-label={$i18n.t('Scroll to bottom')}
 								class=" bg-white border border-gray-100 dark:border-none dark:bg-white/20 p-1.5 rounded-full pointer-events-auto"
 								on:click={() => {
 									autoScroll = true;
@@ -1214,9 +1214,10 @@
 					>
 						<button
 							id="generate-message-pair-button"
+							aria-label={$i18n.t('Generate Message Pair')}
 							class="hidden"
 							on:click={() => createMessagePair(prompt)}
-						/>
+						></button>
 
 						<!-- Task list display -->
 						{#if isActive && chatTasks.length > 0}
@@ -1631,7 +1632,7 @@
 									{#if showWebSearchButton || showImageGenerationButton || showCodeInterpreterButton || showToolsButton || (toggleFilters && toggleFilters.length > 0)}
 										<div
 											class="flex self-center w-[1px] h-4 mx-1 bg-gray-200/50 dark:bg-gray-800/50"
-										/>
+										></div>
 
 										<IntegrationsMenu
 											selectedModels={atSelectedModel ? [atSelectedModel.id] : selectedModels}
@@ -1752,8 +1753,8 @@
 														{:else}
 															<Sparkles className="size-4" strokeWidth="1.75" />
 														{/if}
-														<!-- svelte-ignore a11y-click-events-have-key-events -->
-														<!-- svelte-ignore a11y-no-static-element-interactions -->
+														<!-- svelte-ignore a11y_click_events_have_key_events -->
+														<!-- svelte-ignore a11y_no_static_element_interactions -->
 														<div
 															class="hidden group-hover:block"
 															on:click={(e) => {
@@ -1861,6 +1862,7 @@
 										<div class=" flex items-center">
 											<Tooltip content={$i18n.t('Stop')}>
 												<button
+													aria-label={$i18n.t('Stop')}
 													class="bg-white hover:bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-800 transition rounded-full p-1.5"
 													on:click={() => {
 														stopResponse();
@@ -1973,13 +1975,6 @@
 																return;
 															}
 
-															if ($config.audio.stt.engine === 'web') {
-																toast.error(
-																	$i18n.t('Call feature is not supported when using Web STT engine')
-																);
-
-																return;
-															}
 															// check if user has access to getUserMedia
 															try {
 																let stream = await navigator.mediaDevices.getUserMedia({
@@ -1993,19 +1988,6 @@
 																}
 
 																stream = null;
-
-																if ($settings.audio?.tts?.engine === 'browser-kokoro') {
-																	// If the user has not initialized the TTS worker, initialize it
-																	if (!$TTSWorker) {
-																		await TTSWorker.set(
-																			new KokoroWorker({
-																				dtype: $settings.audio?.tts?.engineConfig?.dtype ?? 'fp32'
-																			})
-																		);
-
-																		await $TTSWorker.init();
-																	}
-																}
 
 																showCallOverlay.set(true);
 																showControls.set(true);
@@ -2067,7 +2049,7 @@
 								{@html DOMPurify.sanitize(marked($config?.license_metadata?.input_footer))}
 							</div>
 						{:else}
-							<div class="mb-1" />
+							<div class="mb-1"></div>
 						{/if}
 					</form>
 				</div>

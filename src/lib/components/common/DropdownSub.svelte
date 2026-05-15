@@ -105,7 +105,7 @@
 
 <svelte:window on:scroll|capture={positionContent} on:resize={positionContent} />
 
-<!-- svelte-ignore a11y-no-static-element-interactions -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	bind:this={triggerEl}
 	class="w-full"
@@ -116,7 +116,7 @@
 </div>
 
 {#if open}
-	<!-- svelte-ignore a11y-no-static-element-interactions -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<!-- Outer wrapper: positioned flush with trigger, invisible padding bridges the gap -->
 	<div use:portal bind:this={contentEl} on:mouseleave={handleContentMouseLeave}>
 		<!-- Inner content: visual styles and transition -->

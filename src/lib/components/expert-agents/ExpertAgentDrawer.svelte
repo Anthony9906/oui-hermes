@@ -726,7 +726,7 @@
 					class="expert-skill-source-editor h-full min-h-0 w-full resize-none rounded-xl border border-[#d8deea] bg-[#fbfcff] p-4 font-mono text-[12px] leading-5 text-[#293246] outline-none transition focus:border-[#8b96aa] focus:ring-2 focus:ring-[#8b96aa]/15 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:border-gray-500"
 					bind:value={detailSourceContent}
 					spellcheck="false"
-				/>
+				></textarea>
 			{:else if detailMarkdownContent}
 				<div class="expert-skill-markdown w-full max-w-none text-[13px]">
 					<Markdown

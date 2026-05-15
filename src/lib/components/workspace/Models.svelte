@@ -128,7 +128,7 @@
 		await _models.set(
 			await getModels(
 				localStorage.token,
-				$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
+				null
 			)
 		);
 	};
@@ -185,7 +185,7 @@
 		await _models.set(
 			await getModels(
 				localStorage.token,
-				$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
+				null
 			)
 		);
 	};
@@ -376,7 +376,7 @@
 					await _models.set(
 						await getModels(
 							localStorage.token,
-							$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
+							null
 						)
 					);
 
@@ -729,8 +729,7 @@
 																		_models.set(
 																			await getModels(
 																				localStorage.token,
-																				$config?.features?.enable_direct_connections &&
-																					($settings?.directConnections ?? null)
+																				null
 																			)
 																		);
 																	}}

@@ -364,12 +364,7 @@
 					})
 				);
 
-				models.set(
-					await getModels(
-						localStorage.token,
-						$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-					)
-				);
+				models.set(await getModels(localStorage.token, null));
 			} else {
 				toast.error($i18n.t('Download canceled'));
 			}
@@ -429,12 +424,7 @@
 
 		if (res) {
 			toast.success($i18n.t('Model unloaded successfully'));
-			models.set(
-				await getModels(
-					localStorage.token,
-					$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-				)
-			);
+			models.set(await getModels(localStorage.token, null));
 		}
 	};
 
@@ -465,12 +455,7 @@
 				value = '';
 			}
 
-			models.set(
-				await getModels(
-					localStorage.token,
-					$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-				)
-			);
+			models.set(await getModels(localStorage.token, null));
 		}
 
 		deleteModelTarget = null;
@@ -521,18 +506,14 @@
 		type="button"
 		on:click={toggleOpen}
 	>
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
 			class="flex w-full text-left px-0.5 bg-transparent truncate {triggerClassName} justify-between {($settings?.highContrastMode ??
 			false)
 				? 'dark:placeholder-gray-100 placeholder-gray-800'
 				: 'placeholder-gray-400'}"
 			on:mouseenter={async () => {
-				models.set(
-					await getModels(
-						localStorage.token,
-						$config?.features?.enable_direct_connections && ($settings?.directConnections ?? null)
-					)
-				);
+				models.set(await getModels(localStorage.token, null));
 			}}
 		>
 			{#if selectedModel}
@@ -725,7 +706,7 @@
 								</div>
 							{/if}
 						{:else}
-							<!-- svelte-ignore a11y-no-static-element-interactions -->
+							<!-- svelte-ignore a11y_no_static_element_interactions -->
 							<div
 								class="max-h-64 overflow-y-auto"
 								role="listbox"
@@ -735,7 +716,7 @@
 									listScrollTop = listContainer.scrollTop;
 								}}
 							>
-								<div style="height: {visibleStart * ITEM_HEIGHT}px;" />
+								<div style="height: {visibleStart * ITEM_HEIGHT}px;"></div>
 								{#each filteredItems.slice(visibleStart, visibleEnd) as item, i (item.value)}
 									{@const index = visibleStart + i}
 									<ModelItem
@@ -754,7 +735,7 @@
 										}}
 									/>
 								{/each}
-								<div style="height: {(filteredItems.length - visibleEnd) * ITEM_HEIGHT}px;" />
+								<div style="height: {(filteredItems.length - visibleEnd) * ITEM_HEIGHT}px;"></div>
 							</div>
 						{/if}
 
@@ -845,8 +826,8 @@
 
 					<div class="pb-2.5"></div>
 
-					<div class="hidden w-[42rem]" />
-					<div class="hidden w-[32rem]" />
+					<div class="hidden w-[42rem]"></div>
+					<div class="hidden w-[32rem]"></div>
 				</slot>
 			</div>
 		</div>

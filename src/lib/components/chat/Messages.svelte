@@ -30,6 +30,7 @@
 	export let user = $_user;
 
 	export let prompt;
+	$: void prompt;
 	export let history = {};
 	export let selectedModels;
 	export let atSelectedModel;
@@ -497,9 +498,9 @@
 						{/each}
 					</ul>
 				</section>
-				<div class="pb-18" />
+				<div class="pb-18"></div>
 				{#if bottomPadding}
-					<div class="  pb-6" />
+					<div class="  pb-6"></div>
 				{/if}
 			{/key}
 		</div>

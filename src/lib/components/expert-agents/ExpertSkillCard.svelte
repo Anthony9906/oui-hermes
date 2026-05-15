@@ -119,7 +119,7 @@
 				{skill.author}
 			</div>
 		{:else}
-			<div aria-hidden="true" />
+			<div aria-hidden="true"></div>
 		{/if}
 
 		<button
