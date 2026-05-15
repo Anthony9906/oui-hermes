@@ -189,6 +189,14 @@ Status: implemented and locally verified on 2026-05-15
 - Chat requests no longer merge or send `$settings.params`, persisted chat `params`, or stop tokens. Persisted chats/new chats also stop writing `system` and `params` fields from the chat UI path.
 - Verification: `npm run build` passed. Targeted static searches for chat-side `AdvancedParams`, `Allow Chat Controls`, `Advanced Parameters`, `System Prompt`, `bind:params`, `$settings?.params`, and chat-controls permission gates returned no active hits under the chat/admin permission surfaces.
 
+## Admin Extension Settings Visibility
+
+Status: implemented and locally verified on 2026-05-15
+
+- Goal: hide the admin settings `Integrations` tab, shown as `扩展功能` in zh-CN, without removing backend APIs or broad extension-related source files.
+- Implementation: `src/lib/components/admin/Settings.svelte` no longer imports `Settings/Integrations.svelte`, no longer includes `integrations` in the recognized/enabled settings tabs, removes the tab/search keywords/icon branch, and removes the content render branch. Direct navigation to `/admin/settings/integrations` now falls back to the General settings tab.
+- Verification: targeted grep for `integrations|Integrations` in `src/lib/components/admin/Settings.svelte` returned no matches; `git diff --check` passed; `npm run build` passed.
+
 ## Chat vs Task Model Scope
 
 Status: implemented and locally verified on 2026-05-15
