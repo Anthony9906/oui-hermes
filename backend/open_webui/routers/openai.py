@@ -32,6 +32,10 @@ from open_webui.utils.access_control import has_connection_access, check_model_a
 from open_webui.config import (
     CACHE_DIR,
 )
+from open_webui.utils.model_usage import (
+    model_usage_from_connection_config,
+    normalize_connection_model_usage,
+)
 from open_webui.env import (
     MODELS_CACHE_TTL,
     AIOHTTP_CLIENT_SESSION_SSL,
@@ -248,11 +252,19 @@ router = APIRouter()
 
 @router.get('/config')
 async def get_config(request: Request, user=Depends(get_admin_user)):
+    raw_api_configs = request.app.state.config.OPENAI_API_CONFIGS
+    api_configs = {}
+    for idx, url in enumerate(request.app.state.config.OPENAI_API_BASE_URLS):
+        api_configs[str(idx)] = normalize_connection_model_usage(
+            raw_api_configs.get(str(idx), raw_api_configs.get(url, {})),
+            url,
+        )
+
     return {
         'ENABLE_OPENAI_API': request.app.state.config.ENABLE_OPENAI_API,
         'OPENAI_API_BASE_URLS': request.app.state.config.OPENAI_API_BASE_URLS,
         'OPENAI_API_KEYS': request.app.state.config.OPENAI_API_KEYS,
-        'OPENAI_API_CONFIGS': request.app.state.config.OPENAI_API_CONFIGS,
+        'OPENAI_API_CONFIGS': api_configs,
     }
 
 
@@ -280,7 +292,15 @@ async def update_config(request: Request, form_data: OpenAIConfigForm, user=Depe
                 len(request.app.state.config.OPENAI_API_BASE_URLS) - len(request.app.state.config.OPENAI_API_KEYS)
             )
 
-    request.app.state.config.OPENAI_API_CONFIGS = form_data.OPENAI_API_CONFIGS
+    request.app.state.config.OPENAI_API_CONFIGS = {
+        str(key): normalize_connection_model_usage(
+            value,
+            request.app.state.config.OPENAI_API_BASE_URLS[int(key)]
+            if str(key).isdigit() and int(key) < len(request.app.state.config.OPENAI_API_BASE_URLS)
+            else key,
+        )
+        for key, value in form_data.OPENAI_API_CONFIGS.items()
+    }
 
     # Remove the API configs that are not in the API URLS
     keys = list(map(str, range(len(request.app.state.config.OPENAI_API_BASE_URLS))))
@@ -402,6 +422,7 @@ async def get_all_models_responses(request: Request, user: UserModel) -> list:
                 str(idx),
                 api_configs.get(url, {}),  # Legacy support
             )
+            api_config = normalize_connection_model_usage(api_config, url)
 
             enable = api_config.get('enable', True)
             model_ids = api_config.get('model_ids', [])
@@ -437,8 +458,10 @@ async def get_all_models_responses(request: Request, user: UserModel) -> list:
                 str(idx),
                 api_configs.get(url, {}),  # Legacy support
             )
+            api_config = normalize_connection_model_usage(api_config, url)
 
             connection_type = api_config.get('connection_type', 'external')
+            model_usage = model_usage_from_connection_config(api_config, url)
             prefix_id = api_config.get('prefix_id', None)
             tags = api_config.get('tags', [])
 
@@ -460,6 +483,7 @@ async def get_all_models_responses(request: Request, user: UserModel) -> list:
 
                 if connection_type:
                     model['connection_type'] = connection_type
+                model['model_usage'] = model_usage
 
     log.debug(f'get_all_models:responses() {responses}')
     return responses
@@ -550,6 +574,7 @@ async def get_all_models(request: Request, user: UserModel) -> dict[str, list]:
                             'owned_by': 'openai',
                             'openai': model,
                             'connection_type': model.get('connection_type', 'external'),
+                            'model_usage': model.get('model_usage', {'chat': False, 'task': True}),
                             'urlIdx': idx,
                         }
 

@@ -40,6 +40,7 @@ from open_webui.models.functions import Functions
 from open_webui.models.models import Models
 
 from open_webui.utils.models import get_all_models, check_model_access
+from open_webui.utils.model_usage import is_chat_model
 from open_webui.utils.payload import convert_payload_openai_to_ollama
 from open_webui.utils.response import (
     convert_response_ollama_to_openai,
@@ -224,7 +225,9 @@ async def generate_chat_completion(
                 model_ids = [
                     available_model['id']
                     for available_model in list(request.app.state.MODELS.values())
-                    if available_model.get('owned_by') != 'arena' and available_model['id'] not in model_ids
+                    if available_model.get('owned_by') != 'arena'
+                    and available_model['id'] not in model_ids
+                    and is_chat_model(available_model)
                 ]
 
             if isinstance(model_ids, list) and model_ids:
@@ -233,7 +236,7 @@ async def generate_chat_completion(
                 model_ids = [
                     available_model['id']
                     for available_model in list(request.app.state.MODELS.values())
-                    if available_model.get('owned_by') != 'arena'
+                    if available_model.get('owned_by') != 'arena' and is_chat_model(available_model)
                 ]
                 selected_model_id = random.choice(model_ids)
 

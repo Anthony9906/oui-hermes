@@ -10,11 +10,15 @@ export const getModels = async (
 	token: string = '',
 	connections: object | null = null,
 	base: boolean = false,
-	refresh: boolean = false
+	refresh: boolean = false,
+	scope: 'chat' | 'task' | 'task-only' | 'all' = base ? 'all' : 'chat'
 ) => {
 	const searchParams = new URLSearchParams();
 	if (refresh) {
 		searchParams.append('refresh', 'true');
+	}
+	if (scope) {
+		searchParams.append('scope', scope);
 	}
 
 	let error = null;
@@ -61,6 +65,10 @@ export const getModels = async (
 					const apiConfig = OPENAI_API_CONFIGS[idx.toString()] ?? {};
 
 					const enable = apiConfig?.enable ?? true;
+					const modelUsage = {
+						chat: apiConfig?.enable_chat ?? apiConfig?.model_usage?.chat ?? false,
+						task: apiConfig?.enable_task ?? apiConfig?.model_usage?.task ?? true
+					};
 					const modelIds = apiConfig?.model_ids ?? [];
 
 					if (enable) {
@@ -72,6 +80,8 @@ export const getModels = async (
 									name: modelId,
 									owned_by: 'openai',
 									openai: { id: modelId },
+									connection_type: apiConfig?.connection_type ?? 'external',
+									model_usage: modelUsage,
 									urlIdx: idx
 								}))
 							};
@@ -117,9 +127,19 @@ export const getModels = async (
 			for (const idx in responses) {
 				const response = responses[idx];
 				const apiConfig = OPENAI_API_CONFIGS[idx.toString()] ?? {};
+				const modelUsage = {
+					chat: apiConfig?.enable_chat ?? apiConfig?.model_usage?.chat ?? false,
+					task: apiConfig?.enable_task ?? apiConfig?.model_usage?.task ?? true
+				};
 
 				let models = Array.isArray(response) ? response : (response?.data ?? []);
-				models = models.map((model) => ({ ...model, openai: { id: model.id }, urlIdx: idx }));
+				models = models.map((model) => ({
+					...model,
+					openai: { id: model.id },
+					connection_type: apiConfig?.connection_type ?? model?.connection_type ?? 'external',
+					model_usage: model?.model_usage ?? modelUsage,
+					urlIdx: idx
+				}));
 
 				const prefixId = apiConfig.prefix_id;
 				if (prefixId) {
@@ -146,6 +166,19 @@ export const getModels = async (
 				direct: true
 			}))
 		);
+
+		models = models.filter((model) => {
+			if (scope === 'all') {
+				return true;
+			}
+			if (scope === 'task') {
+				return model?.model_usage?.task ?? true;
+			}
+			if (scope === 'task-only') {
+				return (model?.model_usage?.task ?? true) && !(model?.model_usage?.chat ?? true);
+			}
+			return model?.model_usage?.chat ?? true;
+		});
 
 		// Remove duplicates
 		const modelsMap = {};

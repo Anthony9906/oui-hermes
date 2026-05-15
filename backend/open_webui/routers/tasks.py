@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from typing import Optional
 import logging
 import re
+from types import SimpleNamespace
 
 from open_webui.utils.chat import generate_chat_completion
 from open_webui.utils.task import (
@@ -77,21 +78,21 @@ def get_task_request_metadata(request: Request, form_data: dict, task: TASKS) ->
 
 
 async def generate_task_chat_completion(request: Request, payload: dict, user, models):
-    had_metadata = hasattr(request.state, 'metadata')
-    previous_metadata = request.state.metadata if had_metadata else None
-    request.state.metadata = payload.get('metadata', {})
+    state_data = dict(getattr(request.state, '_state', {}) or {})
+    state_data['metadata'] = payload.get('metadata', {})
+    task_request = SimpleNamespace(
+        app=request.app,
+        state=SimpleNamespace(**state_data),
+        cookies=getattr(request, 'cookies', {}),
+        headers=getattr(request, 'headers', {}),
+        url=getattr(request, 'url', None),
+        method=getattr(request, 'method', None),
+        client=getattr(request, 'client', None),
+        scope=getattr(request, 'scope', {}),
+    )
 
-    try:
-        payload = await process_pipeline_inlet_filter(request, payload, user, models)
-        return await generate_chat_completion(request, form_data=payload, user=user)
-    finally:
-        if had_metadata:
-            request.state.metadata = previous_metadata
-        else:
-            try:
-                delattr(request.state, 'metadata')
-            except AttributeError:
-                pass
+    payload = await process_pipeline_inlet_filter(task_request, payload, user, models)
+    return await generate_chat_completion(task_request, form_data=payload, user=user)
 
 
 ##################################

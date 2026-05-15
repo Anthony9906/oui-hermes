@@ -30,11 +30,6 @@ from functools import update_wrapper, partial
 from fastapi import Request
 from pydantic import BaseModel, Field, create_model
 
-from langchain_core.utils.function_calling import (
-    convert_to_openai_function as convert_pydantic_model_to_openai_function_spec,
-)
-
-
 from open_webui.utils.misc import is_string_allowed
 from open_webui.models.tools import Tools
 from open_webui.models.users import UserModel
@@ -696,6 +691,18 @@ def convert_function_to_pydantic_model(func: Callable) -> type[BaseModel]:
     model.__doc__ = function_description
 
     return model
+
+
+def convert_pydantic_model_to_openai_function_spec(model: type[BaseModel]) -> dict:
+    schema = model.model_json_schema()
+    schema.pop('title', None)
+    schema.pop('description', None)
+
+    return {
+        'name': model.__name__,
+        'description': inspect.getdoc(model) or '',
+        'parameters': schema,
+    }
 
 
 def clean_properties(schema: dict):

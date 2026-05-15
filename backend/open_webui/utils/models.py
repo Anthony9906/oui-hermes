@@ -179,6 +179,7 @@ async def get_all_models(request, refresh: bool = False, user: UserModel = None)
 
             owned_by = 'openai'
             connection_type = None
+            model_usage = {'chat': True, 'task': True}
             pipe = None
 
             base_model = base_model_lookup.get(custom_model.base_model_id)
@@ -189,6 +190,7 @@ async def get_all_models(request, refresh: bool = False, user: UserModel = None)
                 if 'pipe' in base_model:
                     pipe = base_model['pipe']
                 connection_type = base_model.get('connection_type', None)
+                model_usage = base_model.get('model_usage', model_usage)
 
             model = {
                 'id': f'{custom_model.id}',
@@ -197,6 +199,7 @@ async def get_all_models(request, refresh: bool = False, user: UserModel = None)
                 'created': custom_model.created_at,
                 'owned_by': owned_by,
                 'connection_type': connection_type,
+                'model_usage': model_usage,
                 'preset': True,
                 **({'pipe': pipe} if pipe is not None else {}),
             }

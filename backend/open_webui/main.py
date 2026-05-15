@@ -98,6 +98,7 @@ from open_webui.routers import (
     terminals,
     automations,
 )
+from open_webui.routers.tasks import generate_title as generate_task_title
 
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -519,6 +520,7 @@ from open_webui.utils.models import (
     check_model_access,
     get_filtered_models,
 )
+from open_webui.utils.model_usage import filter_models_by_scope, is_chat_model
 from open_webui.utils.chat import (
     generate_chat_completion as chat_completion_handler,
     chat_completed as chat_completed_handler,
@@ -1380,7 +1382,12 @@ if audit_level != AuditLevel.NONE:
 
 @app.get('/api/models')
 @app.get('/api/v1/models')  # Experimental: Compatibility with OpenAI API
-async def get_models(request: Request, refresh: bool = False, user=Depends(get_verified_user)):
+async def get_models(
+    request: Request,
+    refresh: bool = False,
+    scope: str = 'chat',
+    user=Depends(get_verified_user),
+):
     all_models = await get_all_models(request, refresh=refresh, user=user)
 
     models = []
@@ -1417,6 +1424,7 @@ async def get_models(request: Request, refresh: bool = False, user=Depends(get_v
             )
         )
 
+    models = filter_models_by_scope(models, scope)
     models = await get_filtered_models(models, user)
 
     log.debug(
@@ -1426,8 +1434,9 @@ async def get_models(request: Request, refresh: bool = False, user=Depends(get_v
 
 
 @app.get('/api/models/base')
-async def get_base_models(request: Request, user=Depends(get_admin_user)):
+async def get_base_models(request: Request, scope: str = 'all', user=Depends(get_admin_user)):
     models = await get_all_base_models(request, user=user)
+    models = filter_models_by_scope(models, scope)
     return {'data': models}
 
 
@@ -1477,6 +1486,66 @@ def get_initial_chat_title(user_message: Optional[dict], max_length: int = 100) 
     return title[:max_length].rstrip() + '...' if len(title) > max_length else title
 
 
+def get_generated_title_from_response(res: dict, fallback_title: str) -> str:
+    if not res or not isinstance(res, dict):
+        return fallback_title
+
+    if len(res.get('choices', [])) != 1:
+        return fallback_title
+
+    response_message = res.get('choices', [])[0].get('message', {})
+    title_string = response_message.get('content') or response_message.get('reasoning_content') or fallback_title
+    title_string = title_string[title_string.find('{') : title_string.rfind('}') + 1]
+
+    try:
+        return json.loads(title_string).get('title') or fallback_title
+    except Exception:
+        return fallback_title
+
+
+async def generate_initial_chat_title(request: Request, user, metadata: dict, model_id: str):
+    chat_id = metadata.get('chat_id')
+    if not chat_id or chat_id.startswith('local:'):
+        return
+
+    user_message = metadata.get('user_message') or {}
+    title = get_initial_chat_title(user_message) or 'New Chat'
+
+    try:
+        res = await generate_task_title(
+            request,
+            {
+                'model': model_id,
+                'messages': [
+                    {
+                        'role': 'user',
+                        'content': user_message.get('content', ''),
+                    }
+                ],
+                'chat_id': chat_id,
+            },
+            user,
+        )
+        title = get_generated_title_from_response(res, title)
+    except Exception as e:
+        log.debug(f'Error generating initial chat title: {e}')
+
+    if title:
+        await Chats.update_chat_title_by_id(chat_id, title)
+
+        try:
+            event_emitter = await get_event_emitter(metadata, update_db=False)
+            if event_emitter:
+                await event_emitter(
+                    {
+                        'type': 'chat:title',
+                        'data': title,
+                    }
+                )
+        except Exception as e:
+            log.debug(f'Error emitting initial chat title: {e}')
+
+
 @app.post('/api/chat/completions')
 @app.post('/api/v1/chat/completions')  # Experimental: Compatibility with OpenAI API
 async def chat_completion(
@@ -1500,6 +1569,12 @@ async def chat_completion(
 
             model = request.app.state.MODELS[model_id]
             model_info = await Models.get_model_by_id(model_id)
+
+            if not is_chat_model(model):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='This model is restricted to background tasks and cannot be used for chat.',
+                )
 
             # Check if user has access to the model
             if not BYPASS_MODEL_ACCESS_CONTROL and (user.role != 'admin' or not BYPASS_ADMIN_ACCESS_CONTROL):
@@ -1567,6 +1642,19 @@ async def chat_completion(
             message_ids = {model_id: form_data.pop('id', None)}
         else:
             form_data.pop('id', None)
+
+        for target_model_id in message_ids.keys():
+            target_model = request.app.state.MODELS.get(target_model_id)
+            if not target_model:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=ERROR_MESSAGES.MODEL_NOT_FOUND(),
+                )
+            if not is_chat_model(target_model):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail='This model is restricted to background tasks and cannot be used for chat.',
+                )
 
         user_message = form_data.pop('user_message', None) or form_data.pop('parent_message', None)
         metadata = {
@@ -1653,6 +1741,42 @@ async def chat_completion(
                             folder_id=metadata.get('folder_id'),
                         ),
                     )
+
+                    if tasks and (
+                        TASKS.TITLE_GENERATION in tasks or TASKS.TITLE_GENERATION.value in tasks
+                    ):
+                        title_task_key = (
+                            TASKS.TITLE_GENERATION
+                            if TASKS.TITLE_GENERATION in tasks
+                            else TASKS.TITLE_GENERATION.value
+                        )
+
+                        if tasks.get(title_task_key):
+                            try:
+                                request.state.metadata = metadata
+                                title_metadata = {
+                                    **metadata,
+                                    'message_id': all_assistant_ids[0] if all_assistant_ids else user_message_id,
+                                }
+                                title_model_id = next(iter(message_ids.keys()), model_id)
+                                await create_task(
+                                    request.app.state.redis,
+                                    generate_initial_chat_title(
+                                        request,
+                                        user,
+                                        title_metadata,
+                                        title_model_id,
+                                    ),
+                                    id=chat_id,
+                                )
+                            except Exception as e:
+                                log.debug(f'Error scheduling initial chat title generation: {e}')
+
+                        tasks = {
+                            k: v
+                            for k, v in tasks.items()
+                            if k not in (TASKS.TITLE_GENERATION, TASKS.TITLE_GENERATION.value)
+                        } or None
 
                     # Insert chat files from user message if any
                     user_message_files = user_message.get('files', [])

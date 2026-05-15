@@ -48,7 +48,7 @@
 			taskConfig = await getTaskConfig(localStorage.token);
 
 			workspaceModels = await getBaseModels(localStorage.token);
-			baseModels = await getModels(localStorage.token, null, false);
+			baseModels = await getModels(localStorage.token, null, false, false, 'task-only');
 
 			models = baseModels.map((m) => {
 				const workspaceModel = workspaceModels.find((wm) => wm.id === m.id);
@@ -80,6 +80,16 @@
 	onMount(async () => {
 		await init();
 	});
+
+	const getTaskModelSuffix = (model) => {
+		if (model?.model_usage?.chat === false) {
+			return `(${$i18n.t('Task only')})`;
+		}
+		if (model?.connection_type === 'local') {
+			return `(${$i18n.t('Local')})`;
+		}
+		return '';
+	};
 </script>
 
 {#if models !== null && taskConfig}
@@ -158,7 +168,7 @@
 							{#each models as model}
 								<option value={model.id} class="bg-gray-100 dark:bg-gray-700">
 									{model.name}
-									{model?.connection_type === 'local' ? `(${$i18n.t('Local')})` : ''}
+									{getTaskModelSuffix(model)}
 								</option>
 							{/each}
 						</select>
@@ -201,7 +211,7 @@
 							{#each models as model}
 								<option value={model.id} class="bg-gray-100 dark:bg-gray-700">
 									{model.name}
-									{model?.connection_type === 'local' ? `(${$i18n.t('Local')})` : ''}
+									{getTaskModelSuffix(model)}
 								</option>
 							{/each}
 						</select>

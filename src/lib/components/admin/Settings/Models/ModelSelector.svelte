@@ -11,6 +11,16 @@
 	export let modelIds = [];
 
 	let selectedModelId = '';
+
+	const getUsageLabel = (model) => {
+		if (model?.model_usage?.chat === false && (model?.model_usage?.task ?? true)) {
+			return 'Task only';
+		}
+		if ((model?.model_usage?.chat ?? true) && model?.model_usage?.task === false) {
+			return 'Chat only';
+		}
+		return '';
+	};
 </script>
 
 <div>
@@ -55,7 +65,9 @@
 				<option value="">{$i18n.t('Select a model')}</option>
 				{#each models as model}
 					{#if !modelIds.includes(model.id)}
-						<option value={model.id} class="bg-gray-50 dark:bg-gray-700">{model.name}</option>
+						<option value={model.id} class="bg-gray-50 dark:bg-gray-700">
+							{model.name}{getUsageLabel(model) ? ` (${$i18n.t(getUsageLabel(model))})` : ''}
+						</option>
 					{/if}
 				{/each}
 			</select>
@@ -69,6 +81,11 @@
 					<div class=" flex gap-2 w-full justify-between items-center">
 						<div class=" text-sm flex-1 py-1 rounded-lg">
 							{models.find((model) => model.id === modelId)?.name}
+							{#if getUsageLabel(models.find((model) => model.id === modelId))}
+								<span class="text-xs text-gray-500">
+									({getUsageLabel(models.find((model) => model.id === modelId))})
+								</span>
+							{/if}
 						</div>
 						<div class="shrink-0">
 							<button

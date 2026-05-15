@@ -83,6 +83,12 @@
 
 		const modelOrderList = config.MODEL_ORDER_LIST || [];
 		const allModelIds = $models.map((model) => model.id);
+		const chatModelIds = new Set(
+			$models.filter((model) => model?.model_usage?.chat ?? true).map((model) => model.id)
+		);
+
+		defaultModelIds = defaultModelIds.filter((id) => chatModelIds.has(id));
+		defaultPinnedModelIds = defaultPinnedModelIds.filter((id) => chatModelIds.has(id));
 
 		// Create a Set for quick lookup of ordered IDs
 		const orderedSet = new Set(modelOrderList);

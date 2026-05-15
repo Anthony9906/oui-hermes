@@ -76,6 +76,16 @@
 		);
 	};
 
+	const getModelUsageLabel = (model) => {
+		if (model?.model_usage?.chat === false && (model?.model_usage?.task ?? true)) {
+			return 'Task only';
+		}
+		if ((model?.model_usage?.chat ?? true) && model?.model_usage?.task === false) {
+			return 'Chat only';
+		}
+		return 'Chat + Task';
+	};
+
 	$: if (models) {
 		filteredModels = models
 			.filter((m) => searchValue === '' || m.name.toLowerCase().includes(searchValue.toLowerCase()))
@@ -609,6 +619,8 @@
 									>
 										<div class="font-medium line-clamp-1 flex items-center gap-2">
 											{model.name}
+
+											<Badge type="muted" content={$i18n.t(getModelUsageLabel(model))} />
 
 											<Badge
 												type={(model?.access_grants ?? []).some(

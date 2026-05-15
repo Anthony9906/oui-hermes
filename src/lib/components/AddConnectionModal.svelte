@@ -42,6 +42,8 @@
 
 	let prefixId = '';
 	let enable = true;
+	let enableChat = false;
+	let enableTask = true;
 	let apiVersion = '';
 	let apiType = ''; // '' = chat completions (default), 'responses' = Responses API
 
@@ -184,6 +186,12 @@
 				prefix_id: prefixId,
 				model_ids: modelIds,
 				connection_type: connectionType,
+				enable_chat: enableChat,
+				enable_task: enableTask,
+				model_usage: {
+					chat: enableChat,
+					task: enableTask
+				},
 				auth_type,
 				headers: headers ? JSON.parse(headers) : undefined,
 				...(!ollama && azure ? { azure: true, api_version: apiVersion } : {}),
@@ -200,6 +208,8 @@
 		key = '';
 		auth_type = 'bearer';
 		prefixId = '';
+		enableChat = false;
+		enableTask = true;
 		tags = [];
 		modelIds = [];
 	};
@@ -215,6 +225,8 @@
 				: '';
 
 			enable = connection.config?.enable ?? true;
+			enableChat = connection.config?.enable_chat ?? connection.config?.model_usage?.chat ?? false;
+			enableTask = connection.config?.enable_task ?? connection.config?.model_usage?.task ?? true;
 			tags = connection.config?.tags ?? [];
 			prefixId = connection.config?.prefix_id ?? '';
 			modelIds = connection.config?.model_ids ?? [];
@@ -290,6 +302,30 @@
 											{/if}
 										</button>
 									</div>
+								</div>
+							</div>
+						{/if}
+
+						{#if !ollama && !direct}
+							<div class="flex flex-col gap-2 mt-2">
+								<div class="flex items-center justify-between gap-3">
+									<div>
+										<div class="text-xs text-gray-500">{$i18n.t('Allow in Chat')}</div>
+										<div class="text-[0.7rem] text-gray-400">
+											{$i18n.t('Show models from this connection in the chat model selector')}
+										</div>
+									</div>
+									<Switch bind:state={enableChat} />
+								</div>
+
+								<div class="flex items-center justify-between gap-3">
+									<div>
+										<div class="text-xs text-gray-500">{$i18n.t('Allow for Tasks')}</div>
+										<div class="text-[0.7rem] text-gray-400">
+											{$i18n.t('Use models from this connection for title, tags, and follow-ups')}
+										</div>
+									</div>
+									<Switch bind:state={enableTask} />
 								</div>
 							</div>
 						{/if}

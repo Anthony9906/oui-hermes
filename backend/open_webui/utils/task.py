@@ -7,6 +7,7 @@ import uuid
 
 
 from open_webui.utils.misc import get_last_user_message, get_messages_content
+from open_webui.utils.model_usage import is_task_model
 
 from open_webui.config import DEFAULT_RAG_TEMPLATE
 
@@ -20,10 +21,10 @@ def get_task_model_id(default_model_id: str, task_model: str, task_model_externa
     task_model_id = default_model_id
     # Check if the user has a custom task model and use that model
     if models.get(task_model_id, {}).get('connection_type') == 'local':
-        if task_model and task_model in models:
+        if task_model and task_model in models and is_task_model(models[task_model]):
             task_model_id = task_model
     else:
-        if task_model_external and task_model_external in models:
+        if task_model_external and task_model_external in models and is_task_model(models[task_model_external]):
             task_model_id = task_model_external
 
     return task_model_id
