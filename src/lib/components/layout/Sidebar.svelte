@@ -4,6 +4,7 @@
 	import Sortable from 'sortablejs';
 
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import {
 		user,
 		chats,
@@ -28,8 +29,7 @@
 		models,
 		selectedFolder,
 		sidebarWidth,
-		activeChatIds,
-		showControls
+		activeChatIds
 	} from '$lib/stores';
 	import { onMount, getContext, tick, onDestroy } from 'svelte';
 
@@ -74,7 +74,7 @@
 	import Code from '../icons/Code.svelte';
 	import { slide } from 'svelte/transition';
 	import HotkeyHint from '../common/HotkeyHint.svelte';
-	import { toggleExpertAgentDrawer } from '$lib/stores/expertAgents';
+	import { showExpertAgentDrawer, toggleExpertAgentDrawer } from '$lib/stores/expertAgents';
 
 	const BREAKPOINT = 768;
 	const DEFAULT_PINNED_ITEMS = ['automations'];
@@ -106,6 +106,7 @@
 	let newFolderId = null;
 
 	$: pinnedItems = $settings?.pinnedMenuItems ?? DEFAULT_PINNED_ITEMS;
+	$: collapsedNewChatSelected = $page.url.pathname === '/' && !$showExpertAgentDrawer;
 
 	const isMenuItemVisible = (id) => {
 		switch (id) {
@@ -666,7 +667,6 @@
 		event.stopImmediatePropagation();
 		event.preventDefault();
 
-		showControls.set(true);
 		toggleExpertAgentDrawer();
 
 		if ($mobile) {
@@ -781,7 +781,7 @@
 
 {#if !$mobile && !$showSidebar}
 	<div
-		class=" pt-[7px] pb-2 px-2 flex flex-col justify-between text-black dark:text-white hover:bg-gray-50/30 dark:hover:bg-gray-950/30 h-full z-10 transition-all border-e-[0.5px] border-gray-50 dark:border-gray-850/30"
+		class="pt-6 pb-4 px-3 flex flex-col justify-between text-[#061b49] dark:text-white bg-white/92 dark:bg-gray-950/30 h-full z-10 transition-all border-e border-[#d9e4f2] dark:border-gray-850/30"
 		id="sidebar"
 	>
 		<button
@@ -790,35 +790,31 @@
 				showSidebar.set(!$showSidebar);
 			}}
 		>
-			<div class="pb-1.5">
+			<div class="pb-8">
 				<Tooltip
 					content={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')}
 					placement="right"
 				>
 					<button
-						class="flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group {isWindows
+						class="flex rounded-2xl hover:bg-[#edf5ff] dark:hover:bg-gray-850 transition group {isWindows
 							? 'cursor-pointer'
 							: 'cursor-[e-resize]'}"
 						aria-label={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')}
 					>
-						<div class=" self-center flex items-center justify-center size-9">
-							<img
-								src="{WEBUI_BASE_URL}/static/favicon.png?ts=1"
-								class="sidebar-new-chat-icon size-6 rounded-full group-hover:hidden"
-								alt=""
-							/>
-
-							<Sidebar className="size-5 hidden group-hover:flex" />
+						<div class=" self-center flex items-center justify-center size-11">
+							<Sidebar className="size-5" />
 						</div>
 					</button>
 				</Tooltip>
 			</div>
 
-			<div class="-mt-[0.5px]">
+			<div class="-mt-[0.5px] flex flex-col gap-4">
 				<div class="">
 					<Tooltip content={$i18n.t('New Chat')} placement="right">
 						<a
-							class=" cursor-pointer flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
+							class=" cursor-pointer flex rounded-2xl transition group {collapsedNewChatSelected
+								? 'bg-[#eaf4ff] text-[#001f5b] shadow-[0_10px_24px_rgba(0,31,91,0.08)]'
+								: 'text-[#2c3d63] hover:bg-[#f1f7ff] dark:hover:bg-gray-850'}"
 							href="/"
 							draggable="false"
 							on:click={async (e) => {
@@ -830,7 +826,7 @@
 							}}
 							aria-label={$i18n.t('New Chat')}
 						>
-							<div class=" self-center flex items-center justify-center size-9">
+							<div class=" self-center flex items-center justify-center size-11">
 								<PencilSquare className="size-4.5" />
 							</div>
 						</a>
@@ -840,7 +836,7 @@
 				<div>
 					<Tooltip content={$i18n.t('Search')} placement="right">
 						<button
-							class=" cursor-pointer flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
+							class=" cursor-pointer flex rounded-2xl text-[#2c3d63] hover:bg-[#f1f7ff] dark:hover:bg-gray-850 transition group"
 							on:click={(e) => {
 								e.stopImmediatePropagation();
 								e.preventDefault();
@@ -850,7 +846,7 @@
 							draggable="false"
 							aria-label={$i18n.t('Search')}
 						>
-							<div class=" self-center flex items-center justify-center size-9">
+							<div class=" self-center flex items-center justify-center size-11">
 								<Search className="size-4.5" />
 							</div>
 						</button>
@@ -860,12 +856,14 @@
 				<div>
 					<Tooltip content="Expert Agent" placement="right">
 						<button
-							class=" cursor-pointer flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
+							class=" cursor-pointer flex rounded-2xl transition group {$showExpertAgentDrawer
+								? 'bg-[#eaf4ff] text-[#001f5b] shadow-[0_10px_24px_rgba(0,31,91,0.08)]'
+								: 'text-[#2c3d63] hover:bg-[#f1f7ff] dark:hover:bg-gray-850'}"
 							on:click={expertAgentClickHandler}
 							draggable="false"
 							aria-label="Expert Agent"
 						>
-							<div class=" self-center flex items-center justify-center size-9">
+							<div class=" self-center flex items-center justify-center size-11">
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
 									fill="none"
@@ -891,7 +889,7 @@
 						<div class="">
 							<Tooltip content={$i18n.t(meta.label)} placement="right">
 								<a
-									class=" cursor-pointer flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
+									class=" cursor-pointer flex rounded-2xl text-[#2c3d63] hover:bg-[#f1f7ff] dark:hover:bg-gray-850 transition group"
 									href={meta.href}
 									on:click={async (e) => {
 										e.stopImmediatePropagation();
@@ -902,7 +900,7 @@
 									draggable="false"
 									aria-label={$i18n.t(meta.label)}
 								>
-									<div class=" self-center flex items-center justify-center size-9">
+									<div class=" self-center flex items-center justify-center size-11">
 										{#if itemId === 'notes'}
 											<Note className="size-4.5" />
 										{:else if itemId === 'workspace'}

@@ -1030,6 +1030,14 @@ S3_USE_ACCELERATE_ENDPOINT = os.environ.get('S3_USE_ACCELERATE_ENDPOINT', 'false
 S3_ADDRESSING_STYLE = os.environ.get('S3_ADDRESSING_STYLE') or ('path' if USE_R2_STORAGE_ENV else None)
 S3_ENABLE_TAGGING = os.getenv('S3_ENABLE_TAGGING', 'false').lower() == 'true'
 
+LOCAL_ARTIFACT_BASE_URL = os.environ.get('LOCAL_ARTIFACT_BASE_URL') or os.environ.get(
+    'ARTIFACT_SERVICE_BASE_URL', 'http://localhost:8787'
+)
+LOCAL_ARTIFACT_BUCKET_DIR = os.environ.get(
+    'LOCAL_ARTIFACT_BUCKET_DIR',
+    os.path.expanduser('~/Documents/Hermes/local-artifact-preview-service/bucket'),
+)
+
 GCS_BUCKET_NAME = os.environ.get('GCS_BUCKET_NAME', None)
 GOOGLE_APPLICATION_CREDENTIALS_JSON = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON', None)
 

@@ -3,6 +3,7 @@ import shutil
 import json
 import logging
 import re
+from datetime import datetime
 from abc import ABC, abstractmethod
 from typing import BinaryIO, Tuple, Dict
 
@@ -20,6 +21,8 @@ from open_webui.config import (
     S3_USE_ACCELERATE_ENDPOINT,
     S3_ADDRESSING_STYLE,
     S3_ENABLE_TAGGING,
+    LOCAL_ARTIFACT_BASE_URL,
+    LOCAL_ARTIFACT_BUCKET_DIR,
     GCS_BUCKET_NAME,
     GOOGLE_APPLICATION_CREDENTIALS_JSON,
     AZURE_STORAGE_ENDPOINT,
@@ -213,6 +216,62 @@ class S3StorageProvider(StorageProvider):
         return f'{self.public_base_url}/{s3_key}'
 
 
+class LocalArtifactStorageProvider(StorageProvider):
+    """Stores Open WebUI attachments in the local artifact service bucket."""
+
+    scheme = 'local-artifact://'
+
+    def __init__(self):
+        self.bucket_dir = os.path.abspath(os.path.expanduser(LOCAL_ARTIFACT_BUCKET_DIR))
+        self.public_base_url = LOCAL_ARTIFACT_BASE_URL.rstrip('/')
+
+    def upload_file(self, file: BinaryIO, filename: str, tags: Dict[str, str]) -> Tuple[bytes, str]:
+        contents, local_file_path = LocalStorageProvider.upload_file(file, filename, tags)
+        date_prefix = datetime.now().strftime('%Y/%m/%d')
+        relative_path = os.path.join(date_prefix, filename)
+        bucket_file_path = os.path.join(self.bucket_dir, relative_path)
+        os.makedirs(os.path.dirname(bucket_file_path), exist_ok=True)
+        shutil.copyfile(local_file_path, bucket_file_path)
+        return contents, f'{self.scheme}{relative_path.replace(os.sep, "/")}'
+
+    def get_file(self, file_path: str) -> str:
+        relative_path = self._extract_relative_path(file_path)
+        bucket_file_path = os.path.abspath(os.path.join(self.bucket_dir, relative_path))
+        if os.path.commonpath([self.bucket_dir, bucket_file_path]) != self.bucket_dir:
+            raise RuntimeError(f'Invalid local artifact file path: {file_path}')
+        return bucket_file_path
+
+    def delete_file(self, file_path: str) -> None:
+        try:
+            bucket_file_path = self.get_file(file_path)
+            if os.path.isfile(bucket_file_path):
+                os.remove(bucket_file_path)
+        finally:
+            LocalStorageProvider.delete_file(file_path)
+
+    def delete_all_files(self) -> None:
+        if os.path.exists(self.bucket_dir):
+            for filename in os.listdir(self.bucket_dir):
+                file_path = os.path.join(self.bucket_dir, filename)
+                try:
+                    if os.path.isfile(file_path) or os.path.islink(file_path):
+                        os.unlink(file_path)
+                    elif os.path.isdir(file_path):
+                        shutil.rmtree(file_path)
+                except Exception as e:
+                    log.exception(f'Failed to delete {file_path}. Reason: {e}')
+        LocalStorageProvider.delete_all_files()
+
+    def get_public_url(self, file_path: str) -> str | None:
+        relative_path = self._extract_relative_path(file_path).replace(os.sep, '/')
+        return f'{self.public_base_url}/bucket/{relative_path}'
+
+    def _extract_relative_path(self, file_path: str) -> str:
+        if file_path.startswith(self.scheme):
+            file_path = file_path[len(self.scheme) :]
+        return file_path.lstrip('/\\')
+
+
 class GCSStorageProvider(StorageProvider):
     def __init__(self):
         self.bucket_name = GCS_BUCKET_NAME
@@ -342,6 +401,8 @@ class AzureStorageProvider(StorageProvider):
 def get_storage_provider(storage_provider: str):
     if storage_provider == 'local':
         Storage = LocalStorageProvider()
+    elif storage_provider == 'local_artifact':
+        Storage = LocalArtifactStorageProvider()
     elif storage_provider in ('s3', 'r2'):
         Storage = S3StorageProvider()
     elif storage_provider == 'gcs':
@@ -353,4 +414,39 @@ def get_storage_provider(storage_provider: str):
     return Storage
 
 
-Storage = get_storage_provider(STORAGE_PROVIDER)
+_STORAGE_PROVIDER_CACHE: Dict[str, StorageProvider] = {}
+
+
+def get_cached_storage_provider(storage_provider: str) -> StorageProvider:
+    if storage_provider not in _STORAGE_PROVIDER_CACHE:
+        _STORAGE_PROVIDER_CACHE[storage_provider] = get_storage_provider(storage_provider)
+    return _STORAGE_PROVIDER_CACHE[storage_provider]
+
+
+def get_upload_storage_provider(content_type: str | None) -> StorageProvider:
+    if isinstance(content_type, str) and content_type.lower().startswith('image/'):
+        return get_cached_storage_provider('r2')
+    return Storage
+
+
+def get_storage_provider_for_path(file_path: str | None) -> StorageProvider:
+    if isinstance(file_path, str):
+        if file_path.startswith('local-artifact://'):
+            return get_cached_storage_provider('local_artifact')
+        if file_path.startswith('s3://'):
+            return get_cached_storage_provider('r2')
+        if file_path.startswith('gs://'):
+            return get_cached_storage_provider('gcs')
+    return Storage
+
+
+def get_public_url_for_path(file_path: str | None) -> str | None:
+    if not isinstance(file_path, str) or not file_path:
+        return None
+    storage = get_storage_provider_for_path(file_path)
+    if hasattr(storage, 'get_public_url'):
+        return storage.get_public_url(file_path)
+    return None
+
+
+Storage = get_cached_storage_provider(STORAGE_PROVIDER)

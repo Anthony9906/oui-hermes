@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { v4 as uuidv4 } from 'uuid';
 	import { toast } from 'svelte-sonner';
-	import { PaneGroup, Pane, PaneResizer } from 'paneforge';
+	import { PaneGroup, Pane } from 'paneforge';
 
 	import { getContext, onDestroy, onMount, tick } from 'svelte';
 	import { fade } from 'svelte/transition';
@@ -98,6 +98,7 @@
 		buildExpertSkillPrompt,
 		clearExpertAgentStartRequest,
 		expertAgentStartRequest,
+		showExpertAgentDrawer,
 		type ExpertAgentStartRequest
 	} from '$lib/stores/expertAgents';
 
@@ -105,7 +106,7 @@
 	import MessageInput from '$lib/components/chat/MessageInput.svelte';
 	import Messages from '$lib/components/chat/Messages.svelte';
 	import Navbar from '$lib/components/chat/Navbar.svelte';
-	import ChatControls from './ChatControls.svelte';
+	import ChatSidePanel from './ChatSidePanel.svelte';
 	import EventConfirmDialog from '../common/ConfirmDialog.svelte';
 	import Placeholder from './Placeholder.svelte';
 	import FilesOverlay from './MessageInput/FilesOverlay.svelte';
@@ -121,9 +122,6 @@
 	let loading = true;
 
 	const eventTarget = new EventTarget();
-	let controlPane: Pane | undefined;
-	let controlPaneComponent: ChatControls | undefined;
-
 	let messageInput: MessageInput | undefined;
 
 	let autoScroll = true;
@@ -857,27 +855,6 @@
 			stopAudio();
 		});
 
-		const showControlsSubscribe = showControls.subscribe(async (value) => {
-			await tick();
-			if (controlPane && !$mobile) {
-				try {
-					if (value) {
-						controlPaneComponent?.openPane();
-					} else {
-						controlPane.collapse();
-					}
-				} catch (e) {
-					// ignore
-				}
-			}
-
-			if (!value) {
-				showCallOverlay.set(false);
-				showArtifacts.set(false);
-				showEmbeds.set(false);
-			}
-		});
-
 		const selectedFolderSubscribe = selectedFolder.subscribe(async (folder) => {
 			await tick();
 			if (folder?.data?.model_ids && !equal(selectedModels, folder.data.model_ids)) {
@@ -940,7 +917,6 @@
 					updateLastReadAt(chatIdProp);
 				}
 				pageSubscribe();
-				showControlsSubscribe();
 				selectedFolderSubscribe();
 				expertAgentStartSubscribe();
 				window.removeEventListener('message', onMessageHandler);
@@ -1169,8 +1145,17 @@
                             <meta charset="UTF-8">
                             <meta name="viewport" content="width=device-width, initial-scale=1.0">
 							<${''}style>
+								html,
 								body {
 									background-color: white; /* Ensure the iframe has a white background */
+									margin: 0;
+								}
+
+								body > iframe {
+									display: block;
+									width: 100% !important;
+									border: 0 !important;
+									background: #fff;
 								}
 
 								${group.css}
@@ -1381,7 +1366,6 @@
 
 		if ($page.url.searchParams.get('call') === 'true') {
 			showCallOverlay.set(true);
-			showControls.set(true);
 		}
 
 		// Consume one-shot desktop event (e.g. Spotlight query, call shortcut)
@@ -1390,12 +1374,8 @@
 			desktopEvent.set(null);
 
 			if (event.type === 'call') {
-				// Defer to next macrotask so the call overlay isn't clobbered by
-				// showControlsSubscribe's initial callback (value=false → set(false))
-				// which runs as a pending microtask after this function.
 				setTimeout(() => {
 					showCallOverlay.set(true);
-					showControls.set(true);
 				}, 0);
 			} else if (event.type === 'query') {
 				const query = event.data?.query;
@@ -2967,6 +2947,7 @@
 	class="h-screen max-h-[100dvh] transition-width duration-200 ease-in-out {$showSidebar
 		? 'md:max-w-[calc(100%-var(--sidebar-width))]'
 		: ''} w-full max-w-full flex flex-col ml-5"
+	class:chat-side-panel-open={$showArtifacts || $showExpertAgentDrawer}
 	id="chat-container"
 >
 	{#if !loading}
@@ -3230,29 +3211,6 @@
 						{/if}
 					</div>
 				</Pane>
-
-				<ChatControls
-					bind:this={controlPaneComponent}
-					bind:history
-					bind:chatFiles
-					bind:params
-					bind:files
-					bind:pane={controlPane}
-					chatId={$chatId}
-					modelId={selectedModelIds?.at(0) ?? null}
-					models={selectedModelIds.reduce((a, e, i, arr) => {
-						const model = $models.find((m) => m.id === e);
-						if (model) {
-							return [...a, model];
-						}
-						return a;
-					}, [])}
-					submitPrompt={submitHandler}
-					{stopResponse}
-					{showMessage}
-					{eventTarget}
-					{codeInterpreterEnabled}
-				/>
 			</PaneGroup>
 		</div>
 	{:else if loading}
@@ -3264,7 +3222,30 @@
 	{/if}
 </div>
 
+<ChatSidePanel {history} />
+
 <style>
+	:global(:root) {
+		--chat-side-panel-width: clamp(480px, 38vw, 760px);
+	}
+
+	:global(#chat-container.chat-side-panel-open) {
+		max-width: calc(100vw - var(--chat-side-panel-width) - 60px) !important;
+		margin-right: calc(var(--chat-side-panel-width) + 20px) !important;
+	}
+
+	:global(.app:has(#sidebar[data-state='true']) #chat-container.chat-side-panel-open) {
+		max-width: calc(100vw - var(--sidebar-width) - var(--chat-side-panel-width) - 80px) !important;
+	}
+
+	@media (max-width: 1023px) {
+		:global(#chat-container.chat-side-panel-open),
+		:global(.app:has(#sidebar[data-state='true']) #chat-container.chat-side-panel-open) {
+			max-width: calc(100vw - 40px) !important;
+			margin-right: 20px !important;
+		}
+	}
+
 	::-webkit-scrollbar {
 		height: 0.5rem;
 		width: 0.5rem;

@@ -1,17 +1,10 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
-	import { onMount, getContext, createEventDispatcher } from 'svelte';
+	import { onMount, getContext, createEventDispatcher, tick } from 'svelte';
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
 
-	import {
-		artifactCode,
-		chatId,
-		settings,
-		showArtifacts,
-		showControls,
-		artifactContents
-	} from '$lib/stores';
+	import { artifactCode, chatId, settings, showArtifacts, artifactContents } from '$lib/stores';
 	import { copyToClipboard, createMessagesList } from '$lib/utils';
 
 	import XMark from '../icons/XMark.svelte';
@@ -22,12 +15,39 @@
 	import Download from '../icons/Download.svelte';
 
 	export let overlay = false;
+	export let adaptiveHeight = false;
+	export let minHeight = 560;
 
 	let contents: Array<{ type: string; content: string }> = [];
 	let selectedContentIdx = 0;
 
 	let copied = false;
 	let iframeElement: HTMLIFrameElement;
+	let adaptivePanelHeight: number | null = null;
+
+	const updateAdaptiveHeight = async () => {
+		if (!adaptiveHeight || typeof window === 'undefined') return;
+
+		await tick();
+
+		const maxHeight = Math.max(minHeight, window.innerHeight - 40);
+		let contentHeight = minHeight - 48;
+
+		if (iframeElement?.contentDocument) {
+			const doc = iframeElement.contentDocument;
+			contentHeight = Math.max(
+				doc.documentElement?.scrollHeight ?? 0,
+				doc.body?.scrollHeight ?? 0,
+				contentHeight
+			);
+		}
+
+		adaptivePanelHeight = Math.min(maxHeight, Math.max(minHeight, contentHeight + 48));
+	};
+
+	$: if (adaptiveHeight && contents.length > 0) {
+		void updateAdaptiveHeight();
+	}
 
 	function navigateContent(direction: 'prev' | 'next') {
 		selectedContentIdx =
@@ -37,7 +57,9 @@
 	}
 
 	const iframeLoadHandler = () => {
-		iframeElement.contentWindow.addEventListener(
+		void updateAdaptiveHeight();
+
+		iframeElement.contentWindow?.addEventListener(
 			'click',
 			function (e) {
 				const target = e.target.closest('a');
@@ -45,7 +67,7 @@
 					e.preventDefault();
 					const url = new URL(target.href, iframeElement.baseURI);
 					if (url.origin === window.location.origin) {
-						iframeElement.contentWindow.history.pushState(
+						iframeElement.contentWindow?.history.pushState(
 							null,
 							'',
 							url.pathname + url.search + url.hash
@@ -59,9 +81,9 @@
 		);
 
 		// Cancel drag when hovering over iframe
-		iframeElement.contentWindow.addEventListener('mouseenter', function (e) {
+		iframeElement.contentWindow?.addEventListener('mouseenter', function (e) {
 			e.preventDefault();
-			iframeElement.contentWindow.addEventListener('dragstart', (event) => {
+			iframeElement.contentWindow?.addEventListener('dragstart', (event) => {
 				event.preventDefault();
 			});
 		});
@@ -90,6 +112,8 @@
 	};
 
 	onMount(() => {
+		window.addEventListener('resize', updateAdaptiveHeight);
+
 		const unsubscribeArtifactCode = artifactCode.subscribe((value) => {
 			if (contents) {
 				const codeIdx = contents.findIndex((content) => content.content.includes(value));
@@ -102,7 +126,6 @@
 			console.log('Artifact contents updated:', newContents);
 
 			if (newContents.length === 0) {
-				showControls.set(false);
 				showArtifacts.set(false);
 				selectedContentIdx = 0;
 			} else if (newContents.length > contents.length) {
@@ -113,6 +136,7 @@
 		});
 
 		return () => {
+			window.removeEventListener('resize', updateAdaptiveHeight);
 			unsubscribeArtifactCode();
 			unsubscribeArtifactContents();
 		};
@@ -120,19 +144,24 @@
 </script>
 
 <div
-	class=" w-full h-full relative flex flex-col bg-white dark:bg-gray-850"
+	class="w-full relative flex flex-col bg-white text-[#26384f] dark:bg-gray-850 dark:text-white {adaptiveHeight
+		? ''
+		: 'h-full'}"
+	style={adaptiveHeight && adaptivePanelHeight
+		? `height: ${adaptivePanelHeight}px; min-height: ${minHeight}px; max-height: calc(100dvh - 40px);`
+		: undefined}
 	id="artifacts-container"
 >
 	<div class="w-full h-full flex flex-col flex-1 relative">
 		{#if contents.length > 0}
 			<div
-				class="pointer-events-auto z-20 flex justify-between items-center p-2.5 font-primar text-gray-900 dark:text-white"
+				class="pointer-events-auto z-20 flex justify-between items-center border-b border-[#dbe8f7] px-3.5 py-2.5 font-primary text-[#26384f] dark:border-gray-800 dark:text-white"
 			>
 				<div class="flex-1 flex items-center justify-between pr-1">
 					<div class="flex items-center space-x-2">
 						<div class="flex items-center gap-0.5 self-center min-w-fit" dir="ltr">
 							<button
-								class="self-center p-1 hover:bg-black/5 dark:hover:bg-white/5 dark:hover:text-white hover:text-black rounded-md transition disabled:cursor-not-allowed"
+								class="self-center p-1 text-[#5f7190] hover:bg-[#eef6ff] hover:text-[#001f5b] dark:hover:bg-white/5 dark:hover:text-white rounded-md transition disabled:cursor-not-allowed disabled:opacity-40"
 								on:click={() => navigateContent('prev')}
 								disabled={contents.length <= 1}
 							>
@@ -152,7 +181,9 @@
 								</svg>
 							</button>
 
-							<div class="text-xs self-center dark:text-gray-100 min-w-fit">
+							<div
+								class="text-xs font-medium self-center text-[#26384f] dark:text-gray-100 min-w-fit"
+							>
 								{$i18n.t('Version {{selectedVersion}} of {{totalVersions}}', {
 									selectedVersion: selectedContentIdx + 1,
 									totalVersions: contents.length
@@ -160,7 +191,7 @@
 							</div>
 
 							<button
-								class="self-center p-1 hover:bg-black/5 dark:hover:bg-white/5 dark:hover:text-white hover:text-black rounded-md transition disabled:cursor-not-allowed"
+								class="self-center p-1 text-[#5f7190] hover:bg-[#eef6ff] hover:text-[#001f5b] dark:hover:bg-white/5 dark:hover:text-white rounded-md transition disabled:cursor-not-allowed disabled:opacity-40"
 								on:click={() => navigateContent('next')}
 								disabled={contents.length <= 1}
 							>
@@ -184,7 +215,7 @@
 
 					<div class="flex items-center gap-1.5">
 						<button
-							class="copy-code-button bg-none border-none text-xs bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-md px-1.5 py-0.5"
+							class="copy-code-button border border-[#dbe8f7] bg-[#f7fbff] text-xs font-medium text-[#001f5b] hover:bg-[#eef6ff] dark:border-gray-800 dark:bg-gray-850 dark:text-gray-100 dark:hover:bg-gray-800 transition rounded-md px-2 py-1"
 							on:click={() => {
 								copyToClipboard(contents[selectedContentIdx].content);
 								copied = true;
@@ -197,7 +228,7 @@
 
 						<Tooltip content={$i18n.t('Download')}>
 							<button
-								class=" bg-none border-none text-xs bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-md p-0.5"
+								class="border border-[#dbe8f7] bg-[#f7fbff] text-xs text-[#001f5b] hover:bg-[#eef6ff] dark:border-gray-800 dark:bg-gray-850 dark:text-gray-100 dark:hover:bg-gray-800 transition rounded-md p-1"
 								on:click={downloadArtifact}
 							>
 								<Download className="size-3.5" />
@@ -207,7 +238,7 @@
 						{#if contents[selectedContentIdx].type === 'iframe'}
 							<Tooltip content={$i18n.t('Open in full screen')}>
 								<button
-									class=" bg-none border-none text-xs bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-md p-0.5"
+									class="border border-[#dbe8f7] bg-[#f7fbff] text-xs text-[#001f5b] hover:bg-[#eef6ff] dark:border-gray-800 dark:bg-gray-850 dark:text-gray-100 dark:hover:bg-gray-800 transition rounded-md p-1"
 									on:click={showFullScreen}
 								>
 									<ArrowsPointingOut className="size-3.5" />
@@ -218,14 +249,13 @@
 				</div>
 
 				<button
-					class="self-center pointer-events-auto p-1 rounded-full bg-white dark:bg-gray-850"
+					class="self-center pointer-events-auto p-1 rounded-md bg-white text-[#5f7190] hover:bg-[#eef6ff] hover:text-[#001f5b] dark:bg-gray-850 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white transition"
 					on:click={() => {
 						dispatch('close');
-						showControls.set(false);
 						showArtifacts.set(false);
 					}}
 				>
-					<XMark className="size-3.5 text-gray-900 dark:text-white" />
+					<XMark className="size-3.5" />
 				</button>
 			</div>
 		{/if}
@@ -243,7 +273,7 @@
 								bind:this={iframeElement}
 								title="Content"
 								srcdoc={contents[selectedContentIdx].content}
-								class="w-full border-0 h-full rounded-none"
+								class="w-full border-0 h-full rounded-none bg-white"
 								sandbox="allow-scripts allow-downloads{($settings?.iframeSandboxAllowForms ?? false)
 									? ' allow-forms'
 									: ''}{($settings?.iframeSandboxAllowSameOrigin ?? false)

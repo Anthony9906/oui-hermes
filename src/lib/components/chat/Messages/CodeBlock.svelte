@@ -104,6 +104,67 @@
 		onPreview(code);
 	};
 
+	const decodeEntityText = (value = '') =>
+		value
+			.replace(/&quot;/g, '"')
+			.replace(/&#39;/g, "'")
+			.replace(/&apos;/g, "'")
+			.replace(/&amp;/g, '&')
+			.replace(/&lt;/g, '<')
+			.replace(/&gt;/g, '>');
+
+	const getHtmlAttribute = (tag = '', name = '') => {
+		const match = tag.match(new RegExp(`${name}\\s*=\\s*("([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i'));
+		return decodeEntityText(match?.[2] ?? match?.[3] ?? match?.[4] ?? '').trim();
+	};
+
+	const getArtifactIframeTag = (value = '') => value.match(/<iframe\b[^>]*>/i)?.[0] ?? '';
+
+	const getArtifactIframeSrc = (value = '') => getHtmlAttribute(getArtifactIframeTag(value), 'src');
+
+	const isLocalArtifactIframe = (value = '', language = '') => {
+		const normalizedLang = language.toLowerCase();
+		if (normalizedLang !== 'html') return false;
+
+		const src = getArtifactIframeSrc(value);
+		if (!src) return false;
+
+		return /(^|\/)v\/[^/?#"' ]+|\/api\/artifacts\/|127\.0\.0\.1:8787|localhost:8787|local-artifact-preview-service/i.test(
+			src
+		);
+	};
+
+	const getArtifactTitle = (value = '') => {
+		const iframeTag = getArtifactIframeTag(value);
+		const iframeTitle =
+			getHtmlAttribute(iframeTag, 'title') || getHtmlAttribute(iframeTag, 'aria-label');
+		const titleMatch = value.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+		const h1Match = value.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+		const src = getArtifactIframeSrc(value);
+		const idMatch = src.match(/\/v\/([^/?#]+)/i) || src.match(/\/api\/artifacts\/([^/?#]+)/i);
+
+		const candidates = [
+			iframeTitle,
+			titleMatch?.[1],
+			h1Match?.[1]?.replace(/<[^>]+>/g, ' '),
+			idMatch?.[1]
+		]
+			.map((item) =>
+				decodeEntityText(
+					String(item ?? '')
+						.replace(/\s+/g, ' ')
+						.trim()
+				)
+			)
+			.filter(Boolean)
+			.filter((item) => !/^(content|iframe|html|artifact)$/i.test(item));
+
+		return candidates[0] || 'HTML Artifact';
+	};
+
+	$: showArtifactIframeCard = preview && isLocalArtifactIframe(code, lang);
+	$: artifactTitle = getArtifactTitle(code);
+
 	const checkPythonCode = (str) => {
 		// Check if the string contains typical Python syntax characters
 		const pythonSyntax = [
@@ -437,7 +498,31 @@
 		class="relative {className} flex flex-col rounded-2xl border border-gray-100/30 dark:border-gray-850/30 my-0.5"
 		dir="ltr"
 	>
-		{#if ['mermaid', 'vega', 'vega-lite'].includes(lang)}
+		{#if showArtifactIframeCard}
+			<button
+				type="button"
+				class="group flex w-full items-center gap-3 rounded-2xl border border-[#b8cde8]/80 bg-white px-4 py-3 text-left shadow-xs transition hover:border-[#7fb2e5] hover:bg-[#f7fbff] dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-850"
+				on:click={previewCode}
+				aria-label={$i18n.t('Preview')}
+			>
+				<div
+					class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-[#dcecff] to-[#f7fbff] text-[#001f5b] ring-1 ring-[#cfe0f3] dark:from-gray-800 dark:to-gray-900 dark:text-gray-100 dark:ring-gray-700"
+				>
+					<Cube className="size-5" />
+				</div>
+				<div class="min-w-0 flex-1">
+					<div class="truncate text-sm font-medium text-gray-900 dark:text-gray-100">
+						{artifactTitle}
+					</div>
+					<div class="mt-1 text-xs font-medium text-gray-500 dark:text-gray-400">HTML Artifact</div>
+				</div>
+				<div
+					class="shrink-0 text-lg leading-none text-gray-400 transition group-hover:translate-x-0.5 group-hover:text-[#001f5b] dark:group-hover:text-gray-100"
+				>
+					&gt;
+				</div>
+			</button>
+		{:else if ['mermaid', 'vega', 'vega-lite'].includes(lang)}
 			{#if renderHTML}
 				<SvgPanZoom
 					className=" rounded-2xl max-h-fit overflow-hidden"

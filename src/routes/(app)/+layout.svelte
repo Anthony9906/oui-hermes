@@ -334,12 +334,8 @@
 				checkForVersionUpdates();
 			}
 		}
-		// Persist showControls: track open/close state separately from saved size
-		// chatControlsSize always retains the last width for openPane()
-		await showControls.set(!$mobile ? localStorage.showControls === 'true' : false);
-		showControls.subscribe((value) => {
-			localStorage.showControls = value ? 'true' : 'false';
-		});
+		await showControls.set(false);
+		localStorage.showControls = 'false';
 
 		// Persist selectedTerminalId across page loads
 		selectedTerminalId.set(localStorage.selectedTerminalId ?? null);

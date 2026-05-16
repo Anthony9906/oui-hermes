@@ -31,6 +31,7 @@ from open_webui.models.groups import Groups
 from open_webui.utils.access_control import has_connection_access, check_model_access
 from open_webui.config import (
     CACHE_DIR,
+    HERMES_API_BASE_URL,
 )
 from open_webui.env import (
     MODELS_CACHE_TTL,
@@ -81,11 +82,95 @@ log = logging.getLogger(__name__)
 # clients to attempt decompression of an already-decoded payload, resulting
 # in ZlibError.  See https://github.com/aio-libs/aiohttp/issues/4462.
 _STRIP_PROXY_HEADERS = frozenset({'Content-Encoding', 'Content-Length', 'Transfer-Encoding'})
+_USER_CONTEXT_RE = re.compile(r'\n*<user_context>\s*username:\s*.*?\s*</user_context>\n*', re.DOTALL)
 
 
 def _clean_proxy_headers(raw_headers) -> dict:
     """Return a copy of *raw_headers* with stale encoding headers removed."""
     return {k: v for k, v in raw_headers.items() if k not in _STRIP_PROXY_HEADERS}
+
+
+def _normalize_base_url(url: str | None) -> str:
+    if not url:
+        return ''
+    parsed = urlparse(url.rstrip('/'))
+    path = parsed.path.rstrip('/')
+    if path.endswith('/chat/completions'):
+        path = path[: -len('/chat/completions')]
+    elif path.endswith('/responses'):
+        path = path[: -len('/responses')]
+    if path.endswith('/v1'):
+        path = path[: -len('/v1')]
+
+    hostname = parsed.hostname or ''
+    if hostname == 'localhost':
+        hostname = '127.0.0.1'
+    netloc = hostname
+    if parsed.port:
+        netloc = f'{netloc}:{parsed.port}'
+
+    return parsed._replace(netloc=netloc, path=path, params='', query='', fragment='').geturl().rstrip('/')
+
+
+def _is_hermes_api_url(url: str | None) -> bool:
+    normalized_url = _normalize_base_url(url)
+    normalized_hermes_url = _normalize_base_url(HERMES_API_BASE_URL)
+    return bool(normalized_url and normalized_hermes_url and normalized_url == normalized_hermes_url)
+
+
+def _get_open_webui_username(user) -> str | None:
+    username = getattr(user, 'username', None) or getattr(user, 'name', None)
+    if username is None:
+        return None
+
+    # Strip only leading/trailing transport noise. Internal spaces are part of
+    # the username, e.g. "Anthony Wang", and must be preserved for display.
+    username = str(username).strip()
+    return username or None
+
+
+def _escape_user_context_value(value: str) -> str:
+    return value.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+
+def _prepend_user_context_to_text(content: str, context: str) -> str:
+    content = _USER_CONTEXT_RE.sub('\n', content).strip()
+    return f'{context}\n\n{content}' if content else context
+
+
+def _prepend_user_context_to_message(message: dict, context: str) -> None:
+    content = message.get('content', '')
+    if isinstance(content, str):
+        message['content'] = _prepend_user_context_to_text(content, context)
+        return
+
+    if isinstance(content, list):
+        for part in content:
+            if part.get('type') in ('text', 'input_text') and isinstance(part.get('text'), str):
+                part['text'] = _prepend_user_context_to_text(part['text'], context)
+                return
+
+        content.insert(0, {'type': 'text', 'text': context})
+        return
+
+    message['content'] = _prepend_user_context_to_text(str(content or ''), context)
+
+
+def _inject_user_context(payload: dict, user) -> dict:
+    username = _get_open_webui_username(user)
+    if not username:
+        return payload
+
+    context = f'<user_context>\nusername: {_escape_user_context_value(username)}\n</user_context>'
+    messages = list(payload.get('messages') or [])
+
+    for message in reversed(messages):
+        if message.get('role') == 'user':
+            _prepend_user_context_to_message(message, context)
+            payload['messages'] = messages
+            return payload
+
+    return payload
 
 
 async def send_get_request(
@@ -1121,6 +1206,10 @@ async def generate_chat_completion(
 
     url = request.app.state.config.OPENAI_API_BASE_URLS[idx]
     key = request.app.state.config.OPENAI_API_KEYS[idx]
+    is_hermes_api = _is_hermes_api_url(url)
+
+    if is_hermes_api:
+        payload = _inject_user_context(payload, user)
 
     # Check if model is a reasoning model that needs special handling
     if is_openai_new_model(payload['model']):

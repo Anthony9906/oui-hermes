@@ -41,7 +41,7 @@ from open_webui.models.groups import Groups
 from open_webui.models.access_grants import AccessGrants
 
 
-from open_webui.storage.provider import Storage
+from open_webui.storage.provider import Storage, get_storage_provider_for_path, get_upload_storage_provider
 
 
 from open_webui.config import BYPASS_ADMIN_ACCESS_CONTROL, STORAGE_LOCAL_CACHE, STORAGE_PROVIDER, UPLOAD_DIR
@@ -59,7 +59,8 @@ from open_webui.utils.access_control.files import has_access_to_file
 
 async def _get_file_content_response(file: FileModel, attachment: bool):
     try:
-        file_path = await asyncio.to_thread(Storage.get_file, file.path)
+        storage = get_storage_provider_for_path(file.path)
+        file_path = await asyncio.to_thread(storage.get_file, file.path)
         file_path = Path(file_path)
 
         # Check if the file already exists in the cache
@@ -113,7 +114,8 @@ def _is_text_file(file_path: str, chunk_size: int = 8192) -> bool:
     (e.g. TypeScript .ts → video/mp2t) without maintaining an extension whitelist.
     """
     try:
-        resolved = Storage.get_file(file_path)
+        storage = get_storage_provider_for_path(file_path)
+        resolved = storage.get_file(file_path)
         with open(resolved, 'rb') as f:
             chunk = f.read(chunk_size)
         if not chunk:
@@ -166,7 +168,8 @@ async def process_uploaded_file(
                 stt_supported_content_types = getattr(request.app.state.config, 'STT_SUPPORTED_CONTENT_TYPES', [])
 
                 if strict_match_mime_type(stt_supported_content_types, content_type):
-                    file_path_processed = await asyncio.to_thread(Storage.get_file, file_path)
+                    storage = get_storage_provider_for_path(file_path)
+                    file_path_processed = await asyncio.to_thread(storage.get_file, file_path)
                     result = transcribe(request, file_path_processed, file_metadata, user)
 
                     await process_file(
@@ -284,8 +287,9 @@ async def upload_file_handler(
         id = str(uuid.uuid4())
         name = filename
         filename = f'{id}_{filename}'
+        upload_storage = get_upload_storage_provider(file.content_type)
         contents, file_path = await asyncio.to_thread(
-            Storage.upload_file,
+            upload_storage.upload_file,
             file.file,
             filename,
             {
@@ -720,7 +724,8 @@ async def get_html_file_content_by_id(
 
     if file.user_id == user.id or user.role == 'admin' or await has_access_to_file(id, 'read', user, db=db):
         try:
-            file_path = await asyncio.to_thread(Storage.get_file, file.path)
+            storage = get_storage_provider_for_path(file.path)
+            file_path = await asyncio.to_thread(storage.get_file, file.path)
             file_path = Path(file_path)
 
             # Check if the file already exists in the cache
@@ -769,7 +774,8 @@ async def get_file_content_by_id(
         headers = {'Content-Disposition': f"attachment; filename*=UTF-8''{encoded_filename}"}
 
         if file_path:
-            file_path = await asyncio.to_thread(Storage.get_file, file_path)
+            storage = get_storage_provider_for_path(file_path)
+            file_path = await asyncio.to_thread(storage.get_file, file_path)
             file_path = Path(file_path)
 
             # Check if the file already exists in the cache
@@ -835,10 +841,8 @@ async def delete_file_by_id(id: str, user=Depends(get_verified_user), db: AsyncS
         result = await Files.delete_file_by_id(id, db=db)
         if result:
             try:
-                from open_webui.retrieval.vector.async_client import ASYNC_VECTOR_DB_CLIENT
-
-                await asyncio.to_thread(Storage.delete_file, file.path)
-                await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=f'file-{id}')
+                storage = get_storage_provider_for_path(file.path)
+                await asyncio.to_thread(storage.delete_file, file.path)
             except Exception as e:
                 log.exception(e)
                 log.error('Error deleting files')
@@ -846,6 +850,14 @@ async def delete_file_by_id(id: str, user=Depends(get_verified_user), db: AsyncS
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=ERROR_MESSAGES.DEFAULT('Error deleting files'),
                 )
+
+            try:
+                from open_webui.retrieval.vector.async_client import ASYNC_VECTOR_DB_CLIENT
+
+                await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=f'file-{id}')
+            except Exception as e:
+                log.debug(f'File vector cleanup for {id}: {e}')
+
             return {'message': 'File deleted successfully'}
         else:
             raise HTTPException(

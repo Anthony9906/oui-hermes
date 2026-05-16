@@ -5,6 +5,8 @@
 	import {
 		getExpertAgentDetail,
 		getExpertAgents,
+		openExpertAgentDirectory,
+		updateExpertAgentAppearance,
 		updateExpertAgentDetail,
 		type ExpertSkillCard,
 		type ExpertSkillDetail
@@ -37,12 +39,16 @@
 	let detailSourceContent = '';
 	let detailMode: 'preview' | 'source' = 'preview';
 	let savingDetail = false;
+	let appearanceSaveRequest = 0;
 	let selectedIcon = 'sparkles';
 	let selectedIconBackground = '#e6edf7';
 	let showIconPicker = false;
 	let customIconName = '';
 	let iconPickerButton: HTMLButtonElement | null = null;
 	let iconPickerPanel: HTMLDivElement | null = null;
+	let sourceEditor: HTMLTextAreaElement | null = null;
+	let sourceLineGutter: HTMLDivElement | null = null;
+	let sourceDirty = false;
 
 	const iconOptions = [
 		{ name: 'bot', label: 'AI 专家' },
@@ -119,6 +125,15 @@
 
 	const isValidLucideIconName = (value: string) =>
 		value.length > 0 && value.length <= 64 && /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(value);
+
+	const getLineCount = (content: string) =>
+		content.length ? content.split(/\r\n|\r|\n/).length : 1;
+	const getLineNumbers = (content: string) =>
+		Array.from({ length: getLineCount(content) }, (_, index) => index + 1);
+	const getContentStats = (content: string) => ({
+		lines: getLineCount(content),
+		characters: Array.from(content.replace(/\s/g, '')).length
+	});
 
 	const addCustomIcon = () => {
 		const iconName = normalizeLucideIconName(customIconName);
@@ -252,9 +267,24 @@
 		};
 	};
 
+	const syncSelectedSkillAppearance = (icon: string, iconBackground: string) => {
+		if (!selectedSkill) return;
+
+		const previousSkillName = selectedSkill.skill_name;
+		const updatedCard = {
+			...selectedSkill,
+			icon,
+			icon_background: iconBackground
+		};
+
+		selectedSkill = updatedCard;
+		items = items.map((item) => (item.skill_name === previousSkillName ? updatedCard : item));
+	};
+
 	const updateDraftIconMetadata = (
 		icon = selectedIcon,
-		iconBackground = selectedIconBackground
+		iconBackground = selectedIconBackground,
+		persist = true
 	) => {
 		selectedIcon = icon;
 		selectedIconBackground = iconBackground;
@@ -273,7 +303,101 @@
 				content: detailSourceContent
 			};
 		}
+		syncSelectedSkillAppearance(icon, iconBackground);
 		refreshDetailMarkdownContent();
+		if (persist) {
+			void saveSkillAppearance(icon, iconBackground);
+		}
+	};
+
+	const applyUpdatedDetail = (updatedDetail: ExpertSkillDetail, previousSkillName: string) => {
+		selectedSkillDetail = withSourceFallbackMetadata(updatedDetail);
+		detailSourceContent = selectedSkillDetail.content ?? '';
+		detailMarkdownContent = formatSkillDetailContent(
+			selectedSkillDetail,
+			selectedSkill ?? { skill_name: '', description: '' }
+		);
+
+		const updatedCard = {
+			...(selectedSkill ?? {
+				skill_name: previousSkillName,
+				description: selectedSkillDetail.description || ''
+			}),
+			skill_name: selectedSkillDetail.name || previousSkillName,
+			description: selectedSkillDetail.description || selectedSkill?.description || '',
+			version: selectedSkillDetail.version,
+			author: selectedSkillDetail.author,
+			icon: selectedSkillDetail.icon,
+			icon_background: selectedSkillDetail.icon_background
+		};
+
+		selectedSkill = updatedCard;
+		items = items.map((item) => (item.skill_name === previousSkillName ? updatedCard : item));
+		selectedIcon = selectedSkillDetail.icon || selectedIcon;
+		selectedIconBackground = selectedSkillDetail.icon_background || selectedIconBackground;
+	};
+
+	const saveSkillAppearance = async (icon: string, iconBackground: string) => {
+		if (!selectedSkill) return;
+
+		const requestId = ++appearanceSaveRequest;
+		const previousSkillName = selectedSkill.skill_name;
+
+		try {
+			const updatedDetail = await updateExpertAgentAppearance(
+				previousSkillName,
+				{
+					icon,
+					icon_background: iconBackground
+				},
+				localStorage.token
+			);
+
+			if (requestId !== appearanceSaveRequest) return;
+
+			const mergedDetail = withSourceFallbackMetadata(updatedDetail);
+			selectedSkillDetail = {
+				...mergedDetail,
+				content: sourceDirty ? detailSourceContent : mergedDetail.content
+			};
+
+			const updatedCard = {
+				...selectedSkill,
+				skill_name: mergedDetail.name || previousSkillName,
+				description: mergedDetail.description || selectedSkill.description,
+				version: mergedDetail.version,
+				author: mergedDetail.author,
+				icon: mergedDetail.icon || icon,
+				icon_background: mergedDetail.icon_background || iconBackground
+			};
+
+			selectedSkill = updatedCard;
+			items = items.map((item) => (item.skill_name === previousSkillName ? updatedCard : item));
+
+			if (!sourceDirty) {
+				detailSourceContent = mergedDetail.content ?? '';
+				detailMarkdownContent = formatSkillDetailContent(mergedDetail, updatedCard);
+			}
+		} catch (err) {
+			console.error(err);
+			toast.error(`${err}`);
+		}
+	};
+
+	const openSkillDirectory = async () => {
+		if (!selectedSkill) return;
+
+		try {
+			await openExpertAgentDirectory(selectedSkill.skill_name, localStorage.token);
+		} catch (err) {
+			console.error(err);
+			toast.error(`${err}`);
+		}
+	};
+
+	const handleSourceEditorScroll = () => {
+		if (!sourceEditor || !sourceLineGutter) return;
+		sourceLineGutter.scrollTop = sourceEditor.scrollTop;
 	};
 
 	onMount(() => {
@@ -342,25 +466,27 @@
 		detailError = null;
 		detailLoading = true;
 		detailMode = 'preview';
+		sourceDirty = false;
 		selectedIcon = skill.icon || fallbackIcon(skill.skill_name);
 		selectedIconBackground = skill.icon_background || fallbackIconBackground(skill.skill_name);
 		showIconPicker = false;
 		showDetailModal = true;
 
 		try {
-			selectedSkillDetail = withSourceFallbackMetadata(
+			const loadedDetail = withSourceFallbackMetadata(
 				await getExpertAgentDetail(skill.skill_name, localStorage.token)
 			);
-			detailMarkdownContent = formatSkillDetailContent(selectedSkillDetail, skill);
-			detailSourceContent = selectedSkillDetail.content ?? '';
-			selectedIcon = selectedSkillDetail.icon || selectedIcon;
-			selectedIconBackground = selectedSkillDetail.icon_background || selectedIconBackground;
+			selectedSkillDetail = loadedDetail;
+			detailMarkdownContent = formatSkillDetailContent(loadedDetail, skill);
+			detailSourceContent = loadedDetail.content ?? '';
+			selectedIcon = loadedDetail.icon || selectedIcon;
+			selectedIconBackground = loadedDetail.icon_background || selectedIconBackground;
 			selectedSkill = {
 				...skill,
-				version: skill.version || selectedSkillDetail.version,
-				author: skill.author || selectedSkillDetail.author,
-				icon: skill.icon || selectedSkillDetail.icon,
-				icon_background: skill.icon_background || selectedSkillDetail.icon_background
+				version: skill.version || loadedDetail.version,
+				author: skill.author || loadedDetail.author,
+				icon: skill.icon || loadedDetail.icon,
+				icon_background: skill.icon_background || loadedDetail.icon_background
 			};
 		} catch (err) {
 			console.error(err);
@@ -420,20 +546,8 @@
 				localStorage.token
 			);
 
-			selectedSkillDetail = updatedDetail;
-			detailSourceContent = updatedDetail.content ?? '';
-			detailMarkdownContent = formatSkillDetailContent(updatedDetail, selectedSkill);
-			const updatedCard = {
-				...selectedSkill,
-				skill_name: updatedDetail.name || selectedSkill.skill_name,
-				description: updatedDetail.description || selectedSkill.description,
-				version: updatedDetail.version,
-				author: updatedDetail.author,
-				icon: updatedDetail.icon,
-				icon_background: updatedDetail.icon_background
-			};
-			selectedSkill = updatedCard;
-			items = items.map((item) => (item.skill_name === previousSkillName ? updatedCard : item));
+			applyUpdatedDetail(updatedDetail, previousSkillName);
+			sourceDirty = false;
 			toast.success('专家技能已保存');
 		} catch (err) {
 			console.error(err);
@@ -450,6 +564,10 @@
 	$: if (!show && showDetailModal) {
 		showDetailModal = false;
 	}
+
+	$: sourceLineNumbers = getLineNumbers(detailSourceContent);
+	$: previewLineNumbers = getLineNumbers(detailMarkdownContent);
+	$: detailSourceStats = getContentStats(detailSourceContent);
 </script>
 
 {#if show}
@@ -644,17 +762,25 @@
 				</div>
 			</div>
 
-			<button
-				type="button"
-				class="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-gray-100"
-				aria-label="关闭专家技能详情"
-				on:click={() => {
-					showIconPicker = false;
-					showDetailModal = false;
-				}}
-			>
-				<XMark className="size-5" />
-			</button>
+			<div class="flex shrink-0 items-start gap-2">
+				<div
+					class="mt-0.5 whitespace-nowrap rounded-md border border-[#d8deea] bg-white/70 px-2.5 py-1 text-[11px] font-semibold text-[#667289] shadow-xs dark:border-gray-700 dark:bg-gray-900/60 dark:text-gray-300"
+					title="源文件总行数 / 总字数"
+				>
+					{detailSourceStats.lines} 行 / {detailSourceStats.characters} 字
+				</div>
+				<button
+					type="button"
+					class="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+					aria-label="关闭专家技能详情"
+					on:click={() => {
+						showIconPicker = false;
+						showDetailModal = false;
+					}}
+				>
+					<XMark className="size-5" />
+				</button>
+			</div>
 		</div>
 
 		<div
@@ -687,14 +813,25 @@
 					</button>
 				</div>
 
-				<button
-					type="button"
-					class="inline-flex h-8 items-center justify-center rounded-lg bg-[#2f3a52] px-3 text-xs font-semibold text-white transition hover:bg-[#222b3f] disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-200 dark:text-gray-900 dark:hover:bg-white"
-					disabled={savingDetail || detailLoading || !!detailError}
-					on:click={saveSkillDetail}
-				>
-					{savingDetail ? '保存中...' : '保存'}
-				</button>
+				{#if detailMode === 'source'}
+					<button
+						type="button"
+						class="inline-flex h-8 items-center justify-center rounded-lg bg-[#2f3a52] px-3 text-xs font-semibold text-white transition hover:bg-[#222b3f] disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-200 dark:text-gray-900 dark:hover:bg-white"
+						disabled={savingDetail || detailLoading || !!detailError}
+						on:click={saveSkillDetail}
+					>
+						{savingDetail ? '保存中...' : '保存'}
+					</button>
+				{:else}
+					<button
+						type="button"
+						class="inline-flex h-8 items-center justify-center rounded-lg border border-[#d8deea] bg-white px-3 text-xs font-semibold text-[#667289] transition hover:border-[#aeb9cc] hover:bg-[#f7f9fc] hover:text-[#293246] disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800"
+						disabled={detailLoading || !!detailError}
+						on:click={openSkillDirectory}
+					>
+						打开目录
+					</button>
+				{/if}
 			</div>
 		</div>
 
@@ -722,18 +859,48 @@
 					</button>
 				</div>
 			{:else if detailMode === 'source'}
-				<textarea
-					class="expert-skill-source-editor h-full min-h-0 w-full resize-none rounded-xl border border-[#d8deea] bg-[#fbfcff] p-4 font-mono text-[12px] leading-5 text-[#293246] outline-none transition focus:border-[#8b96aa] focus:ring-2 focus:ring-[#8b96aa]/15 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 dark:focus:border-gray-500"
-					bind:value={detailSourceContent}
-					spellcheck="false"
-				/>
-			{:else if detailMarkdownContent}
-				<div class="expert-skill-markdown w-full max-w-none text-[13px]">
-					<Markdown
-						id={`expert-skill-detail-${selectedSkillDetail?.name || selectedSkill?.skill_name}`}
-						content={detailMarkdownContent}
-						editCodeBlock={false}
+				<div
+					class="expert-skill-source-shell grid h-full min-h-0 grid-cols-[3.5rem_minmax(0,1fr)] overflow-hidden rounded-xl border border-[#d8deea] bg-[#fbfcff] dark:border-gray-700 dark:bg-gray-950"
+				>
+					<div
+						bind:this={sourceLineGutter}
+						class="expert-skill-line-gutter overflow-hidden border-r border-[#e4e9f2] bg-[#f3f6fb] py-4 pr-3 text-right font-mono text-[12px] leading-5 text-[#9aa4b5] dark:border-gray-800 dark:bg-gray-900 dark:text-gray-600"
+						aria-hidden="true"
+					>
+						{#each sourceLineNumbers as lineNumber}
+							<div>{lineNumber}</div>
+						{/each}
+					</div>
+					<textarea
+						bind:this={sourceEditor}
+						class="expert-skill-source-editor h-full min-h-0 w-full resize-none border-0 bg-transparent p-4 font-mono text-[12px] leading-5 text-[#293246] outline-none dark:text-gray-100"
+						bind:value={detailSourceContent}
+						spellcheck="false"
+						on:scroll={handleSourceEditorScroll}
+						on:input={() => {
+							sourceDirty = true;
+						}}
 					/>
+				</div>
+			{:else if detailMarkdownContent}
+				<div
+					class="expert-skill-preview-shell grid w-full max-w-none grid-cols-[3.5rem_minmax(0,1fr)] overflow-hidden rounded-xl border border-[#e4e9f2] bg-white dark:border-gray-800 dark:bg-gray-950"
+				>
+					<div
+						class="expert-skill-line-gutter border-r border-[#e4e9f2] bg-[#f7f9fc] py-4 pr-3 text-right font-mono text-[12px] leading-5 text-[#a3adbd] dark:border-gray-800 dark:bg-gray-900 dark:text-gray-600"
+						aria-hidden="true"
+					>
+						{#each previewLineNumbers as lineNumber}
+							<div>{lineNumber}</div>
+						{/each}
+					</div>
+					<div class="expert-skill-markdown min-w-0 px-4 py-4 text-[13px]">
+						<Markdown
+							id={`expert-skill-detail-${selectedSkillDetail?.name || selectedSkill?.skill_name}`}
+							content={detailMarkdownContent}
+							editCodeBlock={false}
+						/>
+					</div>
 				</div>
 			{:else}
 				<div class="flex h-full min-h-72 items-center justify-center text-sm text-gray-500">

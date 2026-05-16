@@ -3,15 +3,7 @@
 	const i18n = getContext('i18n');
 
 	import Markdown from './Markdown.svelte';
-	import {
-		artifactCode,
-		chatId,
-		mobile,
-		settings,
-		showArtifacts,
-		showControls,
-		showEmbeds
-	} from '$lib/stores';
+	import { artifactCode, chatId, mobile, settings, showArtifacts, showEmbeds } from '$lib/stores';
 	import FloatingButtons from '../ContentRenderer/FloatingButtons.svelte';
 	import { createMessagesList } from '$lib/utils';
 
@@ -200,13 +192,11 @@
 			) {
 				await tick();
 				showArtifacts.set(true);
-				showControls.set(true);
 			}
 		}}
 		onPreview={async (value) => {
 			console.log('Preview', value);
 			await artifactCode.set(value);
-			await showControls.set(true);
 			await showArtifacts.set(true);
 			await showEmbeds.set(false);
 		}}

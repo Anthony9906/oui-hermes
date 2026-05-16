@@ -128,3 +128,76 @@ export const updateExpertAgentDetail = async (
 
 	return res;
 };
+
+export const updateExpertAgentAppearance = async (
+	skillName: string,
+	payload: {
+		icon: string;
+		icon_background: string;
+	},
+	token: string = ''
+): Promise<ExpertSkillDetail> => {
+	let error = null;
+
+	const res = await fetch(
+		`${WEBUI_API_BASE_URL}/expert-agents/${encodeURIComponent(skillName)}/appearance`,
+		{
+			method: 'POST',
+			headers: {
+				Accept: 'application/json',
+				'Content-Type': 'application/json',
+				authorization: `Bearer ${token}`
+			},
+			body: JSON.stringify(payload)
+		}
+	)
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			error = err.detail ?? 'Failed to update expert skill appearance';
+			console.error(err);
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
+export const openExpertAgentDirectory = async (
+	skillName: string,
+	token: string = ''
+): Promise<{ ok: boolean; path: string }> => {
+	let error = null;
+
+	const res = await fetch(
+		`${WEBUI_API_BASE_URL}/expert-agents/${encodeURIComponent(skillName)}/open-directory`,
+		{
+			method: 'POST',
+			headers: {
+				Accept: 'application/json',
+				'Content-Type': 'application/json',
+				authorization: `Bearer ${token}`
+			}
+		}
+	)
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			error = err.detail ?? 'Failed to open expert skill directory';
+			console.error(err);
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};

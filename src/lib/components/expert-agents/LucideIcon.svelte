@@ -17,6 +17,10 @@
 			'<circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12Z"/>',
 		workflow:
 			'<rect width="8" height="8" x="3" y="3" rx="2"/><rect width="8" height="8" x="13" y="13" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><path d="M13 7h4a2 2 0 0 1 2 2v4"/>',
+		'git-pull-request':
+			'<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M6 9v12"/>',
+		'swatch-book':
+			'<path d="M11 17a4 4 0 0 1-8 0V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2Z"/><path d="M16.7 13H19a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H7"/><path d="M7 17h.01"/><path d="m11 8 2.3-2.3a2.4 2.4 0 0 1 3.4 0l1.6 1.6a2.4 2.4 0 0 1 0 3.4L11 18"/>',
 		'drafting-compass':
 			'<path d="m12 2 7 19"/><path d="m12 2-7 19"/><path d="M19.5 21h-15"/><path d="M12 2v6"/><path d="M8.5 11h7"/>',
 		'chart-no-axes-combined':

@@ -9,7 +9,6 @@
 	import { copyToClipboard, createMessagesList } from '$lib/utils';
 
 	import {
-		showControls,
 		showArtifacts,
 		mobile,
 		temporaryChatEnabled,
@@ -315,7 +314,6 @@
 					class="flex gap-2 items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl select-none w-full"
 					id="chat-artifacts-button"
 					on:click={async () => {
-						await showControls.set(true);
 						await showArtifacts.set(true);
 						await showEmbeds.set(false);
 					}}
