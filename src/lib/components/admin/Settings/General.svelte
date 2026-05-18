@@ -2,7 +2,7 @@
 	import DOMPurify from 'dompurify';
 	import { v4 as uuidv4 } from 'uuid';
 
-	import { getBackendConfig, getVersionUpdates, getWebhookUrl, updateWebhookUrl } from '$lib/apis';
+	import { getBackendConfig, getWebhookUrl, updateWebhookUrl } from '$lib/apis';
 	import {
 		getAdminConfig,
 		getLdapConfig,
@@ -19,7 +19,6 @@
 	import { WEBUI_BUILD_HASH, WEBUI_VERSION } from '$lib/constants';
 	import { banners as _banners, config, showChangelog } from '$lib/stores';
 	import type { Banner } from '$lib/types';
-	import { compareVersion } from '$lib/utils';
 	import { onMount, getContext } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import Textarea from '$lib/components/common/Textarea.svelte';
@@ -28,12 +27,6 @@
 	const i18n = getContext('i18n');
 
 	export let saveHandler: Function;
-
-	let updateAvailable = null;
-	let version = {
-		current: '',
-		latest: ''
-	};
 
 	let adminConfig = null;
 	let webhookUrl = '';
@@ -56,21 +49,6 @@
 		use_tls: false,
 		certificate_path: '',
 		ciphers: ''
-	};
-
-	const checkForVersionUpdates = async () => {
-		updateAvailable = null;
-		version = await getVersionUpdates(localStorage.token).catch((error) => {
-			return {
-				current: WEBUI_VERSION,
-				latest: WEBUI_VERSION
-			};
-		});
-
-		console.info(version);
-
-		updateAvailable = compareVersion(version.latest, version.current);
-		console.info(updateAvailable);
 	};
 
 	const updateLdapServerHandler = async () => {
@@ -106,10 +84,6 @@
 	};
 
 	onMount(async () => {
-		if ($config?.features?.enable_version_update_check) {
-			checkForVersionUpdates();
-		}
-
 		await Promise.all([
 			(async () => {
 				adminConfig = await getAdminConfig(localStorage.token);
@@ -159,19 +133,6 @@
 									<Tooltip content={WEBUI_BUILD_HASH}>
 										v{WEBUI_VERSION}
 									</Tooltip>
-
-									{#if $config?.features?.enable_version_update_check}
-										<a
-											href="https://github.com/open-webui/open-webui/releases/tag/v{version.latest}"
-											target="_blank"
-										>
-											{updateAvailable === null
-												? $i18n.t('Checking for updates...')
-												: updateAvailable
-													? `(v${version.latest} ${$i18n.t('available!')})`
-													: $i18n.t('(latest)')}
-										</a>
-									{/if}
 								</div>
 
 								<button
@@ -184,18 +145,6 @@
 									<div>{$i18n.t("See what's new")}</div>
 								</button>
 							</div>
-
-							{#if $config?.features?.enable_version_update_check}
-								<button
-									class=" text-xs px-3 py-1.5 bg-gray-50 hover:bg-gray-100 dark:bg-gray-850 dark:hover:bg-gray-800 transition rounded-lg font-medium"
-									type="button"
-									on:click={() => {
-										checkForVersionUpdates();
-									}}
-								>
-									{$i18n.t('Check for updates')}
-								</button>
-							{/if}
 						</div>
 					</div>
 

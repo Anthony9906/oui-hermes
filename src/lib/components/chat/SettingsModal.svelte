@@ -426,8 +426,6 @@
 				'aboutopenwebui',
 				'aboutpage',
 				'aboutus',
-				'check for updates',
-				'checkforupdates',
 				'contact',
 				'copyright',
 				'details',
@@ -454,8 +452,6 @@
 				'timothyjaeryangbaek',
 				'timothyjbaek',
 				'twitter',
-				'update info',
-				'updateinfo',
 				'version info',
 				'versioninfo'
 			]

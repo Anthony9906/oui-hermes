@@ -12,9 +12,6 @@ import emojiShortCodes from '$lib/emoji-shortcodes.json';
 // Backend
 export const WEBUI_NAME = writable(APP_NAME);
 
-export const WEBUI_VERSION = writable(null);
-export const WEBUI_DEPLOYMENT_ID = writable(null);
-
 export const config: Writable<Config | undefined> = writable(undefined);
 export const user: Writable<SessionUser | undefined> = writable(undefined);
 
@@ -73,7 +70,6 @@ export const functions = writable(null);
 
 export const toolServers = writable([]);
 export const terminalServers = writable([]);
-
 
 export const banners: Writable<Banner[]> = writable([]);
 
@@ -184,7 +180,6 @@ type Settings = {
 	pinnedModels?: never[];
 	toolServers?: never[];
 	detectArtifacts?: boolean;
-	showUpdateToast?: boolean;
 	showChangelog?: boolean;
 	showEmojiInCall?: boolean;
 	voiceInterruption?: boolean;
@@ -298,7 +293,6 @@ type Config = {
 		enable_community_sharing: boolean;
 		enable_memories: boolean;
 		enable_autocomplete_generation: boolean;
-		enable_version_update_check: boolean;
 		folder_max_file_count?: number;
 	};
 	oauth: {

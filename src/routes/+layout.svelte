@@ -14,8 +14,6 @@
 		settings,
 		theme,
 		WEBUI_NAME,
-		WEBUI_VERSION,
-		WEBUI_DEPLOYMENT_ID,
 		mobile,
 		socket,
 		socketConnected,
@@ -37,8 +35,6 @@
 	} from '$lib/stores';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { beforeNavigate } from '$app/navigation';
-	import { updated } from '$app/state';
 
 	import i18n, { initI18n, getLanguages, changeLanguage } from '$lib/i18n';
 
@@ -46,7 +42,7 @@
 	import '../app.css';
 	import 'tippy.js/dist/tippy.css';
 
-	import { executeToolServer, getBackendConfig, getModels, getVersion } from '$lib/apis';
+	import { executeToolServer, getBackendConfig, getModels } from '$lib/apis';
 	import { getSessionUser, updateUserTimezone, userSignOut } from '$lib/apis/auths';
 	import { getAllTags, getChatList } from '$lib/apis/chats';
 	import {
@@ -66,28 +62,6 @@
 	import Spinner from '$lib/components/common/Spinner.svelte';
 	import { getUserSettings } from '$lib/apis/users';
 	import dayjs from 'dayjs';
-
-	const unregisterServiceWorkers = async () => {
-		if ('serviceWorker' in navigator) {
-			try {
-				const registrations = await navigator.serviceWorker.getRegistrations();
-				await Promise.all(registrations.map((r) => r.unregister()));
-				return true;
-			} catch (error) {
-				console.error('Error unregistering service workers:', error);
-				return false;
-			}
-		}
-		return false;
-	};
-
-	// handle frontend updates (https://svelte.dev/docs/kit/configuration#version)
-	beforeNavigate(async ({ willUnload, to }) => {
-		if (updated.current && !willUnload && to?.url) {
-			await unregisterServiceWorkers();
-			location.href = to.url.href;
-		}
-	});
 
 	setContext('i18n', i18n);
 
@@ -132,22 +106,6 @@
 			}
 			hasConnectedOnce = true;
 
-			const res = await getVersion(localStorage.token);
-
-			const deploymentId = res?.deployment_id ?? null;
-			const version = res?.version ?? null;
-
-			if (version !== null || deploymentId !== null) {
-				if (
-					($WEBUI_VERSION !== null && version !== $WEBUI_VERSION) ||
-					($WEBUI_DEPLOYMENT_ID !== null && deploymentId !== $WEBUI_DEPLOYMENT_ID)
-				) {
-					await unregisterServiceWorkers();
-					location.href = location.href;
-					return;
-				}
-			}
-
 			// Send heartbeat every 30 seconds
 			heartbeatInterval = setInterval(() => {
 				if (_socket.connected) {
@@ -155,17 +113,6 @@
 					_socket.emit('heartbeat', {});
 				}
 			}, 30000);
-
-			if (deploymentId !== null) {
-				WEBUI_DEPLOYMENT_ID.set(deploymentId);
-			}
-
-			if (version !== null) {
-				WEBUI_VERSION.set(version);
-				window.WEBUI_VERSION = version;
-			}
-
-			console.log('version', version);
 
 			if (localStorage.getItem('token')) {
 				// Emit user-join event with auth token
@@ -427,12 +374,7 @@
 		if (event.type === 'models:refresh') {
 			const token = localStorage.token;
 			if (token) {
-				models.set(
-					await getModels(
-						token,
-						null
-					)
-				);
+				models.set(await getModels(token, null));
 			}
 			return;
 		}

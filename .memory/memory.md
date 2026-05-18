@@ -217,6 +217,17 @@ Status: implemented and locally verified on 2026-05-15
 - Admin UI updates: connection editor includes `Allow in Chat` and `Allow for Tasks`; model management shows `Task only`, `Chat only`, or `Chat + Task`; model defaults/pinned-model config filters out task-only ids so they cannot be saved as chat defaults.
 - Verification: `python3 -m py_compile backend/open_webui/utils/model_usage.py backend/open_webui/routers/openai.py backend/open_webui/main.py backend/open_webui/utils/models.py backend/open_webui/utils/task.py backend/open_webui/utils/chat.py` passed; `npm run build` passed; targeted `git diff --check` passed.
 
+## Version Update Check Removal
+
+Status: implemented and locally verified on 2026-05-18
+
+- Goal: remove new-version checks and update reminders from OUI Hermes.
+- Frontend release checking was removed from app startup, user About settings, and Admin General settings. The update toast component and the user setting `showUpdateToast` were removed, along with related settings-search keywords.
+- SvelteKit version polling and root-layout auto-reload-on-version-change logic were removed. Socket reconnect no longer calls `/api/version` to compare app/deployment versions for forced reload; `/api/version` itself remains because sync/export code still uses current version metadata.
+- Backend GitHub latest-release checking was removed: `/api/version/updates`, `ENABLE_VERSION_UPDATE_CHECK`, and the `enable_version_update_check` config feature are no longer active.
+- Verification: `python3 -m py_compile backend/open_webui/main.py backend/open_webui/env.py` passed; targeted grep for active update-check/reminder symbols returned no matches outside locale catalogs; `git diff --check` passed; `npm run build` passed and rewrote `build/`.
+- Caveat: unused translation catalog keys such as `Check for updates` may still remain until the locale parser cleanup is run; they are not active UI/runtime references.
+
 ## Xyflow Build Warning Patch
 
 Status: implemented and locally verified on 2026-05-15
@@ -249,7 +260,7 @@ Status: implemented and locally verified on 2026-05-15
 - Hermes direct message context now injects only:
   - `<system_default_context><current_conversation_user user_id="..." user_name="..." display_name="..." /></system_default_context>`
   - `<attached_files><file name="..." url="..." /></attached_files>`
-  It does not inject locale, timezone, file id, size, content type, extracted text, or inline file body.
+    It does not inject locale, timezone, file id, size, content type, extracted text, or inline file body.
 - For Hermes session-delta requests with attachments, missing public object-storage URL now raises a clear `400` asking Admin to configure attachment object storage. The Hermes path no longer falls back to local `/api/v1/files/.../content/direct` URLs.
 - Frontend Admin Settings now includes an `Attachment Storage` page with provider, endpoint, bucket, region, credentials, addressing style, key prefix, and public base URL fields plus Save/Verify actions. Secrets are masked and never displayed back to the browser.
 - Verification: `python3 -m py_compile backend/open_webui/config.py backend/open_webui/storage/provider.py backend/open_webui/routers/configs.py backend/open_webui/routers/files.py backend/open_webui/utils/middleware.py backend/open_webui/main.py` passed; `npm run build` passed; `git diff --check` passed.
