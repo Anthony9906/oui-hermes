@@ -103,6 +103,7 @@
 
 	export let onUpload: Function = (e) => {};
 	export let onChange: Function = () => {};
+	export let ensureChatId: Function = async () => null;
 
 	export let createMessagePair: Function;
 	export let stopResponse: Function;
@@ -580,13 +581,16 @@
 
 		if (!$temporaryChatEnabled) {
 			try {
+				const uploadChatId = await ensureChatId();
+
 				// If the file is an audio file, provide the language for STT.
-				let metadata = null;
+				let metadata = uploadChatId ? { chat_id: uploadChatId } : null;
 				if (
 					(file.type.startsWith('audio/') || file.type.startsWith('video/')) &&
 					$settings?.audio?.stt?.language
 				) {
 					metadata = {
+						...(metadata ?? {}),
 						language: $settings?.audio?.stt?.language
 					};
 				}

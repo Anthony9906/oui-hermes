@@ -46,6 +46,7 @@ from open_webui.storage.provider import get_storage_provider_from_app_config
 
 from open_webui.config import BYPASS_ADMIN_ACCESS_CONTROL, STORAGE_LOCAL_CACHE, UPLOAD_DIR
 from open_webui.utils.auth import decode_token, get_admin_user, get_verified_user
+from open_webui.utils.hermes import is_valid_client_chat_id
 from open_webui.utils.misc import strict_match_mime_type
 from pydantic import BaseModel
 
@@ -138,11 +139,19 @@ def _cleanup_local_cache(request: Request, file_path: str) -> None:
     if STORAGE_LOCAL_CACHE or storage_config.get('provider') == 'local':
         return
     try:
-        local_filename = os.path.basename(file_path)
-        local_path = os.path.join(UPLOAD_DIR, local_filename)
-        if os.path.isfile(local_path):
-            os.remove(local_path)
-            log.debug(f'Cleaned up local cache: {local_path}')
+        candidate_paths = [os.path.join(UPLOAD_DIR, os.path.basename(file_path))]
+        if isinstance(file_path, str) and file_path.startswith('s3://'):
+            object_key = '/'.join(file_path.split('//', 1)[1].split('/')[1:])
+            key_prefix = (storage_config.get('key_prefix') or '').strip('/')
+            if key_prefix and object_key.startswith(f'{key_prefix}/'):
+                object_key = object_key[len(key_prefix) + 1 :]
+            candidate_paths.append(os.path.join(UPLOAD_DIR, object_key))
+
+        for local_path in candidate_paths:
+            if os.path.isfile(local_path):
+                os.remove(local_path)
+                log.debug(f'Cleaned up local cache: {local_path}')
+                break
     except OSError as e:
         log.warning(f'Failed to clean up local cache for {file_path}: {e}')
 
@@ -251,6 +260,11 @@ async def upload_file_handler(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=ERROR_MESSAGES.DEFAULT('Invalid metadata format'),
             )
+    if metadata and not isinstance(metadata, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.DEFAULT('Invalid metadata format'),
+        )
     file_metadata = metadata if metadata else {}
 
     try:
@@ -275,12 +289,23 @@ async def upload_file_handler(
         # replace filename with uuid
         id = str(uuid.uuid4())
         name = filename
-        filename = f'{id}_{filename}'
         if not file_extension:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=ERROR_MESSAGES.DEFAULT('Uploaded files must include a filename extension'),
             )
+
+        chat_id = file_metadata.get('chat_id')
+        if chat_id is not None and not is_valid_client_chat_id(chat_id):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ERROR_MESSAGES.DEFAULT('Invalid chat_id in upload metadata'),
+            )
+
+        filename = f'{id}_{filename}'
+        if chat_id:
+            filename = os.path.join(chat_id, filename)
+
         contents, file_path = await asyncio.to_thread(
             _storage(request).upload_file,
             file.file,

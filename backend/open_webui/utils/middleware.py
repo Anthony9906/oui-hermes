@@ -98,6 +98,7 @@ from open_webui.utils.mcp.client import MCPClient
 from open_webui.utils.hermes import (
     apply_hermes_session_header,
     extract_current_user_message,
+    is_image_file_item,
     is_temporary_chat_id,
 )
 
@@ -2624,12 +2625,11 @@ async def add_direct_file_context(
     return messages
 
 
-async def add_current_turn_image_context(message: dict, request: Request) -> dict:
+async def add_current_turn_image_context(message: dict, request: Request, require_public_urls: bool = False) -> dict:
     image_files = [
         file
         for file in message.get('files', []) or []
-        if isinstance(file, dict)
-        and (file.get('type') == 'image' or (file.get('content_type') or '').startswith('image/'))
+        if is_image_file_item(file)
     ]
     if not image_files:
         return message
@@ -2637,8 +2637,18 @@ async def add_current_turn_image_context(message: dict, request: Request) -> dic
     image_parts = []
     for file in image_files:
         image_url = await get_model_image_url_from_file(file, request)
-        if image_url:
-            image_parts.append({'type': 'image_url', 'image_url': {'url': image_url}})
+        if not image_url:
+            if require_public_urls:
+                name = file.get('name') or file.get('filename') or _extract_file_id(file) or 'image'
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f'Image attachment "{name}" does not have a public object-storage URL. '
+                        'Ask an admin to configure attachment object storage.'
+                    ),
+                )
+            continue
+        image_parts.append({'type': 'image_url', 'image_url': {'url': image_url}})
 
     if not image_parts:
         return message
@@ -3169,7 +3179,6 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         current_user_message = extract_current_user_message(form_data, metadata)
         if not current_user_message:
             raise HTTPException(status_code=400, detail='Hermes session requests require a current user message.')
-        current_user_message = await add_current_turn_image_context(current_user_message, request)
         current_user_message.pop('files', None)
         form_data['messages'] = [current_user_message]
         metadata['hermes_session_delta'] = True
@@ -3209,7 +3218,8 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             except Exception:
                 pass
 
-    form_data = await convert_url_images_to_base64(form_data)
+    if not hermes_session_delta:
+        form_data = await convert_url_images_to_base64(form_data)
 
     event_emitter = await get_event_emitter(metadata)
     event_caller = await get_event_call(metadata)

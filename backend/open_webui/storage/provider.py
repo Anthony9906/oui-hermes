@@ -54,7 +54,17 @@ class LocalStorageProvider(StorageProvider):
         contents = file.read()
         if not contents:
             raise ValueError(ERROR_MESSAGES.EMPTY_CONTENT)
-        file_path = os.path.join(UPLOAD_DIR, filename)
+
+        normalized_filename = os.path.normpath(filename).lstrip(os.sep)
+        if normalized_filename == '..' or normalized_filename.startswith(f'..{os.sep}'):
+            raise ValueError('Invalid upload filename')
+
+        file_path = os.path.abspath(os.path.join(UPLOAD_DIR, normalized_filename))
+        upload_dir = os.path.abspath(UPLOAD_DIR)
+        if os.path.commonpath([upload_dir, file_path]) != upload_dir:
+            raise ValueError('Invalid upload filename')
+
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, 'wb') as f:
             f.write(contents)
         return contents, file_path
@@ -67,8 +77,11 @@ class LocalStorageProvider(StorageProvider):
     @staticmethod
     def delete_file(file_path: str) -> None:
         """Handles deletion of the file from local storage."""
-        filename = os.path.basename(file_path)
-        file_path = os.path.join(UPLOAD_DIR, filename)
+        upload_dir = os.path.abspath(UPLOAD_DIR)
+        candidate = os.path.abspath(file_path)
+        if os.path.commonpath([upload_dir, candidate]) != upload_dir:
+            candidate = os.path.join(upload_dir, os.path.basename(file_path))
+        file_path = candidate
         if os.path.isfile(file_path):
             os.remove(file_path)
         else:

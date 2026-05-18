@@ -1,14 +1,47 @@
 from __future__ import annotations
 
 import copy
+import re
 from typing import Any
 
 
 HERMES_SESSION_HEADER = 'X-Hermes-Session-Id'
+SAFE_CLIENT_CHAT_ID = re.compile(r'^[A-Za-z0-9_-]{1,128}$')
+IMAGE_FILE_EXTENSIONS = {
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.webp',
+    '.gif',
+    '.bmp',
+    '.tiff',
+    '.tif',
+    '.heic',
+    '.heif',
+}
 
 
 def is_temporary_chat_id(chat_id: Any) -> bool:
     return isinstance(chat_id, str) and chat_id.startswith('local:')
+
+
+def is_valid_client_chat_id(chat_id: Any) -> bool:
+    return isinstance(chat_id, str) and bool(SAFE_CLIENT_CHAT_ID.fullmatch(chat_id))
+
+
+def is_image_file_item(file: Any) -> bool:
+    if not isinstance(file, dict):
+        return False
+
+    if file.get('type') == 'image':
+        return True
+
+    content_type = file.get('content_type') or (file.get('file') or {}).get('meta', {}).get('content_type')
+    if isinstance(content_type, str) and content_type.lower().startswith('image/'):
+        return True
+
+    name_or_url = str(file.get('name') or file.get('filename') or file.get('url') or '').lower()
+    return any(name_or_url.endswith(ext) for ext in IMAGE_FILE_EXTENSIONS)
 
 
 def get_hermes_session_id(metadata: dict | None) -> str | None:

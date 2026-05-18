@@ -57,6 +57,7 @@
 	export let onUpload: Function = (e) => {};
 	export let onSelect = (e) => {};
 	export let onChange = (e) => {};
+	export let ensureChatId: Function = async () => null;
 
 	export let toolServers = [];
 
@@ -218,6 +219,7 @@
 					placeholder={$i18n.t('How can I help you today?')}
 					{onChange}
 					{onUpload}
+					{ensureChatId}
 					on:submit={(e) => {
 						dispatch('submit', e.detail);
 					}}

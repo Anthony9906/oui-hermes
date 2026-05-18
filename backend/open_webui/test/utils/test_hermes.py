@@ -1,4 +1,4 @@
-from open_webui.utils.hermes import build_hermes_delta_payload
+from open_webui.utils.hermes import build_hermes_delta_payload, is_valid_client_chat_id
 
 
 def test_build_hermes_delta_payload_preserves_processed_user_context():
@@ -36,3 +36,12 @@ def test_build_hermes_delta_payload_preserves_processed_user_context():
     assert '<current_conversation_user' in result['messages'][0]['content']
     assert '<attached_files>' in result['messages'][0]['content']
     assert 'tools' not in result
+
+
+def test_client_chat_id_validation_allows_safe_preallocated_ids_only():
+    assert is_valid_client_chat_id('01JABC_def-123')
+    assert is_valid_client_chat_id('550e8400-e29b-41d4-a716-446655440000')
+    assert not is_valid_client_chat_id('../chat')
+    assert not is_valid_client_chat_id('local:temporary')
+    assert not is_valid_client_chat_id('chat/id')
+    assert not is_valid_client_chat_id('')

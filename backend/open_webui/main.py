@@ -99,6 +99,7 @@ from open_webui.routers import (
     automations,
 )
 from open_webui.routers.tasks import generate_title as generate_task_title
+from open_webui.utils.hermes import is_valid_client_chat_id
 
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1639,7 +1640,15 @@ async def chat_completion(
         #   null   → new chat (root message, no parent)
         #   value  → follow-up (user message's parentId = prev assistant)
         #   absent → legacy caller, no chat management
-        is_new_chat = 'parent_id' in form_data and form_data['parent_id'] is None and not form_data.get('chat_id')
+        requested_chat_id = form_data.get('chat_id')
+        if requested_chat_id and not is_valid_client_chat_id(requested_chat_id):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail='Invalid chat_id.',
+            )
+
+        is_root_message = 'parent_id' in form_data and form_data['parent_id'] is None
+        is_new_chat = is_root_message and not requested_chat_id
         parent_id = form_data.pop('parent_id', None)
         form_data.pop('new_chat', None)  # Legacy field
 
@@ -1696,6 +1705,16 @@ async def chat_completion(
 
         if is_new_chat:
             metadata['chat_id'] = str(uuid4())
+
+        if is_root_message and requested_chat_id:
+            existing_chat = await Chats.get_chat_by_id(requested_chat_id)
+            if existing_chat is None:
+                is_new_chat = True
+            elif existing_chat.user_id != user.id and user.role != 'admin':
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=ERROR_MESSAGES.DEFAULT(),
+                )
 
         if metadata.get('chat_id') and user:
             chat_id = metadata['chat_id']

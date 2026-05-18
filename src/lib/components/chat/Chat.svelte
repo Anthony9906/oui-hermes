@@ -989,6 +989,16 @@
 
 	// File upload functions
 
+	const ensureChatId = async () => {
+		if ($chatId) {
+			return $chatId;
+		}
+
+		const id = uuidv4();
+		await chatId.set(id);
+		return id;
+	};
+
 	const uploadGoogleDriveFile = async (fileData) => {
 		console.log('Starting uploadGoogleDriveFile with:', {
 			id: fileData.id,
@@ -1072,13 +1082,16 @@
 				throw new Error('Created file is empty');
 			}
 
+			const uploadChatId = await ensureChatId();
+
 			// If the file is an audio file, provide the language for STT.
-			let metadata = null;
+			let metadata = uploadChatId ? { chat_id: uploadChatId } : null;
 			if (
 				(file.type.startsWith('audio/') || file.type.startsWith('video/')) &&
 				$settings?.audio?.stt?.language
 			) {
 				metadata = {
+					...(metadata ?? {}),
 					language: $settings?.audio?.stt?.language
 				};
 			}
@@ -2119,6 +2132,7 @@
 		}
 
 		// Clear input and submit
+		await ensureChatId();
 		messageInput?.setText('');
 		prompt = '';
 		const _files = structuredClone(files);
@@ -2448,7 +2462,7 @@
 				user_message: userMessage,
 
 				background_tasks: {
-					...(!_chatId && (userMessage?.parentId ?? null) === null
+					...((userMessage?.parentId ?? null) === null
 						? {
 								title_generation: $settings?.title?.auto ?? true,
 								tags_generation: $settings?.autoTags ?? true
@@ -2509,10 +2523,14 @@
 				// Only update if the user hasn't navigated to a different chat
 				// while the request was in flight (prevents overwriting $chatId
 				// and causing spurious toast notifications / state duplication).
-				if (res.chat_id && $chatId !== res.chat_id && $chatId === _chatId) {
-					await chatId.set(res.chat_id);
+				if (res.chat_id && $chatId === _chatId) {
+					if ($chatId !== res.chat_id) {
+						await chatId.set(res.chat_id);
+					}
 					if (!$temporaryChatEnabled) {
-						window.history.replaceState(history.state, '', `/c/${res.chat_id}`);
+						if (window.location.pathname !== `/c/${res.chat_id}`) {
+							window.history.replaceState(history.state, '', `/c/${res.chat_id}`);
+						}
 						currentChatPage.set(1);
 						await chats.set(await getChatList(localStorage.token, $currentChatPage));
 					}
@@ -3089,6 +3107,7 @@
 									{stopResponse}
 									{createMessagePair}
 									{onUpload}
+									{ensureChatId}
 									messageQueue={$chatRequestQueues[$chatId] ?? []}
 									{chatTasks}
 									onQueueSendNow={async (id) => {
@@ -3170,6 +3189,7 @@
 									{createMessagePair}
 									{onSelect}
 									{onUpload}
+									{ensureChatId}
 									onChange={(data) => {
 										if (!$temporaryChatEnabled) {
 											saveDraft(data);
