@@ -348,6 +348,7 @@ from open_webui.config import (
     ENABLE_RAG_LOCAL_WEB_FETCH,
     ENABLE_WEB_LOADER_SSL_VERIFICATION,
     ENABLE_GOOGLE_DRIVE_INTEGRATION,
+    STORAGE_CONFIG,
     UPLOAD_DIR,
     EXTERNAL_WEB_SEARCH_URL,
     EXTERNAL_WEB_SEARCH_API_KEY,
@@ -810,6 +811,14 @@ app.state.TOOL_SERVERS = []
 ########################################
 
 app.state.config.TERMINAL_SERVER_CONNECTIONS = TERMINAL_SERVER_CONNECTIONS
+
+####################################
+#
+# STORAGE
+#
+####################################
+
+app.state.config.STORAGE_CONFIG = STORAGE_CONFIG
 app.state.TERMINAL_SERVERS = []
 
 ########################################

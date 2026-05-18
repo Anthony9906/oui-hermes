@@ -41,10 +41,10 @@ from open_webui.models.groups import Groups
 from open_webui.models.access_grants import AccessGrants
 
 
-from open_webui.storage.provider import Storage
+from open_webui.storage.provider import get_storage_provider_from_app_config
 
 
-from open_webui.config import BYPASS_ADMIN_ACCESS_CONTROL, STORAGE_LOCAL_CACHE, STORAGE_PROVIDER, UPLOAD_DIR
+from open_webui.config import BYPASS_ADMIN_ACCESS_CONTROL, STORAGE_LOCAL_CACHE, UPLOAD_DIR
 from open_webui.utils.auth import decode_token, get_admin_user, get_verified_user
 from open_webui.utils.misc import strict_match_mime_type
 from pydantic import BaseModel
@@ -57,9 +57,14 @@ router = APIRouter()
 from open_webui.utils.access_control.files import has_access_to_file
 
 
-async def _get_file_content_response(file: FileModel, attachment: bool):
+def _storage(request: Request):
+    return get_storage_provider_from_app_config(request.app.state.config)
+
+
+async def _get_file_content_response(request: Request, file: FileModel, attachment: bool):
     try:
-        file_path = await asyncio.to_thread(Storage.get_file, file.path)
+        storage = _storage(request)
+        file_path = await asyncio.to_thread(storage.get_file, file.path)
         file_path = Path(file_path)
 
         # Check if the file already exists in the cache
@@ -106,14 +111,14 @@ async def _get_file_content_response(file: FileModel, attachment: bool):
 ############################
 
 
-def _is_text_file(file_path: str, chunk_size: int = 8192) -> bool:
+def _is_text_file(request: Request, file_path: str, chunk_size: int = 8192) -> bool:
     """Check if a file is likely a text file by reading a chunk and validating UTF-8.
 
     This catches files whose extensions are mis-mapped by mimetypes/browsers
     (e.g. TypeScript .ts → video/mp2t) without maintaining an extension whitelist.
     """
     try:
-        resolved = Storage.get_file(file_path)
+        resolved = _storage(request).get_file(file_path)
         with open(resolved, 'rb') as f:
             chunk = f.read(chunk_size)
         if not chunk:
@@ -127,9 +132,10 @@ def _is_text_file(file_path: str, chunk_size: int = 8192) -> bool:
         return False
 
 
-def _cleanup_local_cache(file_path: str) -> None:
+def _cleanup_local_cache(request: Request, file_path: str) -> None:
     """Remove the local cached copy of a cloud-stored file after processing."""
-    if STORAGE_LOCAL_CACHE or STORAGE_PROVIDER == 'local':
+    storage_config = getattr(request.app.state.config, 'STORAGE_CONFIG', {}) or {}
+    if STORAGE_LOCAL_CACHE or storage_config.get('provider') == 'local':
         return
     try:
         local_filename = os.path.basename(file_path)
@@ -159,14 +165,14 @@ async def process_uploaded_file(
 
             # Detect mis-labeled text files (e.g. .ts → video/mp2t)
             if content_type and content_type.startswith(('image/', 'video/')):
-                if _is_text_file(file_path):
+                if _is_text_file(request, file_path):
                     content_type = 'text/plain'
 
             if content_type:
                 stt_supported_content_types = getattr(request.app.state.config, 'STT_SUPPORTED_CONTENT_TYPES', [])
 
                 if strict_match_mime_type(stt_supported_content_types, content_type):
-                    file_path_processed = await asyncio.to_thread(Storage.get_file, file_path)
+                    file_path_processed = await asyncio.to_thread(_storage(request).get_file, file_path)
                     result = transcribe(request, file_path_processed, file_metadata, user)
                     content = result.get('text', '')
             else:
@@ -199,7 +205,7 @@ async def process_uploaded_file(
             async with get_async_db_context() as db_session:
                 await _process_handler(db_session)
     finally:
-        _cleanup_local_cache(file_path)
+        _cleanup_local_cache(request, file_path)
 
 
 @router.post('/', response_model=FileModelResponse)
@@ -270,8 +276,13 @@ async def upload_file_handler(
         id = str(uuid.uuid4())
         name = filename
         filename = f'{id}_{filename}'
+        if not file_extension:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ERROR_MESSAGES.DEFAULT('Uploaded files must include a filename extension'),
+            )
         contents, file_path = await asyncio.to_thread(
-            Storage.upload_file,
+            _storage(request).upload_file,
             file.file,
             filename,
             {
@@ -431,13 +442,15 @@ async def search_files(
 
 
 @router.delete('/all')
-async def delete_all_files(user=Depends(get_admin_user), db: AsyncSession = Depends(get_async_session)):
+async def delete_all_files(
+    request: Request, user=Depends(get_admin_user), db: AsyncSession = Depends(get_async_session)
+):
     result = await Files.delete_all_files(db=db)
     if result:
         try:
             from open_webui.retrieval.vector.async_client import ASYNC_VECTOR_DB_CLIENT
 
-            await asyncio.to_thread(Storage.delete_all_files)
+            await asyncio.to_thread(_storage(request).delete_all_files)
             await ASYNC_VECTOR_DB_CLIENT.reset()
         except Exception as e:
             log.exception(e)
@@ -614,6 +627,7 @@ async def update_file_data_content_by_id(
 
 @router.get('/{id}/content')
 async def get_file_content_by_id(
+    request: Request,
     id: str,
     user=Depends(get_verified_user),
     attachment: bool = Query(False),
@@ -628,7 +642,7 @@ async def get_file_content_by_id(
         )
 
     if file.user_id == user.id or user.role == 'admin' or await has_access_to_file(id, 'read', user, db=db):
-        return await _get_file_content_response(file, attachment)
+        return await _get_file_content_response(request, file, attachment)
     else:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -638,6 +652,7 @@ async def get_file_content_by_id(
 
 @router.get('/{id}/content/direct')
 async def get_file_content_by_id_direct(
+    request: Request,
     id: str,
     token: str = Query(...),
     attachment: bool = Query(False),
@@ -658,12 +673,12 @@ async def get_file_content_by_id_direct(
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    return await _get_file_content_response(file, attachment)
+    return await _get_file_content_response(request, file, attachment)
 
 
 @router.get('/{id}/content/html')
 async def get_html_file_content_by_id(
-    id: str, user=Depends(get_verified_user), db: AsyncSession = Depends(get_async_session)
+    request: Request, id: str, user=Depends(get_verified_user), db: AsyncSession = Depends(get_async_session)
 ):
     file = await Files.get_file_by_id(id, db=db)
 
@@ -682,7 +697,7 @@ async def get_html_file_content_by_id(
 
     if file.user_id == user.id or user.role == 'admin' or await has_access_to_file(id, 'read', user, db=db):
         try:
-            file_path = await asyncio.to_thread(Storage.get_file, file.path)
+            file_path = await asyncio.to_thread(_storage(request).get_file, file.path)
             file_path = Path(file_path)
 
             # Check if the file already exists in the cache
@@ -712,7 +727,7 @@ async def get_html_file_content_by_id(
 
 @router.get('/{id}/content/{file_name}')
 async def get_file_content_by_id(
-    id: str, user=Depends(get_verified_user), db: AsyncSession = Depends(get_async_session)
+    request: Request, id: str, user=Depends(get_verified_user), db: AsyncSession = Depends(get_async_session)
 ):
     file = await Files.get_file_by_id(id, db=db)
 
@@ -731,7 +746,7 @@ async def get_file_content_by_id(
         headers = {'Content-Disposition': f"attachment; filename*=UTF-8''{encoded_filename}"}
 
         if file_path:
-            file_path = await asyncio.to_thread(Storage.get_file, file_path)
+            file_path = await asyncio.to_thread(_storage(request).get_file, file_path)
             file_path = Path(file_path)
 
             # Check if the file already exists in the cache
@@ -769,7 +784,9 @@ async def get_file_content_by_id(
 
 
 @router.delete('/{id}')
-async def delete_file_by_id(id: str, user=Depends(get_verified_user), db: AsyncSession = Depends(get_async_session)):
+async def delete_file_by_id(
+    request: Request, id: str, user=Depends(get_verified_user), db: AsyncSession = Depends(get_async_session)
+):
     file = await Files.get_file_by_id(id, db=db)
 
     if not file:
@@ -799,7 +816,7 @@ async def delete_file_by_id(id: str, user=Depends(get_verified_user), db: AsyncS
             try:
                 from open_webui.retrieval.vector.async_client import ASYNC_VECTOR_DB_CLIENT
 
-                await asyncio.to_thread(Storage.delete_file, file.path)
+                await asyncio.to_thread(_storage(request).delete_file, file.path)
                 await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=f'file-{id}')
             except Exception as e:
                 log.exception(e)

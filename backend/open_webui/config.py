@@ -1030,6 +1030,24 @@ S3_USE_ACCELERATE_ENDPOINT = os.environ.get('S3_USE_ACCELERATE_ENDPOINT', 'false
 S3_ADDRESSING_STYLE = os.environ.get('S3_ADDRESSING_STYLE') or ('path' if USE_R2_STORAGE_ENV else None)
 S3_ENABLE_TAGGING = os.getenv('S3_ENABLE_TAGGING', 'false').lower() == 'true'
 
+STORAGE_CONFIG_DEFAULT = {
+    'provider': STORAGE_PROVIDER,
+    'endpoint_url': S3_ENDPOINT_URL or '',
+    'bucket_name': S3_BUCKET_NAME or '',
+    'region_name': S3_REGION_NAME or '',
+    'access_key_id': S3_ACCESS_KEY_ID or '',
+    'secret_access_key': S3_SECRET_ACCESS_KEY or '',
+    'addressing_style': S3_ADDRESSING_STYLE or '',
+    'key_prefix': S3_KEY_PREFIX or '',
+    'public_base_url': S3_PUBLIC_BASE_URL or '',
+}
+
+STORAGE_CONFIG = PersistentConfig(
+    'STORAGE_CONFIG',
+    'storage.config',
+    STORAGE_CONFIG_DEFAULT,
+)
+
 GCS_BUCKET_NAME = os.environ.get('GCS_BUCKET_NAME', None)
 GOOGLE_APPLICATION_CREDENTIALS_JSON = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON', None)
 

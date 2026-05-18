@@ -17,9 +17,7 @@ import inspect
 import re
 import ast
 
-from datetime import timedelta
 from html.parser import HTMLParser
-from urllib.parse import urlencode
 from uuid import uuid4
 from concurrent.futures import ThreadPoolExecutor
 
@@ -2255,25 +2253,17 @@ async def get_model_image_url_from_file(file: dict, request: Request) -> str:
 
     try:
         from open_webui.models.files import Files
-        from open_webui.storage.provider import get_public_url_for_path
+        from open_webui.storage.provider import get_public_url_for_path_from_app_config
 
         file_item = await Files.get_file_by_id(file_id)
         if file_item:
-            public_url = get_public_url_for_path(file_item.path)
+            public_url = get_public_url_for_path_from_app_config(file_item.path, request.app.state.config)
             if public_url:
                 return public_url
-
-            if isinstance(file_item.path, str) and file_item.path.startswith('s3://'):
-                direct_url = await get_file_access_url({'id': file_id}, request)
-                if direct_url:
-                    return direct_url
     except Exception as e:
         log.debug(f'Failed to resolve image file URL: {e}')
 
-    base_url = str(request.app.state.config.WEBUI_URL or request.base_url).rstrip('/')
-    if url.startswith('/'):
-        return f'{base_url}{url}'
-    return f'{base_url}/api/v1/files/{file_id}/content'
+    return ''
 
 
 async def get_image_urls(delta_images, request, metadata, user) -> list[str]:
@@ -2366,43 +2356,17 @@ async def get_file_access_url(file: dict, request: Request) -> str:
 
     try:
         from open_webui.models.files import Files
-        from open_webui.storage.provider import get_public_url_for_path, get_storage_provider_for_path
+        from open_webui.storage.provider import get_public_url_for_path_from_app_config
 
         file_item = await Files.get_file_by_id(file_id)
         if file_item:
-            public_url = get_public_url_for_path(file_item.path)
+            public_url = get_public_url_for_path_from_app_config(file_item.path, request.app.state.config)
             if public_url:
                 return public_url
-
-        if file_item and isinstance(file_item.path, str) and file_item.path.startswith('s3://'):
-            storage = get_storage_provider_for_path(file_item.path)
-            s3_key = storage._extract_s3_key(file_item.path)
-            if getattr(storage, 'public_base_url', None):
-                public_url = storage.get_public_url(file_item.path)
-                if public_url:
-                    return public_url
-
-            return await asyncio.to_thread(
-                storage.s3_client.generate_presigned_url,
-                'get_object',
-                Params={'Bucket': storage.bucket_name, 'Key': s3_key},
-                ExpiresIn=3600,
-            )
     except Exception as e:
         log.debug(f'Failed to generate direct file access URL for {file_id}: {e}')
 
-    from open_webui.utils.auth import create_token
-
-    token = create_token(
-        {
-            'sub': 'hermes-file-access',
-            'scope': 'file_content',
-            'file_id': file_id,
-        },
-        expires_delta=timedelta(hours=1),
-    )
-    base_url = str(request.app.state.config.WEBUI_URL or request.base_url).rstrip('/')
-    return f'{base_url}/api/v1/files/{file_id}/content/direct?{urlencode({"token": token})}'
+    return ''
 
 
 class _HTMLTextExtractor(HTMLParser):
@@ -2511,7 +2475,7 @@ async def get_file_text_content(file: dict, request: Request, max_chars: int) ->
         from pathlib import Path
 
         from open_webui.models.files import Files
-        from open_webui.storage.provider import get_storage_provider_for_path
+        from open_webui.storage.provider import get_storage_provider_for_path_from_app_config
 
         file_item = await Files.get_file_by_id(file_id)
         if not file_item:
@@ -2570,7 +2534,7 @@ async def get_file_text_content(file: dict, request: Request, max_chars: int) ->
         if not supports_pdf and not supports_text:
             return '', False
 
-        storage = get_storage_provider_for_path(file_item.path)
+        storage = get_storage_provider_for_path_from_app_config(file_item.path, request.app.state.config)
         file_path = Path(await asyncio.to_thread(storage.get_file, file_item.path))
         if not file_path.is_file():
             return '', False
@@ -2588,14 +2552,27 @@ async def add_direct_file_context(
     files: list,
     request: Request,
     content_file_ids: set[str] | None = None,
+    user=None,
+    require_public_urls: bool = False,
 ) -> list:
-    """Inject file URLs into the latest user message; extract text only for selected files."""
-    if not messages or not files:
+    """Inject Hermes default session context and URL-only attachment references into the latest user message."""
+    if not messages:
         return messages
 
+    context_blocks = []
+    if user:
+        user_id = html.escape(str(getattr(user, 'id', '') or ''), quote=True)
+        user_name_value = getattr(user, 'username', None) or getattr(user, 'name', None) or ''
+        user_name = html.escape(str(user_name_value), quote=True)
+        display_name = html.escape(str(getattr(user, 'name', '') or ''), quote=True)
+        context_blocks.append(
+            '<system_default_context>\n'
+            f'<current_conversation_user user_id="{user_id}" user_name="{user_name}" display_name="{display_name}" />\n'
+            '</system_default_context>'
+        )
+
     file_tags = []
-    remaining_chars = ATTACHED_FILES_TOTAL_MAX_CHARS
-    for file in files:
+    for file in files or []:
         if not isinstance(file, dict):
             continue
         if file.get('type') != 'file':
@@ -2603,46 +2580,45 @@ async def add_direct_file_context(
 
         url = await get_file_access_url(file, request)
         if not url:
+            if require_public_urls:
+                name = file.get('name') or file.get('filename') or _extract_file_id(file) or 'attachment'
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f'Attachment "{name}" does not have a public object-storage URL. '
+                        'Ask an admin to configure attachment object storage.'
+                    ),
+                )
             continue
 
-        attrs = f'type="file" url="{html.escape(url, quote=True)}"'
         name = file.get('name') or file.get('filename')
-        content_type = file.get('content_type') or (file.get('file') or {}).get('meta', {}).get('content_type')
-        if content_type:
-            attrs += f' content_type="{html.escape(str(content_type), quote=True)}"'
-        if name:
-            attrs += f' name="{html.escape(str(name), quote=True)}"'
+        if not name:
+            if require_public_urls:
+                raise HTTPException(
+                    status_code=400,
+                    detail='Attachment is missing a filename and cannot be sent to Hermes.',
+                )
+            continue
+        file_tags.append(
+            f'<file name="{html.escape(str(name), quote=True)}" url="{html.escape(url, quote=True)}" />'
+        )
 
-        file_id = _extract_file_id(file)
-        should_extract_content = content_file_ids is None or file_id in content_file_ids
+    if file_tags:
+        context_blocks.append('<attached_files>\n' + '\n'.join(file_tags) + '\n</attached_files>')
 
-        content = ''
-        content_truncated = False
-        if should_extract_content and remaining_chars > 0:
-            max_chars = min(ATTACHED_FILE_CONTENT_MAX_CHARS, remaining_chars)
-            content, content_truncated = await get_file_text_content(file, request, max_chars)
-            remaining_chars -= len(content)
-
-        if content:
-            if content_truncated:
-                attrs += ' content_truncated="true"'
-            file_tags.append(f'<file {attrs}>\n<content><![CDATA[{_cdata(content)}]]></content>\n</file>')
-        else:
-            file_tags.append(f'<file {attrs}/>')
-
-    if not file_tags:
+    if not context_blocks:
         return messages
 
-    file_context = '<attached_files>\n' + '\n'.join(file_tags) + '\n</attached_files>\n\n'
+    context = '\n\n'.join(context_blocks) + '\n\n'
 
     for message in reversed(messages):
         if message.get('role') != 'user':
             continue
         content = message.get('content', '')
         if isinstance(content, list):
-            message['content'] = [{'type': 'text', 'text': file_context}] + content
+            message['content'] = [{'type': 'text', 'text': context}] + content
         else:
-            message['content'] = file_context + str(content or '')
+            message['content'] = context + str(content or '')
         break
 
     return messages
@@ -3427,6 +3403,9 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         tool_ids = None
         terminal_id = None
         form_data.pop('skill_ids', None)
+        current_turn_files = (metadata.get('user_message') or {}).get('files') or []
+        if current_turn_files:
+            files = current_turn_files
 
     # Caller-provided OpenAI-style tools take precedence over server-side
     # tool resolution (tool_ids, MCP servers, builtin tools).
@@ -3507,7 +3486,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     }
     form_data['metadata'] = metadata
 
-    if files:
+    if files or hermes_session_delta:
         current_user_files = (metadata.get('user_message') or {}).get('files')
         current_file_ids = None
         if current_user_files is not None:
@@ -3525,6 +3504,8 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             files,
             request,
             current_file_ids,
+            user=user,
+            require_public_urls=hermes_session_delta and bool(files),
         )
         metadata['direct_files'] = files
         metadata['files'] = []

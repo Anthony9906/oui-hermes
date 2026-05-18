@@ -4,7 +4,7 @@ import json
 import logging
 import re
 from abc import ABC, abstractmethod
-from typing import BinaryIO, Tuple, Dict
+from typing import Any, BinaryIO, Tuple, Dict
 
 from open_webui.config import (
     S3_ACCESS_KEY_ID,
@@ -92,14 +92,21 @@ class LocalStorageProvider(StorageProvider):
 
 
 class S3StorageProvider(StorageProvider):
-    def __init__(self):
+    def __init__(self, config: dict[str, Any] | None = None):
         import boto3
         from botocore.config import Config
+
+        storage_config = config or {}
+        region_name = storage_config.get('region_name') or S3_REGION_NAME
+        endpoint_url = storage_config.get('endpoint_url') or S3_ENDPOINT_URL
+        access_key_id = storage_config.get('access_key_id') or S3_ACCESS_KEY_ID
+        secret_access_key = storage_config.get('secret_access_key') or S3_SECRET_ACCESS_KEY
+        addressing_style = storage_config.get('addressing_style') or S3_ADDRESSING_STYLE
 
         config = Config(
             s3={
                 'use_accelerate_endpoint': S3_USE_ACCELERATE_ENDPOINT,
-                'addressing_style': S3_ADDRESSING_STYLE,
+                'addressing_style': addressing_style,
             },
             # KIT change - see https://github.com/boto/boto3/issues/4400#issuecomment-2600742103∆
             request_checksum_calculation='when_required',
@@ -107,13 +114,13 @@ class S3StorageProvider(StorageProvider):
         )
 
         # If access key and secret are provided, use them for authentication
-        if S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY:
+        if access_key_id and secret_access_key:
             self.s3_client = boto3.client(
                 's3',
-                region_name=S3_REGION_NAME,
-                endpoint_url=S3_ENDPOINT_URL,
-                aws_access_key_id=S3_ACCESS_KEY_ID,
-                aws_secret_access_key=S3_SECRET_ACCESS_KEY,
+                region_name=region_name,
+                endpoint_url=endpoint_url,
+                aws_access_key_id=access_key_id,
+                aws_secret_access_key=secret_access_key,
                 config=config,
             )
         else:
@@ -121,14 +128,15 @@ class S3StorageProvider(StorageProvider):
             # This supports workload identity (IAM roles for EC2, EKS, etc.)
             self.s3_client = boto3.client(
                 's3',
-                region_name=S3_REGION_NAME,
-                endpoint_url=S3_ENDPOINT_URL,
+                region_name=region_name,
+                endpoint_url=endpoint_url,
                 config=config,
             )
 
-        self.bucket_name = S3_BUCKET_NAME
-        self.key_prefix = S3_KEY_PREFIX if S3_KEY_PREFIX else ''
-        self.public_base_url = S3_PUBLIC_BASE_URL.rstrip('/') if S3_PUBLIC_BASE_URL else None
+        self.bucket_name = storage_config.get('bucket_name') or S3_BUCKET_NAME
+        self.key_prefix = storage_config.get('key_prefix') or S3_KEY_PREFIX or ''
+        public_base_url = storage_config.get('public_base_url') or S3_PUBLIC_BASE_URL
+        self.public_base_url = public_base_url.rstrip('/') if public_base_url else None
 
     @staticmethod
     def sanitize_tag_value(s: str) -> str:
@@ -339,11 +347,35 @@ class AzureStorageProvider(StorageProvider):
         LocalStorageProvider.delete_all_files()
 
 
-def get_storage_provider(storage_provider: str):
+def _normalize_storage_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
+    config = config or {}
+    provider = config.get('provider') or STORAGE_PROVIDER
+    return {
+        'provider': provider,
+        'endpoint_url': config.get('endpoint_url') or S3_ENDPOINT_URL,
+        'bucket_name': config.get('bucket_name') or S3_BUCKET_NAME,
+        'region_name': config.get('region_name') or S3_REGION_NAME,
+        'access_key_id': config.get('access_key_id') or S3_ACCESS_KEY_ID,
+        'secret_access_key': config.get('secret_access_key') or S3_SECRET_ACCESS_KEY,
+        'addressing_style': config.get('addressing_style') or S3_ADDRESSING_STYLE,
+        'key_prefix': config.get('key_prefix') or S3_KEY_PREFIX or '',
+        'public_base_url': config.get('public_base_url') or S3_PUBLIC_BASE_URL,
+    }
+
+
+def get_storage_config_from_app_config(app_config) -> dict[str, Any]:
+    try:
+        return _normalize_storage_config(getattr(app_config, 'STORAGE_CONFIG', None))
+    except Exception:
+        return _normalize_storage_config()
+
+
+def get_storage_provider(storage_provider: str, config: dict[str, Any] | None = None):
+    config = _normalize_storage_config(config)
     if storage_provider == 'local':
         Storage = LocalStorageProvider()
     elif storage_provider in ('s3', 'r2'):
-        Storage = S3StorageProvider()
+        Storage = S3StorageProvider(config)
     elif storage_provider == 'gcs':
         Storage = GCSStorageProvider()
     elif storage_provider == 'azure':
@@ -353,9 +385,15 @@ def get_storage_provider(storage_provider: str):
     return Storage
 
 
-def get_storage_provider_for_path(file_path: str):
+def get_storage_provider_from_app_config(app_config):
+    config = get_storage_config_from_app_config(app_config)
+    return get_storage_provider(config.get('provider') or STORAGE_PROVIDER, config)
+
+
+def get_storage_provider_for_path(file_path: str, config: dict[str, Any] | None = None):
+    config = _normalize_storage_config(config)
     if isinstance(file_path, str) and file_path.startswith('s3://'):
-        return get_storage_provider('r2' if STORAGE_PROVIDER == 'r2' else 's3')
+        return get_storage_provider('r2' if config.get('provider') == 'r2' else 's3', config)
     if isinstance(file_path, str) and file_path.startswith('gs://'):
         return get_storage_provider('gcs')
     if isinstance(file_path, str) and file_path.startswith(('http://', 'https://')) and STORAGE_PROVIDER == 'azure':
@@ -363,12 +401,20 @@ def get_storage_provider_for_path(file_path: str):
     return Storage
 
 
-def get_public_url_for_path(file_path: str) -> str | None:
-    storage = get_storage_provider_for_path(file_path)
+def get_storage_provider_for_path_from_app_config(file_path: str, app_config):
+    return get_storage_provider_for_path(file_path, get_storage_config_from_app_config(app_config))
+
+
+def get_public_url_for_path(file_path: str, config: dict[str, Any] | None = None) -> str | None:
+    storage = get_storage_provider_for_path(file_path, config)
     get_public_url = getattr(storage, 'get_public_url', None)
     if callable(get_public_url):
         return get_public_url(file_path)
     return None
+
+
+def get_public_url_for_path_from_app_config(file_path: str, app_config) -> str | None:
+    return get_public_url_for_path(file_path, get_storage_config_from_app_config(app_config))
 
 
 Storage = get_storage_provider(STORAGE_PROVIDER)

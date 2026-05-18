@@ -1,15 +1,20 @@
 import logging
 import copy
+import io
+import uuid
+import asyncio
 from fastapi import APIRouter, Depends, Request, HTTPException
 from pydantic import BaseModel, ConfigDict
 import aiohttp
 
 from typing import Optional
+from urllib.parse import urlparse
 
 from open_webui.env import AIOHTTP_CLIENT_SESSION_SSL, AIOHTTP_CLIENT_TIMEOUT
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.config import get_config, save_config, async_save_config
 from open_webui.config import BannerModel
+from open_webui.storage.provider import get_storage_provider
 
 from open_webui.utils.tools import (
     get_tool_server_data,
@@ -78,6 +83,163 @@ async def get_connections_config(request: Request, user=Depends(get_admin_user))
     return {
         'ENABLE_BASE_MODELS_CACHE': request.app.state.config.ENABLE_BASE_MODELS_CACHE,
     }
+
+
+############################
+# Storage Config
+############################
+
+
+class StorageConfigResponse(BaseModel):
+    provider: str
+    endpoint_url: str = ''
+    bucket_name: str = ''
+    region_name: str = ''
+    addressing_style: str = ''
+    key_prefix: str = ''
+    public_base_url: str = ''
+    access_key_configured: bool = False
+    secret_key_configured: bool = False
+
+
+class StorageConfigForm(BaseModel):
+    provider: str
+    endpoint_url: str = ''
+    bucket_name: str = ''
+    region_name: str = ''
+    access_key_id: Optional[str] = None
+    secret_access_key: Optional[str] = None
+    addressing_style: str = ''
+    key_prefix: str = ''
+    public_base_url: str = ''
+
+
+def _storage_config_response(config: dict) -> StorageConfigResponse:
+    return StorageConfigResponse(
+        provider=config.get('provider') or 'local',
+        endpoint_url=config.get('endpoint_url') or '',
+        bucket_name=config.get('bucket_name') or '',
+        region_name=config.get('region_name') or '',
+        addressing_style=config.get('addressing_style') or '',
+        key_prefix=config.get('key_prefix') or '',
+        public_base_url=config.get('public_base_url') or '',
+        access_key_configured=bool(config.get('access_key_id')),
+        secret_key_configured=bool(config.get('secret_access_key')),
+    )
+
+
+def _merge_storage_config(current: dict, form_data: StorageConfigForm) -> dict:
+    provider = (form_data.provider or '').strip().lower()
+    if provider not in {'r2', 's3'}:
+        raise HTTPException(status_code=400, detail='Storage provider must be r2 or s3.')
+
+    next_config = {
+        'provider': provider,
+        'endpoint_url': form_data.endpoint_url.strip(),
+        'bucket_name': form_data.bucket_name.strip(),
+        'region_name': form_data.region_name.strip(),
+        'access_key_id': (
+            form_data.access_key_id.strip()
+            if form_data.access_key_id is not None and form_data.access_key_id.strip()
+            else current.get('access_key_id', '')
+        ),
+        'secret_access_key': (
+            form_data.secret_access_key.strip()
+            if form_data.secret_access_key is not None and form_data.secret_access_key.strip()
+            else current.get('secret_access_key', '')
+        ),
+        'addressing_style': form_data.addressing_style.strip(),
+        'key_prefix': form_data.key_prefix.strip().strip('/'),
+        'public_base_url': form_data.public_base_url.strip().rstrip('/'),
+    }
+
+    required = {
+        'endpoint_url': 'Endpoint URL is required.',
+        'bucket_name': 'Bucket name is required.',
+        'access_key_id': 'Access key is required.',
+        'secret_access_key': 'Secret key is required.',
+        'public_base_url': 'Public base URL is required.',
+    }
+    for field, message in required.items():
+        if not next_config.get(field):
+            raise HTTPException(status_code=400, detail=message)
+
+    if not next_config['public_base_url'].startswith(('http://', 'https://')):
+        raise HTTPException(status_code=400, detail='Public base URL must start with http:// or https://.')
+
+    return next_config
+
+
+async def _verify_public_url_accessible(public_url: str) -> None:
+    timeout = aiohttp.ClientTimeout(total=10)
+    async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
+        async with session.head(public_url, ssl=AIOHTTP_CLIENT_SESSION_SSL) as response:
+            if response.status < 400:
+                return
+            if response.status != 405:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f'Public URL is not accessible: HTTP {response.status}.',
+                )
+
+        async with session.get(
+            public_url,
+            headers={'Range': 'bytes=0-0'},
+            ssl=AIOHTTP_CLIENT_SESSION_SSL,
+        ) as response:
+            if response.status < 400:
+                return
+            raise HTTPException(
+                status_code=400,
+                detail=f'Public URL is not accessible: HTTP {response.status}.',
+            )
+
+
+@router.get('/storage', response_model=StorageConfigResponse)
+async def get_storage_config(request: Request, user=Depends(get_admin_user)):
+    return _storage_config_response(request.app.state.config.STORAGE_CONFIG or {})
+
+
+@router.post('/storage', response_model=StorageConfigResponse)
+async def set_storage_config(request: Request, form_data: StorageConfigForm, user=Depends(get_admin_user)):
+    current = request.app.state.config.STORAGE_CONFIG or {}
+    next_config = _merge_storage_config(current, form_data)
+    request.app.state.config.STORAGE_CONFIG = next_config
+    return _storage_config_response(next_config)
+
+
+@router.post('/storage/verify')
+async def verify_storage_config(request: Request, form_data: StorageConfigForm, user=Depends(get_admin_user)):
+    current = request.app.state.config.STORAGE_CONFIG or {}
+    next_config = _merge_storage_config(current, form_data)
+    storage = get_storage_provider(next_config['provider'], next_config)
+    filename = f'open-webui-storage-verify-{uuid.uuid4().hex}.txt'
+    storage_path = None
+    public_url = None
+
+    try:
+        _, storage_path = await asyncio.to_thread(
+            storage.upload_file,
+            io.BytesIO(b'open-webui storage verification'),
+            filename,
+            {'OpenWebUI-Storage-Verify': 'true'},
+        )
+        public_url = storage.get_public_url(storage_path)
+        if not public_url:
+            raise HTTPException(status_code=400, detail='Public URL could not be generated.')
+
+        if not urlparse(public_url).path.lower().endswith('.txt'):
+            raise HTTPException(status_code=400, detail='Public URL must preserve the filename extension.')
+
+        await _verify_public_url_accessible(public_url)
+
+        return {'status': True, 'public_url': public_url}
+    finally:
+        if storage_path:
+            try:
+                await asyncio.to_thread(storage.delete_file, storage_path)
+            except Exception as e:
+                log.debug(f'Failed to delete storage verification object: {e}')
 
 
 @router.post('/connections', response_model=ConnectionsConfigForm)

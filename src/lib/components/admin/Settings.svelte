@@ -13,6 +13,7 @@
 	import Interface from './Settings/Interface.svelte';
 	import Models from './Settings/Models.svelte';
 	import Connections from './Settings/Connections.svelte';
+	import Storage from './Settings/Storage.svelte';
 	import Audio from './Settings/Audio.svelte';
 
 	import Evaluations from './Settings/Evaluations.svelte';
@@ -33,6 +34,7 @@
 		selectedTab = [
 			'general',
 			'connections',
+			'storage',
 			'models',
 			'evaluations',
 			'interface',
@@ -63,6 +65,7 @@
 	const enabledSettingTabs = [
 		'general',
 		'connections',
+		'storage',
 		'models',
 		'evaluations',
 		'interface',
@@ -99,15 +102,13 @@
 			id: 'connections',
 			title: 'Connections',
 			route: '/admin/settings/connections',
-			keywords: [
-				'connections',
-				'ollama',
-				'openai',
-				'api',
-				'base url',
-				'proxy',
-				'key'
-			]
+			keywords: ['connections', 'ollama', 'openai', 'api', 'base url', 'proxy', 'key']
+		},
+		{
+			id: 'storage',
+			title: 'Attachment Storage',
+			route: '/admin/settings/storage',
+			keywords: ['storage', 'attachments', 'files', 's3', 'r2', 'oss', 'minio', 'bucket']
 		},
 		{
 			id: 'models',
@@ -297,6 +298,7 @@
 
 		<!-- {$i18n.t('General')} -->
 		<!-- {$i18n.t('Connections')} -->
+		<!-- {$i18n.t('Attachment Storage')} -->
 		<!-- {$i18n.t('Models')} -->
 		<!-- {$i18n.t('Evaluations')} -->
 		<!-- {$i18n.t('Documents')} -->
@@ -339,6 +341,21 @@
 						>
 							<path
 								d="M1 9.5A3.5 3.5 0 0 0 4.5 13H12a3 3 0 0 0 .917-5.857 2.503 2.503 0 0 0-3.198-3.019 3.5 3.5 0 0 0-6.628 2.171A3.5 3.5 0 0 0 1 9.5Z"
+							/>
+						</svg>
+					{:else if tab.id === 'storage'}
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							viewBox="0 0 16 16"
+							fill="currentColor"
+							class="w-4 h-4"
+						>
+							<path d="M8 1C4.686 1 2 2.12 2 3.5S4.686 6 8 6s6-1.12 6-2.5S11.314 1 8 1Z" />
+							<path
+								d="M2 5.35V8c0 1.38 2.686 2.5 6 2.5s6-1.12 6-2.5V5.35C12.8 6.18 10.64 6.75 8 6.75s-4.8-.57-6-1.4Z"
+							/>
+							<path
+								d="M2 9.85V12.5C2 13.88 4.686 15 8 15s6-1.12 6-2.5V9.85c-1.2.83-3.36 1.4-6 1.4s-4.8-.57-6-1.4Z"
 							/>
 						</svg>
 					{:else if tab.id === 'models'}
@@ -478,6 +495,12 @@
 		{:else if selectedTab === 'connections'}
 			<Connections
 				on:save={() => {
+					toast.success($i18n.t('Settings saved successfully!'));
+				}}
+			/>
+		{:else if selectedTab === 'storage'}
+			<Storage
+				saveHandler={() => {
 					toast.success($i18n.t('Settings saved successfully!'));
 				}}
 			/>

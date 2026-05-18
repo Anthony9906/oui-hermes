@@ -228,7 +228,7 @@ Status: implemented and locally verified on 2026-05-15
 
 ## Attachment Storage / R2
 
-Status: verified from local repository inspection on 2026-05-14
+Status: partially superseded by `Attachment Storage Config And Hermes URL Context` on 2026-05-15
 
 - Attachment upload is not hardcoded to Cloudflare R2. `backend/open_webui/routers/files.py` calls the configured global `Storage.upload_file`, and `backend/open_webui/storage/provider.py` selects `local`, `s3`/`r2`, `gcs`, or `azure` from `STORAGE_PROVIDER`.
 - R2 is implemented as an S3-compatible alias: `STORAGE_PROVIDER=r2` maps to `S3StorageProvider`, with config preferring `R2_*` variables and falling back to `S3_*` variables where applicable.
@@ -237,6 +237,27 @@ Status: verified from local repository inspection on 2026-05-14
 - With S3/R2 provider, uploads are first written into `UPLOAD_DIR` by `LocalStorageProvider.upload_file`, then uploaded to S3/R2, and `STORAGE_LOCAL_CACHE=true` leaves the local cached copy in place. Seeing a local file therefore does not by itself prove the canonical storage provider is local; the DB `files.path` value is the key evidence (`s3://...` vs local filesystem path).
 - Image attachments and non-image attachments can appear different in model payloads: images are represented as `image_url` content parts for vision models, while non-image files are usually injected as `<attached_files>` with extracted text and/or a tokenized `/api/v1/files/{id}/content/direct` URL fallback.
 - Review risk: `backend/open_webui/utils/middleware.py` imports `get_public_url_for_path` and `get_storage_provider_for_path` from `backend/open_webui/storage/provider.py`, but the current provider module only defines `get_storage_provider` and `S3StorageProvider.get_public_url`. This means the intended direct public URL / presigned URL path can fail and fall back to tokenized `/api/v1/files/{id}/content` URLs unless helper functions are added or the middleware is corrected.
+
+## Attachment Storage Config And Hermes URL Context
+
+Status: implemented and locally verified on 2026-05-15
+
+- Goal: configure OUI user-uploaded attachment object storage from an Admin-only UI/API, and make Hermes consume only public attachment URLs from message context. Hermes is not the storage owner; it only receives `name + url` and reads objects from the configured storage.
+- Backend added persistent runtime `STORAGE_CONFIG` defaults from existing S3/R2 env values, exposed as Admin-only `/api/v1/configs/storage` GET/POST and `/api/v1/configs/storage/verify`. Saved config overrides startup env defaults; blank secret fields preserve existing secrets; responses expose only `*_configured` booleans.
+- Storage provider lookup now supports dynamic app config instead of relying only on a module-level singleton. S3/R2-compatible config includes provider, endpoint, bucket, region, access key, secret key, addressing style, key prefix, and public base URL.
+- File uploads now reject filenames without an extension. S3/R2 object keys and generated public URLs preserve the original extension so Hermes can infer file type from URL suffix.
+- Hermes direct message context now injects only:
+  - `<system_default_context><current_conversation_user user_id="..." user_name="..." display_name="..." /></system_default_context>`
+  - `<attached_files><file name="..." url="..." /></attached_files>`
+  It does not inject locale, timezone, file id, size, content type, extracted text, or inline file body.
+- For Hermes session-delta requests with attachments, missing public object-storage URL now raises a clear `400` asking Admin to configure attachment object storage. The Hermes path no longer falls back to local `/api/v1/files/.../content/direct` URLs.
+- Frontend Admin Settings now includes an `Attachment Storage` page with provider, endpoint, bucket, region, credentials, addressing style, key prefix, and public base URL fields plus Save/Verify actions. Secrets are masked and never displayed back to the browser.
+- Verification: `python3 -m py_compile backend/open_webui/config.py backend/open_webui/storage/provider.py backend/open_webui/routers/configs.py backend/open_webui/routers/files.py backend/open_webui/utils/middleware.py backend/open_webui/main.py` passed; `npm run build` passed; `git diff --check` passed.
+- Remaining caveat: no live R2/S3 credentials were available in this run, so the real write/delete/public-URL verify flow was implemented but not exercised against an external bucket locally.
+- Follow-up fix on 2026-05-18: MinIO/proxy deployments may return `405 Method Not Allowed` for public object `HEAD` even when `GET` works. Storage verify now tries `HEAD` first and falls back to a ranged `GET` on `405`, so MinIO public URL verification is not rejected solely because HEAD is unavailable.
+- Runtime update on 2026-05-18: backend on port 8080 was restarted in `screen` session `oui-hermes-backend` after the MinIO verify fallback fix. `curl http://127.0.0.1:8080/health` returned `{"status":true}`. An unauthenticated `POST /api/v1/configs/storage/verify` returned `401 Not authenticated`, confirming the running route accepts POST and is no longer surfacing method mismatch at the route layer.
+- Correction on 2026-05-18: the previous "Hermes direct attachment context injects" implementation was incomplete. `process_chat_payload()` injected `user_identity` / `attached_files`, but `routers/openai.py` then called `build_hermes_delta_payload()`, which re-read `metadata.user_message` and replaced the processed message with the original user message, dropping the XML context blocks. Fix: `build_hermes_delta_payload()` now prefers the already-processed payload user message and only falls back to `metadata.user_message` when needed. Regression test added in `backend/open_webui/test/utils/test_hermes.py`; verified with `PYTHONPATH=backend uv run --with-requirements backend/requirements.txt pytest backend/open_webui/test/utils/test_hermes.py -q`, `python3 -m py_compile backend/open_webui/utils/hermes.py backend/open_webui/test/utils/test_hermes.py`, `git diff --check`, and backend restart/health check on port 8080.
+- Contract update on 2026-05-18: `user_identity` is replaced by the clearer default-session-context wrapper `<system_default_context><current_conversation_user ... /></system_default_context>`, so the model can distinguish OUI system-default conversation user context from the user's own text. `attached_files` remains a current-message attachment block.
 
 ## External API Server Diff
 

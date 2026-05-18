@@ -45,6 +45,15 @@ def extract_current_user_message(payload: dict, metadata: dict | None) -> dict |
     return None
 
 
+def extract_processed_user_message(payload: dict) -> dict | None:
+    """Return the latest user message from an already-processed payload."""
+    for message in reversed(payload.get('messages') or []):
+        if isinstance(message, dict) and message.get('role') == 'user':
+            return _clean_user_message(copy.deepcopy(message))
+
+    return None
+
+
 def _clean_user_message(message: dict) -> dict:
     allowed = {'role', 'content', 'files', 'name'}
     return {k: v for k, v in message.items() if k in allowed}
@@ -52,7 +61,7 @@ def _clean_user_message(message: dict) -> dict:
 
 def build_hermes_delta_payload(payload: dict, metadata: dict | None) -> dict:
     """Strip Open WebUI context ownership from a chat-completions payload."""
-    user_message = extract_current_user_message(payload, metadata)
+    user_message = extract_processed_user_message(payload) or extract_current_user_message(payload, metadata)
     if not user_message:
         return payload
 
