@@ -87,6 +87,7 @@
 	import Terminal from '../icons/Terminal.svelte';
 	import IntegrationsMenu from './MessageInput/IntegrationsMenu.svelte';
 	import TerminalMenu from './MessageInput/TerminalMenu.svelte';
+	import FolderSelector from './MessageInput/FolderSelector.svelte';
 	import Component from '../icons/Component.svelte';
 	import PlusAlt from '../icons/PlusAlt.svelte';
 	import Dropdown from '../common/Dropdown.svelte';
@@ -1627,6 +1628,10 @@
 											<PlusAlt className="size-5.5" />
 										</div>
 									</InputMenu>
+
+									{#if !history?.currentId && !$temporaryChatEnabled}
+										<FolderSelector />
+									{/if}
 
 									{#if showWebSearchButton || showImageGenerationButton || showCodeInterpreterButton || showToolsButton || (toggleFilters && toggleFilters.length > 0)}
 										<div

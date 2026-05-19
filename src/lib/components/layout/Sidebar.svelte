@@ -28,6 +28,7 @@
 		isApp,
 		models,
 		selectedFolder,
+		folderRefreshSignal,
 		sidebarWidth,
 		activeChatIds
 	} from '$lib/stores';
@@ -161,6 +162,20 @@
 	$: if ($selectedFolder) {
 		initFolders();
 	}
+
+	let handledFolderRefreshSignalId = 0;
+	$: if ($folderRefreshSignal?.id && $folderRefreshSignal.id !== handledFolderRefreshSignalId) {
+		handledFolderRefreshSignalId = $folderRefreshSignal.id;
+		refreshFoldersFromSignal($folderRefreshSignal.folderId);
+	}
+
+	const refreshFoldersFromSignal = async (folderId = null) => {
+		await initFolders();
+		await tick();
+		if (folderId) {
+			folderRegistry[folderId]?.setFolderItems();
+		}
+	};
 
 	const initFolders = async () => {
 		if ($config?.features?.enable_folders === false) {

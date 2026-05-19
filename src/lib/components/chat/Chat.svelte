@@ -29,6 +29,7 @@
 		user,
 		socket,
 		audioQueue,
+		chatTitleUpdateSignal,
 		showControls,
 		showCallOverlay,
 		currentChatPage,
@@ -41,6 +42,8 @@
 		toolServers,
 		terminalServers,
 		functions,
+		folderRefreshSignal,
+		newChatFolder,
 		selectedFolder,
 		pinnedChats,
 		showEmbeds,
@@ -141,6 +144,55 @@
 		return nextMeta;
 	};
 
+	const getNewChatFolder = () => ($newChatFolder === undefined ? $selectedFolder : $newChatFolder);
+	const getNewChatFolderId = () => getNewChatFolder()?.id ?? null;
+	const refreshFolderChatList = (folderId = currentChatFolderId) => {
+		if (folderId) {
+			folderRefreshSignal.set({ id: Date.now(), folderId });
+		}
+	};
+
+	const refreshSidebarChatTitle = async (targetChatId: string, folderId = currentChatFolderId) => {
+		const updatedChat = await getChatById(localStorage.token, targetChatId).catch(() => null);
+		const updatedTitle = updatedChat?.chat?.title ?? updatedChat?.title ?? '';
+		const newChatTitle = $i18n.t('New Chat');
+
+		if (!updatedTitle || updatedTitle === 'New Chat' || updatedTitle === newChatTitle) {
+			return false;
+		}
+
+		if ($chatId === targetChatId) {
+			chatTitle.set(updatedTitle);
+		}
+		chatTitleUpdateSignal.set({ id: Date.now(), chatId: targetChatId, title: updatedTitle });
+
+		currentChatPage.set(1);
+		await chats.set(await getChatList(localStorage.token, $currentChatPage));
+		refreshFolderChatList(folderId ?? updatedChat?.folder_id ?? null);
+
+		return true;
+	};
+
+	const watchGeneratedChatTitle = async (targetChatId: string, folderId = currentChatFolderId) => {
+		if (!targetChatId || titleRefreshWatchers.has(targetChatId)) {
+			return;
+		}
+
+		titleRefreshWatchers.add(targetChatId);
+
+		try {
+			for (let i = 0; i < 90; i++) {
+				await new Promise((resolve) => setTimeout(resolve, 1000));
+
+				if (await refreshSidebarChatTitle(targetChatId, folderId)) {
+					return;
+				}
+			}
+		} finally {
+			titleRefreshWatchers.delete(targetChatId);
+		}
+	};
+
 	const getExpertSkillNameFromChatContent = (chatContent) => {
 		const messages = [
 			...Object.values(chatContent?.history?.messages ?? {}),
@@ -215,6 +267,8 @@
 	let generationController = null;
 
 	let chat = null;
+	let currentChatFolderId = null;
+	const titleRefreshWatchers = new Set<string>();
 	let tags = [];
 
 	let chatTasks = [];
@@ -509,12 +563,20 @@
 
 		if (event.chat_id === $chatId) {
 			await tick();
+			const type = event?.data?.type ?? null;
+			const data = event?.data?.data ?? null;
+
+			if (type === 'chat:title') {
+				chatTitle.set(data);
+				chatTitleUpdateSignal.set({ id: Date.now(), chatId: event.chat_id, title: data });
+				currentChatPage.set(1);
+				await chats.set(await getChatList(localStorage.token, $currentChatPage));
+				refreshFolderChatList();
+				return;
+			}
+
 			let message = history.messages[event.message_id];
-
 			if (message) {
-				const type = event?.data?.type ?? null;
-				const data = event?.data?.data ?? null;
-
 				if (type === 'status') {
 					if (message?.statusHistory) {
 						message.statusHistory.push(data);
@@ -581,10 +643,6 @@
 				} else if (type === 'chat:message:favorite') {
 					// Update message favorite status
 					message.favorite = data.favorite;
-				} else if (type === 'chat:title') {
-					chatTitle.set(data);
-					currentChatPage.set(1);
-					await chats.set(await getChatList(localStorage.token, $currentChatPage));
 				} else if (type === 'chat:tags') {
 					chat = await getChatById(localStorage.token, $chatId);
 					allTags.set(await getAllTags(localStorage.token));
@@ -1445,6 +1503,8 @@
 		});
 
 		if (chat) {
+			currentChatFolderId = chat?.folder_id ?? null;
+
 			tags = await getTagsById(localStorage.token, $chatId).catch(async (error) => {
 				return [];
 			});
@@ -2473,7 +2533,7 @@
 
 				session_id: $socket?.id,
 				chat_id: _chatId || undefined,
-				folder_id: $selectedFolder?.id ?? undefined,
+				folder_id: getNewChatFolderId() ?? undefined,
 
 				id: responseMessageId,
 				...(messageIdsMap ? { message_ids: messageIdsMap } : {}),
@@ -2536,6 +2596,10 @@
 					taskIds.push(...newTaskIds);
 				} else {
 					taskIds = newTaskIds;
+				}
+
+				if (!$temporaryChatEnabled) {
+					void watchGeneratedChatTitle(res.chat_id ?? _chatId ?? $chatId, currentChatFolderId);
 				}
 
 				// Backend returns chat_id for new chats — set store + URL.
@@ -2795,6 +2859,8 @@
 
 	const initChatHandler = async (history) => {
 		let _chatId = $chatId;
+		const folderId = getNewChatFolderId();
+		currentChatFolderId = folderId;
 
 		if (!$temporaryChatEnabled) {
 			chat = await createNewChat(
@@ -2811,7 +2877,7 @@
 					tags: [],
 					timestamp: Date.now()
 				},
-				$selectedFolder?.id
+				folderId
 			);
 
 			_chatId = chat.id;
@@ -2824,6 +2890,11 @@
 			await chats.set(await getChatList(localStorage.token, $currentChatPage));
 			currentChatPage.set(1);
 
+			if (folderId) {
+				refreshFolderChatList(folderId);
+			}
+
+			newChatFolder.set(undefined);
 			selectedFolder.set(null);
 		} else {
 			_chatId = `local:${$socket?.id}`; // Use socket id for temporary chat
