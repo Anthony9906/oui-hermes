@@ -1,13 +1,19 @@
 <script lang="ts">
+	import { getContext } from 'svelte';
+	import type { Writable } from 'svelte/store';
+	import type { i18n as i18nType } from 'i18next';
+
 	import ChevronDown from '../icons/ChevronDown.svelte';
 	import Check from '../icons/Check.svelte';
 	import Search from '../icons/Search.svelte';
 	import Select from './Select.svelte';
 
+	const i18n: Writable<i18nType> = getContext('i18n');
+
 	export let value = '';
-	export let placeholder = $i18n.t('Select a model');
+	export let placeholder = '';
 	export let searchEnabled = true;
-	export let searchPlaceholder = $i18n.t('Search a model');
+	export let searchPlaceholder = '';
 
 	export let items = [
 		{ value: 'mango', label: 'Mango' },
@@ -20,6 +26,9 @@
 	let searchValue = '';
 	let selectRef;
 
+	$: resolvedPlaceholder = placeholder || $i18n.t('Select a model');
+	$: resolvedSearchPlaceholder = searchPlaceholder || $i18n.t('Search a model');
+
 	$: filteredItems = searchValue
 		? items.filter((item) => item.value.toLowerCase().includes(searchValue.toLowerCase()))
 		: items;
@@ -29,7 +38,7 @@
 	bind:value
 	bind:this={selectRef}
 	{items}
-	{placeholder}
+	placeholder={resolvedPlaceholder}
 	triggerClass="relative w-full"
 	contentClass="w-full rounded-lg bg-white dark:bg-gray-900 dark:text-white shadow-lg border border-gray-300/30 dark:border-gray-700/40 outline-hidden"
 	onClose={() => {
@@ -54,7 +63,7 @@
 					<input
 						bind:value={searchValue}
 						class="w-full text-sm bg-transparent outline-hidden"
-						placeholder={searchPlaceholder}
+						placeholder={resolvedSearchPlaceholder}
 						on:click|stopPropagation
 					/>
 				</div>

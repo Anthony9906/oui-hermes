@@ -69,8 +69,7 @@
 						<textarea
 							class="w-full h-full min-h-[200px] bg-transparent outline-none resize-none text-base leading-relaxed placeholder:text-gray-300 dark:placeholder:text-gray-600"
 							bind:value={content}
-							placeholder={$i18n.t('Write something...')}
-						/>
+							placeholder={$i18n.t('Write something...')}></textarea>
 					</div>
 				</div>
 			</div>
@@ -144,23 +143,24 @@
 </Modal>
 
 <style>
-	input::-webkit-outer-spin-button,
-	input::-webkit-inner-spin-button {
+	:global(input::-webkit-outer-spin-button),
+	:global(input::-webkit-inner-spin-button) {
 		/* display: none; <- Crashes Chrome on hover */
 		-webkit-appearance: none;
 		margin: 0; /* <-- Apparently some margin are still there even though it's hidden */
 	}
 
-	.tabs::-webkit-scrollbar {
+	:global(.tabs::-webkit-scrollbar) {
 		display: none; /* for Chrome, Safari and Opera */
 	}
 
-	.tabs {
+	:global(.tabs) {
 		-ms-overflow-style: none; /* IE and Edge */
 		scrollbar-width: none; /* Firefox */
 	}
 
-	input[type='number'] {
+	:global(input[type='number']) {
+		appearance: textfield;
 		-moz-appearance: textfield; /* Firefox */
 	}
 </style>

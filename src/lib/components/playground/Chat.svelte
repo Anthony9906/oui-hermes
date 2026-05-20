@@ -346,8 +346,7 @@
 								on:input={() => {
 									resizeSystemTextarea();
 								}}
-								rows="4"
-							/>
+								rows="4"></textarea>
 						</div>
 					</div>
 				</Collapsible>
@@ -431,8 +430,7 @@
 								e.target.style.height = '';
 								e.target.style.height = Math.min(e.target.scrollHeight, 150) + 'px';
 							}}
-							rows="2"
-						/>
+							rows="2"></textarea>
 					</div>
 
 					<div

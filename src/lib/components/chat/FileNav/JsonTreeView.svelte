@@ -78,7 +78,7 @@
 		padding: 0.75rem 1rem;
 	}
 	.json-node {
-		/* keep structure visible */
+		display: block;
 	}
 	.json-toggle {
 		cursor: pointer;
@@ -104,7 +104,7 @@
 		margin-left: 0.35em;
 	}
 	.json-entry {
-		/* one entry per line */
+		display: block;
 	}
 	.json-key {
 		color: #0550ae;

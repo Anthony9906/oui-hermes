@@ -187,7 +187,7 @@
 {/if}
 
 <style>
-	.modal-content {
+	:global(.modal-content) {
 		animation: scaleUp 0.1s ease-out forwards;
 	}
 

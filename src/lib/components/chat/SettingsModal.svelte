@@ -900,7 +900,7 @@
 		scrollbar-width: none; /* Firefox */
 	}
 
-	input[type='number'] {
+	:global(input[type='number']) {
 		appearance: textfield;
 		-moz-appearance: textfield; /* Firefox */
 	}

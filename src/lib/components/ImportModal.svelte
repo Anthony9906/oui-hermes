@@ -12,6 +12,7 @@
 
 	export let onImport = (e) => {};
 	export let onClose = () => {};
+	$: void onClose;
 
 	export let loadUrlHandler: Function = () => {};
 	export let successMessage: string = '';

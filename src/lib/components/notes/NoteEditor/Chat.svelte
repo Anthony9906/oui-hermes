@@ -68,6 +68,7 @@
 	export let onEdited = () => {};
 
 	export let insertNoteHandler = () => {};
+	$: void insertNoteHandler;
 	export let scrollToBottomHandler = () => {};
 
 	let loaded = false;
