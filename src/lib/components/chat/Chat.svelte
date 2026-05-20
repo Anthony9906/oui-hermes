@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { v4 as uuidv4 } from 'uuid';
 	import { toast } from 'svelte-sonner';
-	import { PaneGroup, Pane, PaneResizer } from 'paneforge';
+	import { PaneGroup, Pane } from 'paneforge';
 
 	import { getContext, onMount, tick } from 'svelte';
 	import { fade } from 'svelte/transition';
@@ -41,6 +41,8 @@
 		toolServers,
 		terminalServers,
 		functions,
+		folderRefreshSignal,
+		newChatFolder,
 		selectedFolder,
 		pinnedChats,
 		showEmbeds,
@@ -98,6 +100,7 @@
 		buildExpertSkillPrompt,
 		clearExpertAgentStartRequest,
 		expertAgentStartRequest,
+		showExpertAgentDrawer,
 		type ExpertAgentStartRequest
 	} from '$lib/stores/expertAgents';
 
@@ -105,7 +108,7 @@
 	import MessageInput from '$lib/components/chat/MessageInput.svelte';
 	import Messages from '$lib/components/chat/Messages.svelte';
 	import Navbar from '$lib/components/chat/Navbar.svelte';
-	import ChatControls from './ChatControls.svelte';
+	import ChatSidePanel from './ChatSidePanel.svelte';
 	import EventConfirmDialog from '../common/ConfirmDialog.svelte';
 	import Placeholder from './Placeholder.svelte';
 	import FilesOverlay from './MessageInput/FilesOverlay.svelte';
@@ -121,9 +124,6 @@
 	let loading = true;
 
 	const eventTarget = new EventTarget();
-	let controlPane: Pane | undefined;
-	let controlPaneComponent: ChatControls | undefined;
-
 	let messageInput: MessageInput | undefined;
 
 	let autoScroll = true;
@@ -141,6 +141,14 @@
 		}
 
 		return nextMeta;
+	};
+
+	const getNewChatFolder = () => ($newChatFolder === undefined ? $selectedFolder : $newChatFolder);
+	const getNewChatFolderId = () => getNewChatFolder()?.id ?? null;
+	const refreshFolderChatList = (folderId = currentChatFolderId) => {
+		if (folderId) {
+			folderRefreshSignal.set({ id: Date.now(), folderId });
+		}
 	};
 
 	const getExpertSkillNameFromChatContent = (chatContent) => {
@@ -218,6 +226,7 @@
 	let generationController = null;
 
 	let chat = null;
+	let currentChatFolderId = null;
 	let tags = [];
 
 	let chatTasks = [];
@@ -889,27 +898,6 @@
 			stopAudio();
 		});
 
-		const showControlsSubscribe = showControls.subscribe(async (value) => {
-			await tick();
-			if (controlPane && !$mobile) {
-				try {
-					if (value) {
-						controlPaneComponent?.openPane();
-					} else {
-						controlPane.collapse();
-					}
-				} catch (e) {
-					// ignore
-				}
-			}
-
-			if (!value) {
-				showCallOverlay.set(false);
-				showArtifacts.set(false);
-				showEmbeds.set(false);
-			}
-		});
-
 		const selectedFolderSubscribe = selectedFolder.subscribe(async (folder) => {
 			await tick();
 			if (folder?.data?.model_ids && !equal(selectedModels, folder.data.model_ids)) {
@@ -972,7 +960,6 @@
 					updateLastReadAt(chatIdProp);
 				}
 				pageSubscribe();
-				showControlsSubscribe();
 				selectedFolderSubscribe();
 				expertAgentStartSubscribe();
 				window.removeEventListener('message', onMessageHandler);
@@ -1216,8 +1203,17 @@
                             <meta charset="UTF-8">
                             <meta name="viewport" content="width=device-width, initial-scale=1.0">
 							<${''}style>
+								html,
 								body {
 									background-color: white; /* Ensure the iframe has a white background */
+									margin: 0;
+								}
+
+								body > iframe {
+									display: block;
+									width: 100% !important;
+									border: 0 !important;
+									background: #fff;
 								}
 
 								${group.css}
@@ -1411,7 +1407,6 @@
 
 		if ($page.url.searchParams.get('call') === 'true') {
 			showCallOverlay.set(true);
-			showControls.set(true);
 		}
 
 		// Consume one-shot desktop event (e.g. Spotlight query, call shortcut)
@@ -1420,12 +1415,8 @@
 			desktopEvent.set(null);
 
 			if (event.type === 'call') {
-				// Defer to next macrotask so the call overlay isn't clobbered by
-				// showControlsSubscribe's initial callback (value=false → set(false))
-				// which runs as a pending microtask after this function.
 				setTimeout(() => {
 					showCallOverlay.set(true);
-					showControls.set(true);
 				}, 0);
 			} else if (event.type === 'query') {
 				const query = event.data?.query;
@@ -1495,6 +1486,8 @@
 		});
 
 		if (chat) {
+			currentChatFolderId = chat?.folder_id ?? null;
+
 			tags = await getTagsById(localStorage.token, $chatId).catch(async (error) => {
 				return [];
 			});
@@ -2454,7 +2447,7 @@
 
 				session_id: $socket?.id,
 				chat_id: _chatId || undefined,
-				folder_id: $selectedFolder?.id ?? undefined,
+				folder_id: getNewChatFolderId() ?? undefined,
 
 				id: responseMessageId,
 				...(messageIdsMap ? { message_ids: messageIdsMap } : {}),
@@ -2797,37 +2790,49 @@
 
 	const initChatHandler = async (history) => {
 		let _chatId = $chatId;
+		const folderId = getNewChatFolderId();
+		currentChatFolderId = folderId;
 		const initialTitle =
 			getInitialChatTitle(createMessagesList(history, history.currentId)) || $i18n.t('New Chat');
 
 		await chatTitle.set(initialTitle);
 
-		chat = await createNewChat(
-			localStorage.token,
-			{
-				id: _chatId,
-				title: initialTitle,
-				models: selectedModels,
-				history: history,
-				messages: createMessagesList(history, history.currentId),
-				meta: buildChatMeta(),
-				tags: [],
-				timestamp: Date.now()
-			},
-			$selectedFolder?.id
-		);
+		if (!$temporaryChatEnabled) {
+			chat = await createNewChat(
+				localStorage.token,
+				{
+					id: _chatId,
+					title: initialTitle,
+					models: selectedModels,
+					history: history,
+					messages: createMessagesList(history, history.currentId),
+					meta: buildChatMeta(),
+					tags: [],
+					timestamp: Date.now()
+				},
+				folderId
+			);
 
-		_chatId = chat.id;
-		await chatId.set(_chatId);
+			_chatId = chat.id;
+			await chatId.set(_chatId);
 
-		window.history.replaceState(history.state, '', `/c/${_chatId}`);
+			window.history.replaceState(history.state, '', `/c/${_chatId}`);
 
-		await tick();
+			await tick();
 
-		await chats.set(await getChatList(localStorage.token, $currentChatPage));
-		currentChatPage.set(1);
+			await chats.set(await getChatList(localStorage.token, $currentChatPage));
+			currentChatPage.set(1);
 
-		selectedFolder.set(null);
+			if (folderId) {
+				refreshFolderChatList(folderId);
+			}
+
+			newChatFolder.set(undefined);
+			selectedFolder.set(null);
+		} else {
+			_chatId = `local:${$socket?.id}`; // Use socket id for temporary chat
+			await chatId.set(_chatId);
+		}
 		await tick();
 
 		return _chatId;
@@ -2945,6 +2950,7 @@
 	class="h-screen max-h-[100dvh] transition-width duration-200 ease-in-out {$showSidebar
 		? 'md:max-w-[calc(100%-var(--sidebar-width))]'
 		: ''} w-full max-w-full flex flex-col ml-5"
+	class:chat-side-panel-open={$showArtifacts || $showExpertAgentDrawer}
 	id="chat-container"
 >
 	{#if !loading}
@@ -3207,21 +3213,6 @@
 						{/if}
 					</div>
 				</Pane>
-
-				<ChatControls
-					bind:this={controlPaneComponent}
-					bind:history
-					bind:chatFiles
-					bind:files
-					bind:pane={controlPane}
-					chatId={$chatId}
-					modelId={selectedModelIds?.at(0) ?? null}
-					submitPrompt={submitHandler}
-					{stopResponse}
-					{showMessage}
-					{eventTarget}
-					{codeInterpreterEnabled}
-				/>
 			</PaneGroup>
 		</div>
 	{:else if loading}
@@ -3233,7 +3224,30 @@
 	{/if}
 </div>
 
+<ChatSidePanel {history} />
+
 <style>
+	:global(:root) {
+		--chat-side-panel-width: clamp(480px, 38vw, 760px);
+	}
+
+	:global(#chat-container.chat-side-panel-open) {
+		max-width: calc(100vw - var(--chat-side-panel-width) - 60px) !important;
+		margin-right: calc(var(--chat-side-panel-width) + 20px) !important;
+	}
+
+	:global(.app:has(#sidebar[data-state='true']) #chat-container.chat-side-panel-open) {
+		max-width: calc(100vw - var(--sidebar-width) - var(--chat-side-panel-width) - 80px) !important;
+	}
+
+	@media (max-width: 1023px) {
+		:global(#chat-container.chat-side-panel-open),
+		:global(.app:has(#sidebar[data-state='true']) #chat-container.chat-side-panel-open) {
+			max-width: calc(100vw - 40px) !important;
+			margin-right: 20px !important;
+		}
+	}
+
 	::-webkit-scrollbar {
 		height: 0.5rem;
 		width: 0.5rem;

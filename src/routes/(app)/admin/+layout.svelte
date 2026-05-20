@@ -62,8 +62,8 @@
 						<a
 							draggable="false"
 							class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/users')
-								? 'text-white'
-								: 'text-white/70 hover:text-white'} transition select-none"
+								? 'text-gray-900 dark:text-white'
+								: 'text-gray-600 hover:text-gray-900 dark:text-white/70 dark:hover:text-white'} transition select-none"
 							href="/admin">{$i18n.t('Users')}</a
 						>
 
@@ -71,8 +71,8 @@
 							<a
 								draggable="false"
 								class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/analytics')
-									? 'text-white'
-									: 'text-white/70 hover:text-white'} transition select-none"
+									? 'text-gray-900 dark:text-white'
+									: 'text-gray-600 hover:text-gray-900 dark:text-white/70 dark:hover:text-white'} transition select-none"
 								href="/admin/analytics">{$i18n.t('Analytics')}</a
 							>
 						{/if}
@@ -80,16 +80,16 @@
 						<a
 							draggable="false"
 							class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/evaluations')
-								? 'text-white'
-								: 'text-white/70 hover:text-white'} transition select-none"
+								? 'text-gray-900 dark:text-white'
+								: 'text-gray-600 hover:text-gray-900 dark:text-white/70 dark:hover:text-white'} transition select-none"
 							href="/admin/evaluations">{$i18n.t('Evaluations')}</a
 						>
 
 						<a
 							draggable="false"
 							class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/settings')
-								? 'text-white'
-								: 'text-white/70 hover:text-white'} transition select-none"
+								? 'text-gray-900 dark:text-white'
+								: 'text-gray-600 hover:text-gray-900 dark:text-white/70 dark:hover:text-white'} transition select-none"
 							href="/admin/settings">{$i18n.t('Settings')}</a
 						>
 					</div>

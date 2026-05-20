@@ -80,7 +80,7 @@
 				($user?.permissions?.features?.direct_tool_servers ?? true))) ||
 		(codeInterpreterEnabled && $config?.code?.interpreter_engine !== 'jupyter');
 	$: showOverviewTab = hasMessages;
-	$: showExpertAgentTab = $showExpertAgentDrawer;
+	$: showExpertAgentTab = !largeScreen && $showExpertAgentDrawer;
 
 	const firstVisibleTab = () => {
 		if (showFilesTab) activeTab = 'files';
@@ -109,7 +109,7 @@
 		closePanel();
 	}
 
-	$: if ($showExpertAgentDrawer) {
+	$: if (!largeScreen && $showExpertAgentDrawer) {
 		activeTab = 'expertAgents';
 		showControls.set(true);
 	}
@@ -239,7 +239,12 @@
 
 	function closePanel() {
 		showControls.set(false);
-		closeExpertAgentDrawer();
+		if (!largeScreen) {
+			closeExpertAgentDrawer();
+			showArtifacts.set(false);
+			showEmbeds.set(false);
+			if ($showCallOverlay) showCallOverlay.set(false);
+		}
 	}
 
 	async function startExpertAgentChat(skill: ExpertSkillCard) {
@@ -320,16 +325,18 @@
 		if (!largeScreen) {
 			closePanel();
 		}
-		showArtifacts.set(false);
 		showEmbeds.set(false);
-		closeExpertAgentDrawer();
+		if (!largeScreen) {
+			showArtifacts.set(false);
+			closeExpertAgentDrawer();
+		}
 		if ($showCallOverlay) showCallOverlay.set(false);
 	};
 
 	$: if (paneReady && !chatId) closeHandler();
 
 	// Helper: is a "special" full-screen panel active?
-	$: specialPanel = $showCallOverlay || $showArtifacts || $showEmbeds;
+	$: specialPanel = $showCallOverlay || $showEmbeds;
 </script>
 
 {#if !largeScreen}
@@ -509,8 +516,6 @@
 						</div>
 					{:else if $showEmbeds}
 						<Embeds overlay={dragged} />
-					{:else if $showArtifacts}
-						<Artifacts {history} overlay={dragged} />
 					{:else}
 						<!-- Hermes context tabs -->
 						<div class="flex flex-col h-full min-h-0">

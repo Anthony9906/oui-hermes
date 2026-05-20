@@ -65,10 +65,18 @@
 	];
 	const EMOJI_KEYS = ['emoji'];
 	const CUSTOM_TOOL_EMOJIS: Record<string, string> = {
-		todo: '🗒️',
-		terminal: '⌨️',
+		todo: '📋',
+		bash: '🖥️',
+		shell: '🖥️',
+		command: '🖥️',
+		exec: '🖥️',
+		exec_command: '🖥️',
+		execute: '🖥️',
+		execute_command: '🖥️',
+		run_command: '🖥️',
+		terminal: '🖥️',
 		process: '⏱️',
-		execute_code: '🧪',
+		execute_code: '🧬',
 		search_files: '🔎',
 		web_search: '🔍',
 		web_extract: '📄',
@@ -81,8 +89,9 @@
 		browser_press: '⌨️',
 		browser_console: '🧾',
 		read_file: '📖',
-		write_file: '✍️',
-		patch: '🛠️',
+		write_file: '📝',
+		patch: '✏️',
+		apply_patch: '✏️',
 		memory: '🧠',
 		session_search: '🔎',
 		skill_view: '📚',
@@ -237,6 +246,26 @@
 		return undefined;
 	}
 
+	function readOwnValueByKeyPriority(value: unknown, keys: string[]): unknown {
+		if (!isRecord(value)) {
+			return undefined;
+		}
+
+		for (const key of keys) {
+			const entry = Object.entries(value).find(
+				([nestedKey, nestedValue]) =>
+					nestedKey.toLowerCase() === key.toLowerCase() &&
+					nestedValue !== null &&
+					nestedValue !== undefined
+			);
+			if (entry) {
+				return entry[1];
+			}
+		}
+
+		return undefined;
+	}
+
 	function valueToPreview(value: unknown): string {
 		if (value === null || value === undefined) {
 			return '';
@@ -317,7 +346,7 @@
 
 				const content = compactText(
 					valueToPreview(
-						readOwnValueByKeys(item, ['content', 'title', 'task', 'description', 'id'])
+						readOwnValueByKeyPriority(item, ['content', 'title', 'task', 'description', 'id'])
 					)
 				);
 				if (!content) {
@@ -340,7 +369,7 @@
 			if (todos.length === 0) {
 				return '';
 			}
-			return `Agent 正在分步完成任务：${todos.filter((todo) => todo.status === 'completed').length} / ${todos.length}`;
+			return `共 ${todos.length} 个任务，已完成 ${todos.filter((todo) => todo.status === 'completed').length}`;
 		}
 
 		const total = Number(summary.total ?? 0);
@@ -349,7 +378,7 @@
 			return '';
 		}
 
-		return `Agent 正在分步完成任务：${Number.isFinite(completed) ? completed : 0} / ${total}`;
+		return `共 ${total} 个任务，已完成 ${Number.isFinite(completed) ? completed : 0}`;
 	}
 
 	function isTodoTool(rawName: string, parsedArgs: unknown, parsedResult: unknown): boolean {
@@ -634,23 +663,26 @@
 	$: displayEmoji = getCustomToolEmoji(toolName, parsedArgs, parsedResult, hermesEmoji);
 	$: visibleArgsText = EMPTY_PREVIEW_TEXTS.has(compactText(argsText)) ? '' : argsText;
 	$: visibleResultText = EMPTY_PREVIEW_TEXTS.has(compactText(resultText)) ? '' : resultText;
-	$: todoItems = isTodoTool(toolName, parsedArgs, parsedResult)
+	$: isTodo = isTodoTool(toolName, parsedArgs, parsedResult);
+	$: todoItems = isTodo
 		? getTodoItems(parsedResult).length > 0
 			? getTodoItems(parsedResult)
 			: getTodoItems(parsedArgs)
 		: [];
-	$: todoSummaryText = isTodoTool(toolName, parsedArgs, parsedResult)
+	$: todoSummaryText = isTodo
 		? getTodoSummaryText(parsedResult) || getTodoSummaryText(parsedArgs)
 		: '';
 	$: previewText = limitText(
-		getPreviewText(
-			toolName,
-			parsedArgs,
-			parsedResult,
-			visibleArgsText,
-			visibleResultText,
-			displayToolName
-		) || todoSummaryText,
+		isTodo
+			? todoSummaryText
+			: getPreviewText(
+					toolName,
+					parsedArgs,
+					parsedResult,
+					visibleArgsText,
+					visibleResultText,
+					displayToolName
+				),
 		HEADER_PREVIEW_LIMIT
 	);
 </script>

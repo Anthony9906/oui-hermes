@@ -1,6 +1,8 @@
 import logging
 import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -122,6 +124,16 @@ class ExpertAgentUpdateRequest(BaseModel):
     content: str
     icon: str | None = None
     icon_background: str | None = None
+
+
+class ExpertAgentAppearanceRequest(BaseModel):
+    icon: str
+    icon_background: str
+
+
+class ExpertAgentOpenDirectoryResponse(BaseModel):
+    ok: bool = True
+    path: str
 
 
 def _split_env_list(value: str) -> set[str]:
@@ -537,6 +549,98 @@ async def update_expert_agent_detail_post(
     return _update_expert_agent_detail(skill_name, form_data)
 
 
+@router.post("/{skill_name:path}/appearance", response_model=ExpertAgentDetailResponse)
+async def update_expert_agent_appearance(
+    skill_name: str,
+    form_data: ExpertAgentAppearanceRequest,
+    user=Depends(get_verified_user),
+):
+    skill = _find_visible_skill(skill_name)
+    if not skill:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Expert skill not found",
+        )
+
+    content = _apply_expert_agent_ui_metadata(
+        skill.get("content") or "",
+        form_data.icon,
+        form_data.icon_background,
+    )
+    content = _normalize_skill_frontmatter_key_spacing(content)
+
+    skill_md = skill["_skill_md"]
+    try:
+        skill_md.write_text(content, encoding="utf-8")
+    except OSError as e:
+        log.exception("Failed to update Hermes expert skill appearance %s", skill_md)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update expert skill appearance",
+        ) from e
+
+    updated_skill = _read_skill(skill_md)
+    if not updated_skill:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reload expert skill",
+        )
+
+    return _expert_agent_detail_response(updated_skill)
+
+
+@router.post(
+    "/{skill_name:path}/open-directory",
+    response_model=ExpertAgentOpenDirectoryResponse,
+)
+async def open_expert_agent_directory(skill_name: str, user=Depends(get_verified_user)):
+    skill = _find_visible_skill(skill_name)
+    if not skill:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Expert skill not found",
+        )
+
+    skill_dir = Path(skill["path"]).expanduser().resolve()
+    try:
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", str(skill_dir)])
+        elif sys.platform.startswith("linux"):
+            subprocess.Popen(["xdg-open", str(skill_dir)])
+        elif sys.platform.startswith("win"):
+            subprocess.Popen(["explorer", str(skill_dir)])
+        else:
+            raise OSError(f"Unsupported platform: {sys.platform}")
+    except OSError as e:
+        log.exception("Failed to open Hermes expert skill directory %s", skill_dir)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to open expert skill directory",
+        ) from e
+
+    return ExpertAgentOpenDirectoryResponse(path=str(skill_dir))
+
+
+def _expert_agent_detail_response(skill: dict[str, Any]) -> ExpertAgentDetailResponse:
+    return ExpertAgentDetailResponse(
+        name=skill["name"],
+        description=skill.get("description") or "",
+        version=skill.get("version"),
+        author=skill.get("author"),
+        icon=skill.get("icon"),
+        icon_background=skill.get("icon_background"),
+        content=skill.get("content") or "",
+        path=skill.get("path"),
+        tags=skill.get("tags") or [],
+        related_skills=skill.get("related_skills") or [],
+        linked_files=skill.get("linked_files"),
+        readiness_status=skill.get("readiness_status"),
+        setup_needed=skill.get("setup_needed"),
+        setup_note=skill.get("setup_note"),
+        metadata=skill.get("metadata"),
+    )
+
+
 def _update_expert_agent_detail(
     skill_name: str, form_data: ExpertAgentUpdateRequest
 ):
@@ -578,20 +682,4 @@ def _update_expert_agent_detail(
             detail="Failed to reload expert skill",
         )
 
-    return ExpertAgentDetailResponse(
-        name=updated_skill["name"],
-        description=updated_skill.get("description") or "",
-        version=updated_skill.get("version"),
-        author=updated_skill.get("author"),
-        icon=updated_skill.get("icon"),
-        icon_background=updated_skill.get("icon_background"),
-        content=updated_skill.get("content") or "",
-        path=updated_skill.get("path"),
-        tags=updated_skill.get("tags") or [],
-        related_skills=updated_skill.get("related_skills") or [],
-        linked_files=updated_skill.get("linked_files"),
-        readiness_status=updated_skill.get("readiness_status"),
-        setup_needed=updated_skill.get("setup_needed"),
-        setup_note=updated_skill.get("setup_note"),
-        metadata=updated_skill.get("metadata"),
-    )
+    return _expert_agent_detail_response(updated_skill)

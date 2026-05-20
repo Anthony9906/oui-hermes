@@ -60,6 +60,9 @@ export const tags = writable([]);
 export const folders = writable([]);
 
 export const selectedFolder = writable(null);
+export const newChatFolder = writable(undefined);
+export const folderRefreshSignal = writable({ id: 0, folderId: null });
+export const chatTitleUpdateSignal = writable({ id: 0, chatId: null, title: '' });
 
 export const models: Writable<Model[]> = writable([]);
 

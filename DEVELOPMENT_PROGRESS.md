@@ -73,6 +73,15 @@ Status: patched and verified
 - Active expert skill state is stored in chat `meta.expert_skill_name`; the chat top area shows the active expert mode badge.
 - Expert skill management is intentionally not implemented as destructive UI controls in Open WebUI. Skill lifecycle work should happen through the agent/Hermes side.
 
+### Chat Homepage Suggested Skill Cards
+
+Status: patched
+
+- The chat homepage uses `Suggestions.svelte` to render two engineering skill cards for Standard Parts Selection and PLC Flow Chart, with compact English tags, lucide icons, and static sketch images under `static/assets/images/expert-agent/`.
+- Suggested card ordering is deterministic: Standard Parts Selection and PLC Flow Chart are prioritized ahead of other persisted prompt suggestions, avoiding the previous random-sort behavior where the two cards could disappear until refresh.
+- Card copy supports three-line descriptions and non-wrapping tag rows; validation used Prettier, single-file Svelte compiler smoke compile, and `git diff --check` on `Suggestions.svelte`.
+- Performance caveat: the two PNG sketch assets are about 860 KB combined and the card styling uses blur, gradients, shadows, and hover transitions; consider WebP/AVIF assets and lighter effects if homepage rendering feels slow.
+
 ### Attachments, R2, And Preview
 
 Status: patched and runtime verified

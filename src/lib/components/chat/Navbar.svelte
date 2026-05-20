@@ -112,11 +112,19 @@
 			"
 				>
 					{#if showModelSelector}
-						<ModelSelector bind:selectedModels showSetDefault={!shareEnabled} />
+						<div class="flex items-start">
+							<ModelSelector bind:selectedModels showSetDefault={false} />
+						</div>
 					{/if}
 				</div>
 
 				<div class="self-start flex flex-none items-center text-gray-600 dark:text-gray-400">
+					<span
+						class="mr-10 hidden shrink-0 select-none whitespace-nowrap text-[20px] font-semibold text-[#2563eb] sm:inline-flex"
+					>
+						Cowain
+					</span>
+
 					<!-- <div class="md:hidden flex self-center w-[1px] h-5 mx-2 bg-gray-300 dark:bg-stone-700" /> -->
 
 					{#if $mobile && !$temporaryChatEnabled && chat && chat.id}

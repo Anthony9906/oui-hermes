@@ -113,7 +113,7 @@
 	>
 		{#if skill.author}
 			<div
-				class="min-w-0 truncate rounded-md border border-[#d8deea] bg-[#f7f9fc] px-2 py-1 text-[11px] font-medium leading-4 text-[#667289] dark:border-gray-700 dark:bg-gray-850 dark:text-gray-300"
+				class="min-w-0 truncate text-[11px] font-medium leading-4 text-[#9aa4b5] dark:text-gray-500"
 				title={skill.author}
 			>
 				{skill.author}
