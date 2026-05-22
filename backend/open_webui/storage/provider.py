@@ -2,6 +2,7 @@ import os
 import shutil
 import json
 import logging
+import mimetypes
 import re
 from abc import ABC, abstractmethod
 from typing import Any, BinaryIO, Tuple, Dict
@@ -156,12 +157,26 @@ class S3StorageProvider(StorageProvider):
         """Only include S3 allowed characters."""
         return re.sub(r'[^a-zA-Z0-9 äöüÄÖÜß\+\-=\._:/@]', '', s)
 
+    @staticmethod
+    def get_content_type(filename: str) -> str | None:
+        extension = os.path.splitext(filename)[1].lower()
+        if extension in {'.md', '.markdown'}:
+            return 'text/markdown'
+
+        content_type, _ = mimetypes.guess_type(filename)
+        return content_type
+
     def upload_file(self, file: BinaryIO, filename: str, tags: Dict[str, str]) -> Tuple[bytes, str]:
         """Handles uploading of the file to S3 storage."""
         contents, file_path = LocalStorageProvider.upload_file(file, filename, tags)
         s3_key = os.path.join(self.key_prefix, filename)
         try:
-            self.s3_client.upload_file(file_path, self.bucket_name, s3_key)
+            extra_args = {}
+            content_type = self.get_content_type(filename)
+            if content_type:
+                extra_args['ContentType'] = content_type
+
+            self.s3_client.upload_file(file_path, self.bucket_name, s3_key, ExtraArgs=extra_args or None)
             if S3_ENABLE_TAGGING and tags:
                 sanitized_tags = {self.sanitize_tag_value(k): self.sanitize_tag_value(v) for k, v in tags.items()}
                 tagging = {'TagSet': [{'Key': k, 'Value': v} for k, v in sanitized_tags.items()]}

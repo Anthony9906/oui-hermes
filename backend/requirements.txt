@@ -23,6 +23,7 @@ async-timeout==5.0.1
 aiocache==0.12.3
 aiofiles==25.1.0
 pypdf==6.9.1
+boto3~=1.40
 starlette-compress==1.7.0
 Brotli==1.2.0
 brotlicffi==1.2.0.1
