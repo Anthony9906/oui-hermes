@@ -29,6 +29,7 @@
 		user,
 		socket,
 		audioQueue,
+		chatTitleUpdateSignal,
 		showControls,
 		showCallOverlay,
 		currentChatPage,
@@ -151,6 +152,47 @@
 		}
 	};
 
+	const refreshSidebarChatTitle = async (targetChatId: string, folderId = currentChatFolderId) => {
+		const updatedChat = await getChatById(localStorage.token, targetChatId).catch(() => null);
+		const updatedTitle = updatedChat?.chat?.title ?? updatedChat?.title ?? '';
+		const newChatTitle = $i18n.t('New Chat');
+
+		if (!updatedTitle || updatedTitle === 'New Chat' || updatedTitle === newChatTitle) {
+			return false;
+		}
+
+		if ($chatId === targetChatId) {
+			chatTitle.set(updatedTitle);
+		}
+		chatTitleUpdateSignal.set({ id: Date.now(), chatId: targetChatId, title: updatedTitle });
+
+		currentChatPage.set(1);
+		await chats.set(await getChatList(localStorage.token, $currentChatPage));
+		refreshFolderChatList(folderId ?? updatedChat?.folder_id ?? null);
+
+		return true;
+	};
+
+	const watchGeneratedChatTitle = async (targetChatId: string, folderId = currentChatFolderId) => {
+		if (!targetChatId || titleRefreshWatchers.has(targetChatId)) {
+			return;
+		}
+
+		titleRefreshWatchers.add(targetChatId);
+
+		try {
+			for (let i = 0; i < 90; i++) {
+				await new Promise((resolve) => setTimeout(resolve, 1000));
+
+				if (await refreshSidebarChatTitle(targetChatId, folderId)) {
+					return;
+				}
+			}
+		} finally {
+			titleRefreshWatchers.delete(targetChatId);
+		}
+	};
+
 	const getExpertSkillNameFromChatContent = (chatContent) => {
 		const messages = [
 			...Object.values(chatContent?.history?.messages ?? {}),
@@ -227,6 +269,7 @@
 
 	let chat = null;
 	let currentChatFolderId = null;
+	const titleRefreshWatchers = new Set<string>();
 	let tags = [];
 
 	let chatTasks = [];
@@ -259,6 +302,7 @@
 
 		currentChatPage.set(1);
 		await chats.set(await getChatList(localStorage.token, $currentChatPage));
+		refreshFolderChatList();
 	};
 
 	let taskIds = null;
@@ -554,11 +598,19 @@
 
 			await tick();
 			let message = eventMessage ?? history.messages[event.message_id];
+			const type = event?.data?.type ?? null;
+			const data = event?.data?.data ?? null;
+
+			if (type === 'chat:title') {
+				chatTitle.set(data);
+				chatTitleUpdateSignal.set({ id: Date.now(), chatId: event.chat_id, title: data });
+				currentChatPage.set(1);
+				await chats.set(await getChatList(localStorage.token, $currentChatPage));
+				refreshFolderChatList();
+				return;
+			}
 
 			if (message) {
-				const type = event?.data?.type ?? null;
-				const data = event?.data?.data ?? null;
-
 				if (type === 'status') {
 					if (message?.statusHistory) {
 						message.statusHistory.push(data);
@@ -625,10 +677,6 @@
 				} else if (type === 'chat:message:favorite') {
 					// Update message favorite status
 					message.favorite = data.favorite;
-				} else if (type === 'chat:title') {
-					chatTitle.set(data);
-					currentChatPage.set(1);
-					await chats.set(await getChatList(localStorage.token, $currentChatPage));
 				} else if (type === 'chat:tags') {
 					chat = await getChatById(localStorage.token, $chatId);
 					allTags.set(await getAllTags(localStorage.token));
@@ -2125,7 +2173,6 @@
 		}
 
 		// Clear input and submit
-		await ensureChatId();
 		messageInput?.setText('');
 		prompt = '';
 		const _files = structuredClone(files);
@@ -2204,6 +2251,7 @@
 
 		// New chat — backend generates the chat_id on first request
 		if (!_chatId) {
+			currentChatFolderId = getNewChatFolderId();
 			await tick();
 		}
 
@@ -2512,11 +2560,18 @@
 					taskIds = newTaskIds;
 				}
 
+				if (!$temporaryChatEnabled) {
+					void watchGeneratedChatTitle(res.chat_id ?? _chatId ?? $chatId, currentChatFolderId);
+				}
+
 				// Backend returns chat_id for new chats — set store + URL.
 				// Only update if the user hasn't navigated to a different chat
 				// while the request was in flight (prevents overwriting $chatId
 				// and causing spurious toast notifications / state duplication).
-				if (res.chat_id && $chatId === _chatId) {
+				const responseBelongsToCurrentChat =
+					$chatId === _chatId || (!$chatId && !_chatId) || $chatId === res.chat_id;
+
+				if (res.chat_id && responseBelongsToCurrentChat) {
 					if ($chatId !== res.chat_id) {
 						await chatId.set(res.chat_id);
 					}
@@ -2526,6 +2581,9 @@
 						}
 						currentChatPage.set(1);
 						await chats.set(await getChatList(localStorage.token, $currentChatPage));
+						refreshFolderChatList();
+						newChatFolder.set(undefined);
+						selectedFolder.set(null);
 					}
 				}
 			}
