@@ -163,7 +163,7 @@
 		</div>
 	</DeleteConfirmDialog>
 
-	<div class="mb-3 px-6 @md:max-w-3xl justify-between w-full flex relative group items-center">
+	<div class="mb-4 w-full justify-between flex relative group items-center">
 		<div class="text-center flex gap-3.5 items-center">
 			<EmojiPicker
 				onClose={() => {}}
