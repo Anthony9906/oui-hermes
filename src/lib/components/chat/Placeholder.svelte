@@ -179,7 +179,7 @@
 
 			{#if $selectedFolder}
 				<div
-					class="mx-auto px-4 md:max-w-3xl md:px-6 font-primary min-h-62"
+					class="mx-auto w-full max-w-5xl px-4 md:px-6 font-primary min-h-62 text-left"
 					in:fade={{ duration: 200, delay: 200 }}
 				>
 					<FolderPlaceholder folder={$selectedFolder} />
