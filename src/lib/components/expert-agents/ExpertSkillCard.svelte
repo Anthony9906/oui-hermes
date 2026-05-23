@@ -52,6 +52,13 @@
 		'#edeef1',
 		'#edf0e6'
 	];
+	const tagStyles = [
+		{ background: '#eef2f6', color: '#5f6f82', border: '#dde5ee' },
+		{ background: '#eef4f0', color: '#607568', border: '#dfe9e2' },
+		{ background: '#f4f1ec', color: '#7a6955', border: '#e8e1d7' },
+		{ background: '#f1f0f5', color: '#6d6681', border: '#e3e0eb' },
+		{ background: '#edf3f4', color: '#5f7479', border: '#dce8ea' }
+	];
 
 	const hashString = (value: string) =>
 		Array.from(value || 'expert-agent').reduce((acc, char) => acc + char.charCodeAt(0), 0);
@@ -64,10 +71,11 @@
 			? skill.version
 			: `v${skill.version}`
 		: '未标版本';
+	$: skillTags = skill.tags ?? [];
 </script>
 
 <div
-	class="expert-skill-card group relative flex min-h-[8.75rem] w-full min-w-[240px] flex-col overflow-hidden rounded-xl border border-[#d8deea] bg-white/92 p-3.5 shadow-[0_1px_2px_rgba(64,74,96,0.05)] transition duration-200 hover:-translate-y-0.5 hover:border-[#aeb9cc] hover:bg-white hover:shadow-[0_18px_38px_rgba(77,88,116,0.16)] focus-within:border-[#aeb9cc] focus-within:bg-white focus-within:shadow-[0_18px_38px_rgba(77,88,116,0.16)] dark:border-gray-800 dark:bg-gray-900/92 dark:hover:border-gray-700 dark:hover:bg-gray-900"
+	class="expert-skill-card group relative flex min-h-[10rem] w-full min-w-[240px] flex-col overflow-hidden rounded-lg border border-[#b9d3ee]/80 bg-white p-3.5 shadow-[0_10px_28px_rgba(16,67,132,0.07),inset_0_1px_0_rgba(255,255,255,0.88)] transition duration-200 hover:-translate-y-0.5 hover:border-[#5f91c7]/60 hover:bg-[#fbfdff] hover:shadow-[0_18px_40px_rgba(16,67,132,0.12),inset_0_1px_0_rgba(255,255,255,0.95)] focus-within:border-[#5f91c7]/60 focus-within:bg-[#fbfdff] focus-within:shadow-[0_18px_40px_rgba(16,67,132,0.12),inset_0_1px_0_rgba(255,255,255,0.95)] dark:border-gray-800 dark:bg-gray-900/92 dark:hover:border-gray-700 dark:hover:bg-gray-900"
 >
 	<div class="flex items-start justify-between gap-3">
 		<div class="flex min-w-0 items-start gap-3">
@@ -80,11 +88,11 @@
 
 			<div class="min-w-0">
 				<div
-					class="line-clamp-1 text-[15px] font-semibold leading-5 text-[#232c40] dark:text-gray-100"
+					class="line-clamp-1 text-[15px] font-semibold leading-5 text-[#071f4d] dark:text-gray-100"
 				>
 					{skill.skill_name}
 				</div>
-				<div class="mt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8b96aa]">
+				<div class="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#5f6f8f]">
 					{skillVersion}
 				</div>
 			</div>
@@ -102,8 +110,24 @@
 		</button>
 	</div>
 
+	{#if skillTags.length}
+		<div class="mt-3 flex flex-wrap items-center gap-1.5">
+			{#each skillTags as tag, tagIdx}
+				<span
+					class="expert-skill-tag inline-flex h-5 min-w-0 max-w-full items-center truncate rounded-md border px-1.5 text-[10px] font-medium leading-none tracking-normal shadow-none"
+					style:background-color={tagStyles[tagIdx % tagStyles.length].background}
+					style:border-color={tagStyles[tagIdx % tagStyles.length].border}
+					style:color={tagStyles[tagIdx % tagStyles.length].color}
+					title={tag}
+				>
+					{tag}
+				</span>
+			{/each}
+		</div>
+	{/if}
+
 	<div
-		class="skill-description-preview mt-3 flex-1 text-[13px] leading-5 text-[#8b96aa] dark:text-gray-500"
+		class="skill-description-preview mt-2.5 flex-1 text-[13px] leading-5 text-[#61708f] dark:text-gray-500"
 	>
 		{skill.description || '暂无描述'}
 	</div>
@@ -113,7 +137,7 @@
 	>
 		{#if skill.author}
 			<div
-				class="min-w-0 truncate text-[11px] font-medium leading-4 text-[#9aa4b5] dark:text-gray-500"
+				class="min-w-0 truncate text-[11px] font-medium leading-4 text-[#7b8ba8] dark:text-gray-500"
 				title={skill.author}
 			>
 				{skill.author}
@@ -124,7 +148,7 @@
 
 		<button
 			type="button"
-			class="start-chat-button inline-flex h-7 min-w-0 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-[#d8deea] bg-white px-3 text-[12px] font-semibold text-[#667289] shadow-none transition group-hover:border-[#2f3a52] group-hover:bg-[#2f3a52] group-hover:text-white group-hover:shadow-[0_10px_24px_rgba(47,58,82,0.2)] hover:bg-[#222b3f] dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:group-hover:border-[#d9e2f5] dark:group-hover:bg-[#d9e2f5] dark:group-hover:text-[#1e2637]"
+			class="start-chat-button inline-flex h-7 min-w-0 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-[#b9d3ee] bg-white px-3 text-[12px] font-semibold text-[#001f5b] shadow-none transition group-hover:border-[#001f5b] group-hover:bg-[#001f5b] group-hover:text-white group-hover:shadow-[0_10px_24px_rgba(0,31,91,0.18)] hover:bg-[#071f4d] dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:group-hover:border-[#d9e2f5] dark:group-hover:bg-[#d9e2f5] dark:group-hover:text-[#1e2637]"
 			on:click={() => onStart(skill)}
 		>
 			<ChatBubble className="size-3.5" strokeWidth="1.9" />
@@ -134,21 +158,30 @@
 </div>
 
 <style>
+	.expert-skill-card {
+		background: linear-gradient(
+			135deg,
+			rgba(255, 255, 255, 0.98) 0%,
+			rgba(244, 250, 255, 0.9) 100%
+		);
+	}
+
 	.expert-skill-card::before {
 		content: '';
 		position: absolute;
-		inset: 0 auto 0 0;
+		inset: 0;
 		z-index: 0;
-		width: 3px;
-		background: linear-gradient(180deg, #6f7f9e 0%, #8ba16d 100%);
+		border-top: 2px solid rgba(123, 184, 238, 0.72);
 		opacity: 0.72;
 		transition: opacity 180ms ease;
+		pointer-events: none;
 	}
 
 	.skill-icon-block {
+		background: linear-gradient(145deg, rgba(238, 247, 255, 0.96), rgba(218, 241, 255, 0.86));
 		box-shadow:
 			0 1px 1px rgba(47, 58, 82, 0.04),
-			0 0 0 1px rgba(255, 255, 255, 0.78) inset;
+			0 0 0 1px rgba(123, 164, 216, 0.18) inset;
 	}
 
 	.start-chat-button {
@@ -166,7 +199,7 @@
 	}
 
 	:global(.dark) .expert-skill-card::before {
-		background: linear-gradient(180deg, #9aa6c8 0%, #8ba16d 100%);
+		border-top-color: rgba(154, 166, 200, 0.76);
 	}
 
 	.expert-skill-card > :global(*) {
@@ -180,5 +213,9 @@
 		-webkit-box-orient: vertical;
 		-webkit-line-clamp: 2;
 		line-clamp: 2;
+	}
+
+	.expert-skill-tag {
+		flex: 0 1 auto;
 	}
 </style>

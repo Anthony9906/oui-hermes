@@ -1,6 +1,6 @@
 # Development Progress
 
-Last updated: 2026-05-13
+Last updated: 2026-05-23
 
 This is the compact handoff log for Hermes-specific Open WebUI development. Keep it evidence-based: preserve current outcomes, active contracts, validation rules, and durable caveats. Do not append debugging chronology.
 
@@ -68,6 +68,9 @@ Status: patched and verified
 - `GET /api/v1/expert-agents` and detail reads are implemented in Open WebUI and read local Hermes skills directly, defaulting to `~/.hermes/profiles/expertagent/skills` when present.
 - Bundled Hermes skills in `.bundled_manifest` are filtered out so the panel focuses on user-added/non-bundled skills.
 - `HERMES_EXPERT_AGENT_HIDDEN_SKILLS` hides individual skills; `HERMES_EXPERT_AGENT_VISIBLE_SKILLS` can act as a whitelist.
+- Local development pins `HERMES_EXPERT_AGENT_SKILLS_DIR` to `~/.hermes/profiles/expertagent/skills`; the current visible skill set is `artifact-delivery`, `cad-copilot`, `cylinder-selection`, `plc-flowchart`, and `standard-parts-selection`.
+- Skill cards and detail modals display `metadata.hermes.tags`; list cards request detail fallback when tags are missing from the list response, so pre-existing version/author/icon metadata does not suppress tag hydration.
+- Expert Agent card styling is aligned to the current white / pale-blue / deep-navy UI direction, and the detail preview/source line-number gutters use stable shared scrolling instead of textarea scroll mirroring.
 - Expert Agent UI lives in the chat right-side pane beside Controls / Files / Overview, not as a global overlay.
 - Normal-user "Start Chat" routes through `/?expert-agent=<skill>&expert-agent-start=<nonce>` and uses the repo's `uuidv4()` helper instead of `crypto.randomUUID()` for browser compatibility.
 - Active expert skill state is stored in chat `meta.expert_skill_name`; the chat top area shows the active expert mode badge.
@@ -99,6 +102,7 @@ Status: patched and runtime verified
 - File IDs are resolved from either direct IDs or Open WebUI file-content URLs.
 - File preview remains UI-owned: PDF uses `PDFViewer`, Markdown renders as Markdown, HTML uses sandboxed `iframe srcdoc`, and other text/code files use source previews.
 - Runtime tests confirmed PDF, HTML, Markdown, and image attachments store in R2, inject attachment URLs into the Hermes request, and are parsed by the agent.
+- `STORAGE_PROVIDER` and `ARTIFACT_STORAGE_PROVIDER` are intentionally independent. `ARTIFACT_STORAGE_PROVIDER=local_artifact` must not become the global upload storage provider; development can use `STORAGE_PROVIDER=r2` with local artifact preview, while production MinIO should use the S3-compatible path (`STORAGE_PROVIDER=s3`, `ARTIFACT_STORAGE_PROVIDER=s3`, `S3_*` variables).
 
 ### Attachment URL And Multimodal Boundary
 

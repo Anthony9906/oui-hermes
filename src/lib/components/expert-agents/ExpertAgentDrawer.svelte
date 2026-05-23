@@ -47,7 +47,6 @@
 	let iconPickerButton: HTMLButtonElement | null = null;
 	let iconPickerPanel: HTMLDivElement | null = null;
 	let sourceEditor: HTMLTextAreaElement | null = null;
-	let sourceLineGutter: HTMLDivElement | null = null;
 	let sourceDirty = false;
 
 	const iconOptions = [
@@ -93,6 +92,13 @@
 		'#f1e9ee',
 		'#edeef1',
 		'#edf0e6'
+	];
+	const tagStyles = [
+		{ background: '#eef2f6', color: '#5f6f82', border: '#dde5ee' },
+		{ background: '#eef4f0', color: '#607568', border: '#dfe9e2' },
+		{ background: '#f4f1ec', color: '#7a6955', border: '#e8e1d7' },
+		{ background: '#f1f0f5', color: '#6d6681', border: '#e3e0eb' },
+		{ background: '#edf3f4', color: '#5f7479', border: '#dce8ea' }
 	];
 
 	const hashString = (value: string) =>
@@ -328,7 +334,8 @@
 			version: selectedSkillDetail.version,
 			author: selectedSkillDetail.author,
 			icon: selectedSkillDetail.icon,
-			icon_background: selectedSkillDetail.icon_background
+			icon_background: selectedSkillDetail.icon_background,
+			tags: selectedSkillDetail.tags || selectedSkill?.tags
 		};
 
 		selectedSkill = updatedCard;
@@ -368,7 +375,8 @@
 				version: mergedDetail.version,
 				author: mergedDetail.author,
 				icon: mergedDetail.icon || icon,
-				icon_background: mergedDetail.icon_background || iconBackground
+				icon_background: mergedDetail.icon_background || iconBackground,
+				tags: mergedDetail.tags || selectedSkill.tags
 			};
 
 			selectedSkill = updatedCard;
@@ -393,11 +401,6 @@
 			console.error(err);
 			toast.error(`${err}`);
 		}
-	};
-
-	const handleSourceEditorScroll = () => {
-		if (!sourceEditor || !sourceLineGutter) return;
-		sourceLineGutter.scrollTop = sourceEditor.scrollTop;
 	};
 
 	onMount(() => {
@@ -431,7 +434,15 @@
 			const loadedItems = await getExpertAgents(localStorage.token);
 			items = await Promise.all(
 				loadedItems.map(async (item) => {
-					if (item.version && item.author && item.icon && item.icon_background) return item;
+					if (
+						item.version &&
+						item.author &&
+						item.icon &&
+						item.icon_background &&
+						item.tags?.length
+					) {
+						return item;
+					}
 
 					try {
 						const detail = withSourceFallbackMetadata(
@@ -442,7 +453,8 @@
 							version: item.version || detail.version,
 							author: item.author || detail.author,
 							icon: item.icon || detail.icon,
-							icon_background: item.icon_background || detail.icon_background
+							icon_background: item.icon_background || detail.icon_background,
+							tags: item.tags?.length ? item.tags : detail.tags
 						};
 					} catch {
 						return item;
@@ -486,7 +498,8 @@
 				version: skill.version || loadedDetail.version,
 				author: skill.author || loadedDetail.author,
 				icon: skill.icon || loadedDetail.icon,
-				icon_background: skill.icon_background || loadedDetail.icon_background
+				icon_background: skill.icon_background || loadedDetail.icon_background,
+				tags: skill.tags?.length ? skill.tags : loadedDetail.tags
 			};
 		} catch (err) {
 			console.error(err);
@@ -753,6 +766,17 @@
 								{selectedSkillDetail?.author || selectedSkill?.author}
 							</div>
 						{/if}
+						{#each selectedSkillDetail?.tags || selectedSkill?.tags || [] as tag, tagIdx}
+							<span
+								class="inline-flex h-5 max-w-[9rem] items-center truncate rounded-md border px-1.5 text-[10px] font-medium leading-none tracking-normal"
+								style:background-color={tagStyles[tagIdx % tagStyles.length].background}
+								style:border-color={tagStyles[tagIdx % tagStyles.length].border}
+								style:color={tagStyles[tagIdx % tagStyles.length].color}
+								title={tag}
+							>
+								{tag}
+							</span>
+						{/each}
 					</div>
 					{#if selectedSkillDetail?.description || selectedSkill?.description}
 						<div class="mt-2 text-sm leading-5 text-gray-500 dark:text-gray-400">
@@ -860,11 +884,10 @@
 				</div>
 			{:else if detailMode === 'source'}
 				<div
-					class="expert-skill-source-shell grid h-full min-h-0 grid-cols-[3.5rem_minmax(0,1fr)] overflow-hidden rounded-xl border border-[#d8deea] bg-[#fbfcff] dark:border-gray-700 dark:bg-gray-950"
+					class="expert-skill-source-shell grid h-full min-h-0 grid-cols-[3.5rem_minmax(0,1fr)] items-start overflow-auto rounded-xl border border-[#d8deea] bg-[#fbfcff] dark:border-gray-700 dark:bg-gray-950"
 				>
 					<div
-						bind:this={sourceLineGutter}
-						class="expert-skill-line-gutter overflow-hidden border-r border-[#e4e9f2] bg-[#f3f6fb] py-4 pr-3 text-right font-mono text-[12px] leading-5 text-[#9aa4b5] dark:border-gray-800 dark:bg-gray-900 dark:text-gray-600"
+						class="expert-skill-line-gutter min-h-full self-stretch border-r border-[#e4e9f2] bg-[#f3f6fb] py-4 pr-3 text-right font-mono text-[12px] leading-5 text-[#9aa4b5] dark:border-gray-800 dark:bg-gray-900 dark:text-gray-600"
 						aria-hidden="true"
 					>
 						{#each sourceLineNumbers as lineNumber}
@@ -873,10 +896,10 @@
 					</div>
 					<textarea
 						bind:this={sourceEditor}
-						class="expert-skill-source-editor h-full min-h-0 w-full resize-none border-0 bg-transparent p-4 font-mono text-[12px] leading-5 text-[#293246] outline-none dark:text-gray-100"
+						class="expert-skill-source-editor min-h-full w-full resize-none overflow-hidden border-0 bg-transparent p-4 font-mono text-[12px] leading-5 text-[#293246] outline-none dark:text-gray-100"
 						bind:value={detailSourceContent}
+						rows={getLineCount(detailSourceContent)}
 						spellcheck="false"
-						on:scroll={handleSourceEditorScroll}
 						on:input={() => {
 							sourceDirty = true;
 						}}
@@ -887,7 +910,7 @@
 					class="expert-skill-preview-shell grid w-full max-w-none grid-cols-[3.5rem_minmax(0,1fr)] overflow-hidden rounded-xl border border-[#e4e9f2] bg-white dark:border-gray-800 dark:bg-gray-950"
 				>
 					<div
-						class="expert-skill-line-gutter border-r border-[#e4e9f2] bg-[#f7f9fc] py-4 pr-3 text-right font-mono text-[12px] leading-5 text-[#a3adbd] dark:border-gray-800 dark:bg-gray-900 dark:text-gray-600"
+						class="expert-skill-line-gutter min-h-full self-stretch border-r border-[#e4e9f2] bg-[#f7f9fc] py-4 pr-3 text-right font-mono text-[12px] leading-5 text-[#a3adbd] dark:border-gray-800 dark:bg-gray-900 dark:text-gray-600"
 						aria-hidden="true"
 					>
 						{#each previewLineNumbers as lineNumber}

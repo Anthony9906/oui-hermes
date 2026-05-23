@@ -991,7 +991,7 @@ if CUSTOM_NAME:
 ####################################
 
 ARTIFACT_STORAGE_PROVIDER = os.environ.get('ARTIFACT_STORAGE_PROVIDER')
-STORAGE_PROVIDER = os.environ.get('STORAGE_PROVIDER') or ARTIFACT_STORAGE_PROVIDER or 'local'
+STORAGE_PROVIDER = os.environ.get('STORAGE_PROVIDER') or 'local'
 USE_R2_STORAGE_ENV = STORAGE_PROVIDER == 'r2' or ARTIFACT_STORAGE_PROVIDER == 'r2'
 STORAGE_LOCAL_CACHE = os.environ.get('STORAGE_LOCAL_CACHE', 'true').lower() == 'true'
 

@@ -96,6 +96,7 @@ class ExpertAgentItem(BaseModel):
     author: str | None = None
     icon: str | None = None
     icon_background: str | None = None
+    tags: list[str] = Field(default_factory=list)
 
 
 class ExpertAgentListResponse(BaseModel):
@@ -338,6 +339,12 @@ def _expert_agent_ui_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
     return expert_agent_metadata
 
 
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if item is not None and str(item).strip()]
+
+
 def _apply_expert_agent_ui_metadata(
     content: str, icon: str | None, icon_background: str | None
 ) -> str:
@@ -408,14 +415,10 @@ def _read_skill(skill_md: Path) -> dict[str, Any] | None:
         "content": content,
         "path": str(skill_md.parent),
         "tags": (
-            hermes_metadata.get("tags")
-            if isinstance(hermes_metadata.get("tags"), list)
-            else []
+            _string_list(hermes_metadata.get("tags"))
         ),
         "related_skills": (
-            hermes_metadata.get("related_skills")
-            if isinstance(hermes_metadata.get("related_skills"), list)
-            else []
+            _string_list(hermes_metadata.get("related_skills"))
         ),
         "linked_files": (
             hermes_metadata.get("linked_files")
@@ -497,6 +500,7 @@ async def get_expert_agents(user=Depends(get_verified_user)):
             author=skill.get("author"),
             icon=skill.get("icon"),
             icon_background=skill.get("icon_background"),
+            tags=skill.get("tags") or [],
         )
         for skill in _load_visible_skills()
     ]
