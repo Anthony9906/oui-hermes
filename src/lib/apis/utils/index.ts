@@ -27,6 +27,36 @@ export const getGravatarUrl = async (token: string, email: string) => {
 	return res;
 };
 
+export const getArtifactTitle = async (token: string, url: string) => {
+	let error = null;
+
+	const res = await fetch(
+		`${WEBUI_API_BASE_URL}/utils/artifacts/title?url=${encodeURIComponent(url)}`,
+		{
+			method: 'GET',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${token}`
+			}
+		}
+	)
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			console.error(err);
+			error = err.detail ?? err;
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res?.title ?? '';
+};
+
 export const executeCode = async (token: string, code: string) => {
 	let error = null;
 

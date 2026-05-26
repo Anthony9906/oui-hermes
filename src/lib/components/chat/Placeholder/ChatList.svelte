@@ -61,9 +61,11 @@
 
 {#if chatList}
 	{#if chatList.length > 0}
-		<div class="flex text-xs font-medium mb-1 items-center -mr-0.5">
+		<div
+			class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_max-content] gap-x-10 text-xs font-medium mb-1 items-center"
+		>
 			<button
-				class="px-1.5 py-1 cursor-pointer select-none basis-3/5"
+				class="px-3 py-1 cursor-pointer select-none text-left"
 				on:click={() => setSortKey('title')}
 			>
 				<div class="flex gap-1.5 items-center">
@@ -85,7 +87,7 @@
 				</div>
 			</button>
 			<button
-				class="px-1.5 py-1 cursor-pointer select-none hidden sm:flex sm:basis-2/5 justify-end"
+				class="px-3 py-1 cursor-pointer select-none hidden sm:flex justify-end whitespace-nowrap"
 				on:click={() => setSortKey('updated_at')}
 			>
 				<div class="flex gap-1.5 items-center">
@@ -148,17 +150,17 @@
 			{/if}
 
 			<a
-				class=" w-full flex justify-between items-center rounded-lg text-sm py-2 px-3 hover:bg-gray-50 dark:hover:bg-gray-850"
+				class="w-full grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_max-content] gap-x-10 items-center rounded-lg text-sm py-2 px-3 hover:bg-gray-50 dark:hover:bg-gray-850"
 				draggable="false"
 				href={`/c/${chat.id}`}
 				on:click={() => (show = false)}
 			>
-				<div class="text-ellipsis line-clamp-1 w-full sm:basis-3/5">
+				<div class="text-ellipsis line-clamp-1 min-w-0">
 					{chat?.title}
 				</div>
 
-				<div class="hidden sm:flex sm:basis-2/5 items-center justify-end">
-					<div class=" text-gray-500 dark:text-gray-400 text-xs">
+				<div class="hidden sm:flex items-center justify-end">
+					<div class="text-gray-500 dark:text-gray-400 text-xs whitespace-nowrap">
 						{dayjs(chat?.updated_at * 1000).calendar()}
 					</div>
 				</div>
