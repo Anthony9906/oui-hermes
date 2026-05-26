@@ -7,6 +7,7 @@ export type ExpertSkillCard = {
 	author?: string | null;
 	icon?: string | null;
 	icon_background?: string | null;
+	tags?: string[];
 };
 
 export type ExpertSkillDetail = {

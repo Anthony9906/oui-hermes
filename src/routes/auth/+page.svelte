@@ -17,7 +17,7 @@
 		updateUserTimezone
 	} from '$lib/apis/auths';
 
-	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
+	import { WEBUI_BASE_URL } from '$lib/constants';
 	import { WEBUI_NAME, config, user, socket } from '$lib/stores';
 
 	import { generateInitialsImage, canvasPixelTest, getUserTimezone } from '$lib/utils';
@@ -207,21 +207,21 @@
 	}}
 />
 
-<div class="w-full h-screen max-h-[100dvh] text-white relative" id="auth-page">
+<div class="w-full h-screen max-h-[100dvh] text-[#071f4d] relative" id="auth-page">
 	<div class="absolute inset-0 auth-page-bg"></div>
 
 	<div class="w-full absolute top-0 left-0 right-0 h-8 drag-region"></div>
 
 	{#if loaded}
 		<div
-			class="fixed bg-transparent min-h-screen max-h-[100dvh] overflow-y-auto w-full flex justify-center font-primary z-50 text-black dark:text-white"
+			class="fixed bg-transparent min-h-screen max-h-[100dvh] overflow-y-auto w-full flex justify-center font-primary z-50 text-[#071f4d] dark:text-white"
 			id="auth-container"
 		>
-			<div class="w-full px-5 sm:px-8 min-h-screen flex flex-col text-center">
+			<div class="auth-shell w-full px-5 sm:px-8 min-h-screen flex flex-col text-center">
 				{#if ($config?.features.auth_trusted_header ?? false) || $config?.features.auth === false}
 					<div class="auth-card my-auto w-full sm:max-w-md">
 						<div
-							class="flex items-center justify-center gap-3 text-xl sm:text-2xl text-center font-medium text-gray-800 dark:text-gray-100"
+							class="flex items-center justify-center gap-3 text-xl sm:text-2xl text-center font-medium text-[#071f4d] dark:text-gray-100"
 						>
 							<div>
 								{$i18n.t('Signing in to {{WEBUI_NAME}}', { WEBUI_NAME: $WEBUI_NAME })}
@@ -235,10 +235,15 @@
 				{:else}
 					<div class="my-auto flex flex-col justify-center items-center">
 						<div class="auth-card sm:max-w-md my-auto w-full dark:text-gray-100">
-							<div class="flex justify-center mb-5">
+							<div class="auth-brand mb-6 flex items-center justify-center">
 								<div class="auth-logo-mark" aria-hidden="true">
-									<span class="auth-logo-c">C</span>
-									<span class="auth-logo-o">o</span>
+									<img
+										id="logo"
+										src="{WEBUI_BASE_URL}/static/favicon.png"
+										class="auth-logo-image"
+										alt=""
+										draggable="false"
+									/>
 								</div>
 							</div>
 							<form
@@ -250,21 +255,21 @@
 							>
 								<div class="mb-1">
 									<div
-										class="text-3xl font-semibold tracking-normal text-gray-900 dark:text-gray-100"
+										class="auth-title text-2xl font-semibold tracking-normal text-[#071f4d] dark:text-gray-100"
 									>
 										{#if $config?.onboarding ?? false}
 											{$i18n.t(`Get started with {{WEBUI_NAME}}`, { WEBUI_NAME: $WEBUI_NAME })}
 										{:else if mode === 'ldap'}
 											{$i18n.t(`Sign in with LDAP`, { WEBUI_NAME: $WEBUI_NAME })}
 										{:else if mode === 'signin'}
-											{$i18n.t(`Sign in`, { WEBUI_NAME: $WEBUI_NAME })}
+											Expert Agent
 										{:else}
 											{$i18n.t(`Sign up`, { WEBUI_NAME: $WEBUI_NAME })}
 										{/if}
 									</div>
 
 									{#if $config?.onboarding ?? false}
-										<div class="mt-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+										<div class="mt-2 text-xs font-medium text-[#61708f] dark:text-gray-400">
 											ⓘ {$WEBUI_NAME}
 											{$i18n.t(
 												'does not make any external connections, and your data stays securely on your locally hosted server.'
@@ -375,13 +380,13 @@
 											</button>
 
 											{#if $config?.features.enable_signup && !($config?.onboarding ?? false)}
-												<div class="mt-4 text-sm text-center text-gray-600 dark:text-gray-400">
+												<div class="mt-4 text-sm text-center text-[#61708f] dark:text-gray-400">
 													{mode === 'signin'
 														? $i18n.t("Don't have an account?")
 														: $i18n.t('Already have an account?')}
 
 													<button
-														class="font-semibold text-gray-800 underline underline-offset-2 hover:text-[#0d64d8] dark:text-gray-200 dark:hover:text-white"
+														class="font-semibold text-[#001f5b] underline underline-offset-2 hover:text-[#2563eb] dark:text-gray-200 dark:hover:text-white"
 														type="button"
 														on:click={() => {
 															if (mode === 'signin') {
@@ -405,7 +410,7 @@
 									<hr class="w-32 h-px my-4 border-0 bg-gray-200 dark:bg-gray-100/10" />
 									{#if $config?.features.enable_login_form || $config?.features.enable_ldap || form}
 										<span
-											class="px-3 text-sm font-medium text-gray-500 dark:text-gray-400 bg-transparent"
+											class="px-3 text-sm font-medium text-[#61708f] dark:text-gray-400 bg-transparent"
 											>{$i18n.t('or')}</span
 										>
 									{/if}
@@ -541,7 +546,7 @@
 							{#if $config?.features.enable_ldap && $config?.features.enable_login_form}
 								<div class="mt-2">
 									<button
-										class="flex justify-center items-center text-xs w-full text-center underline underline-offset-2 text-gray-500 hover:text-[#0d64d8] dark:text-gray-400 dark:hover:text-white"
+										class="flex justify-center items-center text-xs w-full text-center underline underline-offset-2 text-[#61708f] hover:text-[#2563eb] dark:text-gray-400 dark:hover:text-white"
 										type="button"
 										on:click={() => {
 											if (mode === 'ldap')
@@ -560,11 +565,12 @@
 						</div>
 						{#if $config?.metadata?.login_footer}
 							<div class="max-w-3xl mx-auto">
-								<div class="mt-4 text-[0.7rem] text-gray-600 dark:text-gray-400 marked">
+								<div class="mt-4 text-[0.7rem] text-[#61708f] dark:text-gray-400 marked">
 									{@html DOMPurify.sanitize(marked($config?.metadata?.login_footer))}
 								</div>
 							</div>
 						{/if}
+						<div class="auth-copyright mt-4">© 2026&nbsp;&nbsp;Cowain AI</div>
 					</div>
 				{/if}
 			</div>
@@ -573,72 +579,110 @@
 </div>
 
 <style>
+	.auth-shell {
+		background: transparent;
+	}
+
 	.auth-page-bg {
-		background:
-			radial-gradient(circle at 18% 12%, rgba(145, 126, 255, 0.28), transparent 34%),
-			radial-gradient(circle at 82% 18%, rgba(107, 142, 255, 0.22), transparent 36%),
-			linear-gradient(145deg, #d9deed 0%, #c4ccdf 48%, #b5bfd5 100%);
+		background: radial-gradient(circle at center, #ffffff 0%, #f7fbff 36%, #e3f1ff 100%);
 	}
 
 	:global(.dark) .auth-page-bg {
 		background:
-			radial-gradient(circle at 18% 12%, rgba(124, 60, 255, 0.18), transparent 34%),
-			radial-gradient(circle at 82% 18%, rgba(13, 100, 216, 0.16), transparent 36%),
-			linear-gradient(145deg, #171d2d 0%, #1f273a 48%, #111827 100%);
+			linear-gradient(rgba(74, 85, 104, 0.2) 1px, transparent 1px),
+			linear-gradient(90deg, rgba(74, 85, 104, 0.2) 1px, transparent 1px),
+			linear-gradient(135deg, #111827 0%, #172033 48%, #0f172a 100%);
+		background-size:
+			32px 32px,
+			32px 32px,
+			100% 100%;
 	}
 
 	.auth-card {
-		border-radius: 1.5rem;
-		border: 1px solid rgba(255, 255, 255, 0.72);
-		background: rgba(255, 255, 255, 0.94);
+		position: relative;
+		overflow: hidden;
+		border-radius: 0.75rem;
+		border: 1px solid rgba(185, 211, 238, 0.8);
+		background:
+			linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(244, 250, 255, 0.9) 100%),
+			radial-gradient(circle at 12% 16%, rgba(123, 220, 255, 0.16), transparent 34%);
 		box-shadow:
-			0 18px 48px rgba(71, 79, 102, 0.12),
-			0 4px 14px rgba(71, 79, 102, 0.08);
+			0 18px 48px rgba(16, 67, 132, 0.1),
+			inset 0 1px 0 rgba(255, 255, 255, 0.88);
 		padding: 2rem;
 	}
 
+	.auth-card::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-top: 2px solid rgba(123, 184, 238, 0.72);
+		opacity: 0.72;
+		pointer-events: none;
+	}
+
+	.auth-card > :global(*) {
+		position: relative;
+		z-index: 1;
+	}
+
 	:global(.dark) .auth-card {
-		border-color: rgba(255, 255, 255, 0.08);
+		border-color: rgba(255, 255, 255, 0.1);
 		background: rgba(23, 29, 45, 0.92);
 		box-shadow:
 			0 22px 52px rgba(0, 0, 0, 0.28),
 			0 1px 0 rgba(255, 255, 255, 0.04) inset;
 	}
 
+	:global(.dark) .auth-card::before {
+		border-top-color: rgba(154, 166, 200, 0.76);
+	}
+
+	.auth-brand {
+		color: #2563eb;
+	}
+
+	.auth-brand-name {
+		font-size: 1.375rem;
+		font-weight: 700;
+		line-height: 1;
+		letter-spacing: 0;
+	}
+
 	.auth-logo-mark {
-		position: relative;
 		display: flex;
-		height: 3.5rem;
-		width: 3.5rem;
+		height: 2.75rem;
+		width: 2.75rem;
 		align-items: center;
 		justify-content: center;
-		border-radius: 9999px;
-		background: #ffffff;
-		box-shadow:
-			0 0 0 1px #e9edf4,
-			0 10px 24px rgba(71, 79, 102, 0.12);
+		border-radius: 0.875rem;
+		overflow: hidden;
+		background: #346aa8;
+		box-shadow: 0 10px 24px rgba(0, 31, 91, 0.18);
 	}
 
-	.auth-logo-c {
-		font-size: 2.125rem;
-		font-weight: 800;
-		line-height: 1;
-		color: #db7c42;
+	.auth-logo-image {
+		display: block;
+		height: 100%;
+		width: 100%;
+		object-fit: cover;
+		transform: scale(1.035);
+		transform-origin: center;
 	}
 
-	.auth-logo-o {
-		position: absolute;
-		right: 0.65rem;
-		top: 1.05rem;
-		font-size: 1.25rem;
-		font-weight: 800;
-		line-height: 1;
-		color: #db7c42;
-		text-shadow:
-			-2px 0 #ffffff,
-			0 2px #ffffff,
-			2px 0 #ffffff,
-			0 -2px #ffffff;
+	.auth-title {
+		line-height: 1.2;
+	}
+
+	.auth-copyright {
+		font-size: 0.75rem;
+		font-weight: 500;
+		line-height: 1rem;
+		color: #8a95a8;
+	}
+
+	:global(.dark) .auth-copyright {
+		color: #6b7280;
 	}
 
 	:global(.auth-label) {
@@ -647,7 +691,7 @@
 		text-align: left;
 		font-size: 0.875rem;
 		font-weight: 600;
-		color: #4b5368;
+		color: #2c3d63;
 	}
 
 	:global(.dark .auth-label) {
@@ -657,10 +701,10 @@
 	:global(.auth-input),
 	:global(.auth-sensitive-input) {
 		width: 100%;
-		border-radius: 1rem;
-		border: 1px solid #d9dee8;
-		background: #ffffff;
-		color: #374057;
+		border-radius: 0.75rem;
+		border: 1px solid #d8e5f3;
+		background: #fbfdff;
+		color: #293246;
 		box-shadow: 0 1px 0 rgba(255, 255, 255, 0.92) inset;
 		transition:
 			border-color 150ms ease,
@@ -682,14 +726,14 @@
 
 	:global(.auth-input::placeholder),
 	:global(.auth-sensitive-input input::placeholder) {
-		color: #a4aec2;
+		color: #9aa4b5;
 	}
 
 	:global(.auth-input:focus),
 	:global(.auth-sensitive-input:focus-within) {
-		border-color: #0d64d8;
+		border-color: #5f91c7;
 		box-shadow:
-			0 0 0 3px rgba(13, 100, 216, 0.14),
+			0 0 0 3px rgba(95, 145, 199, 0.16),
 			0 1px 0 rgba(255, 255, 255, 0.92) inset;
 	}
 
@@ -706,7 +750,7 @@
 		width: 100%;
 		align-items: center;
 		justify-content: center;
-		border-radius: 1rem;
+		border-radius: 0.75rem;
 		font-size: 0.875rem;
 		font-weight: 600;
 		transition:
@@ -717,27 +761,27 @@
 	}
 
 	:global(.auth-primary-button) {
-		background: #0d64d8;
+		background: #001f5b;
 		color: #ffffff;
 		padding: 0.75rem 1rem;
-		box-shadow: 0 10px 24px rgba(13, 100, 216, 0.18);
+		box-shadow: 0 10px 24px rgba(0, 31, 91, 0.18);
 	}
 
 	:global(.auth-primary-button:hover) {
-		background: #0b56ba;
+		background: #071f4d;
 	}
 
 	:global(.auth-secondary-button) {
-		border: 1px solid #d9dee8;
+		border: 1px solid #d8e5f3;
 		background: #ffffff;
-		color: #4b5368;
+		color: #2c3d63;
 		padding: 0.625rem 1rem;
 	}
 
 	:global(.auth-secondary-button:hover) {
-		border-color: #cbd3e1;
-		background: #f5f7fb;
-		color: #374057;
+		border-color: #b9d3ee;
+		background: #f1f7ff;
+		color: #001f5b;
 	}
 
 	:global(.dark .auth-secondary-button) {
