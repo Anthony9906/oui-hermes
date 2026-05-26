@@ -119,6 +119,24 @@
 
 	const getArtifactIframeSrc = (value = '') => getHtmlAttribute(getArtifactIframeTag(value), 'src');
 
+	const isMinioArtifactSrc = (src = '') => {
+		try {
+			const url = new URL(
+				src,
+				typeof window !== 'undefined' ? window.location.origin : 'http://localhost'
+			);
+			return (
+				url.pathname.includes('/agent-files/') &&
+				(url.pathname.endsWith('/artifact-viewer/index.html') ||
+					(url.pathname.includes('/artifacts/') && url.pathname.endsWith('.html')))
+			);
+		} catch {
+			return /\/agent-files\/[^?#"']*\/(?:artifact-viewer\/index\.html|artifacts\/[^?#"']*\.html)(?:[?#]|$)/i.test(
+				src
+			);
+		}
+	};
+
 	const isArtifactIframe = (value = '', language = '') => {
 		const normalizedLang = language.toLowerCase();
 		if (normalizedLang !== 'html') return false;
@@ -126,7 +144,7 @@
 		const src = getArtifactIframeSrc(value);
 		if (!src) return false;
 
-		return /(^|\/)v\/[^/?#"' ]+|\/api\/artifacts\//i.test(src);
+		return /(^|\/)v\/[^/?#"' ]+|\/api\/artifacts\//i.test(src) || isMinioArtifactSrc(src);
 	};
 
 	const getArtifactTitleFromHtml = (value = '') => {
@@ -157,7 +175,7 @@
 		return candidates[0] || 'HTML Artifact';
 	};
 
-	$: showArtifactIframeCard = preview && isArtifactIframe(code, lang);
+	$: showArtifactIframeCard = isArtifactIframe(code, lang);
 	let remoteArtifactTitle = '';
 	let remoteArtifactTitleKey = '';
 	let loadingArtifactTitleKey = '';

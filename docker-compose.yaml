@@ -45,6 +45,7 @@ services:
     container_name: oui-hermes
     volumes:
       - oui-hermes-data:/app/backend/data
+      - ${HERMES_EXPERT_AGENT_SKILLS_DIR_HOST:-${HOME}/.hermes/profiles/expert-agent/skills}:/opt/hermes/expert-agent/skills
     ports:
       - ${OUI_HERMES_PORT-3000}:8080
     depends_on:
@@ -57,6 +58,7 @@ services:
       OPENAI_API_BASE_URL: ${OPENAI_API_BASE_URL-http://host.docker.internal:8642}
       OPENAI_API_KEY: ${OPENAI_API_KEY-}
       WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY-}
+      HERMES_EXPERT_AGENT_SKILLS_DIR: ${HERMES_EXPERT_AGENT_SKILLS_DIR_CONTAINER:-/opt/hermes/expert-agent/skills}
       STORAGE_PROVIDER: ${STORAGE_PROVIDER-local}
       S3_ENDPOINT_URL: ${S3_ENDPOINT_URL-}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME-}
