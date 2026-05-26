@@ -18,7 +18,7 @@
 	export let adaptiveHeight = false;
 	export let minHeight = 560;
 
-	let contents: Array<{ type: string; content: string }> = [];
+	let contents: Array<{ type: string; content: string; source?: string; title?: string }> = [];
 	let selectedContentIdx = 0;
 
 	let copied = false;
@@ -33,13 +33,17 @@
 		const maxHeight = Math.max(minHeight, window.innerHeight - 40);
 		let contentHeight = minHeight - 48;
 
-		if (iframeElement?.contentDocument) {
-			const doc = iframeElement.contentDocument;
-			contentHeight = Math.max(
-				doc.documentElement?.scrollHeight ?? 0,
-				doc.body?.scrollHeight ?? 0,
-				contentHeight
-			);
+		try {
+			if (iframeElement?.contentDocument) {
+				const doc = iframeElement.contentDocument;
+				contentHeight = Math.max(
+					doc.documentElement?.scrollHeight ?? 0,
+					doc.body?.scrollHeight ?? 0,
+					contentHeight
+				);
+			}
+		} catch {
+			// Cross-origin artifact iframes keep the panel at its normal height.
 		}
 
 		adaptivePanelHeight = Math.min(maxHeight, Math.max(minHeight, contentHeight + 48));
@@ -59,34 +63,38 @@
 	const iframeLoadHandler = () => {
 		void updateAdaptiveHeight();
 
-		iframeElement.contentWindow?.addEventListener(
-			'click',
-			function (e) {
-				const target = e.target.closest('a');
-				if (target && target.href) {
-					e.preventDefault();
-					const url = new URL(target.href, iframeElement.baseURI);
-					if (url.origin === window.location.origin) {
-						iframeElement.contentWindow?.history.pushState(
-							null,
-							'',
-							url.pathname + url.search + url.hash
-						);
-					} else {
-						console.info('External navigation blocked:', url.href);
+		try {
+			iframeElement.contentWindow?.addEventListener(
+				'click',
+				function (e) {
+					const target = e.target.closest('a');
+					if (target && target.href) {
+						e.preventDefault();
+						const url = new URL(target.href, iframeElement.baseURI);
+						if (url.origin === window.location.origin) {
+							iframeElement.contentWindow?.history.pushState(
+								null,
+								'',
+								url.pathname + url.search + url.hash
+							);
+						} else {
+							console.info('External navigation blocked:', url.href);
+						}
 					}
-				}
-			},
-			true
-		);
+				},
+				true
+			);
 
-		// Cancel drag when hovering over iframe
-		iframeElement.contentWindow?.addEventListener('mouseenter', function (e) {
-			e.preventDefault();
-			iframeElement.contentWindow?.addEventListener('dragstart', (event) => {
-				event.preventDefault();
+			// Cancel drag when hovering over iframe
+			iframeElement.contentWindow?.addEventListener('mouseenter', function (e) {
+				e.preventDefault();
+				iframeElement.contentWindow?.addEventListener('dragstart', (event) => {
+					event.preventDefault();
+				});
 			});
-		});
+		} catch {
+			// Cross-origin artifact iframes cannot be instrumented from the host panel.
+		}
 	};
 
 	const showFullScreen = () => {
@@ -100,7 +108,10 @@
 	};
 
 	const downloadArtifact = () => {
-		const blob = new Blob([contents[selectedContentIdx].content], { type: 'text/html' });
+		const selectedContent = contents[selectedContentIdx];
+		const blob = new Blob([selectedContent.source ?? selectedContent.content], {
+			type: selectedContent.type === 'external-iframe' ? 'text/plain' : 'text/html'
+		});
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
 		a.href = url;
@@ -116,7 +127,9 @@
 
 		const unsubscribeArtifactCode = artifactCode.subscribe((value) => {
 			if (contents) {
-				const codeIdx = contents.findIndex((content) => content.content.includes(value));
+				const codeIdx = contents.findIndex(
+					(content) => content.content.includes(value) || content.source?.includes(value)
+				);
 				selectedContentIdx = codeIdx !== -1 ? codeIdx : 0;
 			}
 		});
@@ -219,7 +232,9 @@
 						<button
 							class="copy-code-button border border-[#dbe8f7] bg-[#f7fbff] text-xs font-medium text-[#001f5b] hover:bg-[#eef6ff] dark:border-gray-800 dark:bg-gray-850 dark:text-gray-100 dark:hover:bg-gray-800 transition rounded-md px-2 py-1"
 							on:click={() => {
-								copyToClipboard(contents[selectedContentIdx].content);
+								copyToClipboard(
+									contents[selectedContentIdx].source ?? contents[selectedContentIdx].content
+								);
 								copied = true;
 
 								setTimeout(() => {
@@ -237,7 +252,7 @@
 							</button>
 						</Tooltip>
 
-						{#if contents[selectedContentIdx].type === 'iframe'}
+						{#if ['iframe', 'external-iframe'].includes(contents[selectedContentIdx].type)}
 							<Tooltip content={$i18n.t('Open in full screen')}>
 								<button
 									class="border border-[#dbe8f7] bg-[#f7fbff] text-xs text-[#001f5b] hover:bg-[#eef6ff] dark:border-gray-800 dark:bg-gray-850 dark:text-gray-100 dark:hover:bg-gray-800 transition rounded-md p-1"
@@ -270,7 +285,21 @@
 			<div class=" h-full flex flex-col">
 				{#if contents.length > 0}
 					<div class="max-w-full w-full h-full">
-						{#if contents[selectedContentIdx].type === 'iframe'}
+						{#if contents[selectedContentIdx].type === 'external-iframe'}
+							<iframe
+								bind:this={iframeElement}
+								title={contents[selectedContentIdx].title ?? 'Content'}
+								src={contents[selectedContentIdx].content}
+								class="w-full border-0 h-full rounded-none bg-white"
+								sandbox="allow-scripts allow-downloads{($settings?.iframeSandboxAllowForms ?? false)
+									? ' allow-forms'
+									: ''}{($settings?.iframeSandboxAllowSameOrigin ?? false)
+									? ' allow-same-origin'
+									: ''}"
+								referrerpolicy="strict-origin-when-cross-origin"
+								on:load={iframeLoadHandler}
+							></iframe>
+						{:else if contents[selectedContentIdx].type === 'iframe'}
 							<iframe
 								bind:this={iframeElement}
 								title="Content"

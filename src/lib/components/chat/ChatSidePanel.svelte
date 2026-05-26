@@ -146,7 +146,7 @@
 				class:chat-side-panel-shell-artifacts={activePanel === 'artifacts'}
 			>
 				{#if activePanel === 'artifacts'}
-					<Artifacts {history} adaptiveHeight={true} on:close={closeActivePanel} />
+					<Artifacts {history} on:close={closeActivePanel} />
 				{:else}
 					<ExpertAgentDrawer
 						show={$showExpertAgentDrawer}

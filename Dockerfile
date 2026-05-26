@@ -6,6 +6,7 @@ ARG BUILD_HASH=dev-build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
+COPY scripts ./scripts
 RUN npm ci --force
 
 COPY . .

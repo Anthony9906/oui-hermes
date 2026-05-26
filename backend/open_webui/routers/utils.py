@@ -4,10 +4,10 @@ import logging
 import markdown
 import os
 import re
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from open_webui.models.chats import ChatTitleMessagesForm
-from open_webui.config import DATA_DIR, ENABLE_ADMIN_EXPORT
+from open_webui.config import DATA_DIR, ENABLE_ADMIN_EXPORT, S3_PUBLIC_BASE_URL
 from open_webui.constants import ERROR_MESSAGES
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
@@ -27,6 +27,7 @@ LOCAL_ARTIFACT_BASE_URL = os.environ.get('LOCAL_ARTIFACT_BASE_URL', 'http://loca
 LOCAL_ARTIFACT_ID_RE = re.compile(r'^[A-Za-z0-9_-]+$')
 LOCAL_ARTIFACT_PATH_RE = re.compile(r'^/(?:v|api/artifacts)/([A-Za-z0-9_-]+)/?$')
 LOCAL_ARTIFACT_HOST_ALIASES = {'localhost', '127.0.0.1', '::1'}
+MINIO_ARTIFACT_VIEWER_PATH = '/artifact-viewer/index.html'
 
 
 def _is_allowed_local_artifact_url(url: str) -> tuple[str, str]:
@@ -58,6 +59,55 @@ def _is_allowed_local_artifact_url(url: str) -> tuple[str, str]:
     return origin, artifact_id
 
 
+def _is_allowed_s3_public_url(url: str) -> bool:
+    if not S3_PUBLIC_BASE_URL:
+        return False
+
+    parsed = urlparse(url)
+    base = urlparse(S3_PUBLIC_BASE_URL.rstrip('/'))
+
+    if parsed.scheme not in {'http', 'https'} or not parsed.hostname:
+        return False
+
+    if parsed.scheme != base.scheme:
+        return False
+
+    if parsed.hostname.lower() != (base.hostname or '').lower() or parsed.port != base.port:
+        return False
+
+    base_path = base.path.rstrip('/')
+    return parsed.path == base_path or parsed.path.startswith(f'{base_path}/')
+
+
+def _get_allowed_minio_metadata_url(url: str) -> tuple[str, str]:
+    if not _is_allowed_s3_public_url(url):
+        raise HTTPException(status_code=400, detail='artifact_host_not_allowed')
+
+    parsed = urlparse(url)
+
+    if parsed.path.endswith(MINIO_ARTIFACT_VIEWER_PATH):
+        artifact_values = parse_qs(parsed.query).get('artifact') or []
+        payload_url = artifact_values[0] if artifact_values else ''
+        payload = urlparse(payload_url)
+        if (
+            not payload_url
+            or not _is_allowed_s3_public_url(payload_url)
+            or payload.path.endswith(MINIO_ARTIFACT_VIEWER_PATH)
+            or not payload.path.lower().endswith('.json')
+        ):
+            raise HTTPException(status_code=400, detail='invalid_artifact_payload_url')
+
+        return payload_url, 'json'
+
+    if parsed.path.lower().endswith('.json'):
+        return url, 'json'
+
+    if parsed.path.lower().endswith('.html'):
+        return url, 'html'
+
+    raise HTTPException(status_code=400, detail='invalid_artifact_payload_url')
+
+
 @router.get('/gravatar')
 async def get_gravatar(email: str, user=Depends(get_verified_user)):
     return get_gravatar_url(email)
@@ -65,8 +115,14 @@ async def get_gravatar(email: str, user=Depends(get_verified_user)):
 
 @router.get('/artifacts/title')
 async def get_artifact_title(url: str, user=Depends(get_verified_user)):
-    origin, artifact_id = _is_allowed_local_artifact_url(url)
-    metadata_url = f'{origin}/api/artifacts/{artifact_id}'
+    artifact_id = ''
+
+    if _is_allowed_s3_public_url(url):
+        metadata_url, metadata_kind = _get_allowed_minio_metadata_url(url)
+    else:
+        origin, artifact_id = _is_allowed_local_artifact_url(url)
+        metadata_url = f'{origin}/api/artifacts/{artifact_id}'
+        metadata_kind = 'json'
 
     try:
         timeout = aiohttp.ClientTimeout(total=3)
@@ -79,6 +135,12 @@ async def get_artifact_title(url: str, user=Depends(get_verified_user)):
                 if response.status >= 400:
                     raise HTTPException(status_code=502, detail='artifact_metadata_unavailable')
 
+                if metadata_kind == 'html':
+                    text = await response.text()
+                    match = re.search(r'<title[^>]*>([\s\S]*?)</title>', text, re.IGNORECASE)
+                    title = re.sub(r'\s+', ' ', match.group(1)).strip() if match else ''
+                    return {'id': artifact_id, 'title': title}
+
                 payload = await response.json()
     except HTTPException:
         raise
@@ -86,7 +148,7 @@ async def get_artifact_title(url: str, user=Depends(get_verified_user)):
         log.debug(f'Failed to fetch artifact metadata from {metadata_url}: {e}')
         raise HTTPException(status_code=502, detail='artifact_metadata_unavailable')
 
-    title = payload.get('artifact', {}).get('title')
+    title = payload.get('artifact', {}).get('title') or payload.get('title')
     return {'id': artifact_id, 'title': title if isinstance(title, str) else ''}
 
 

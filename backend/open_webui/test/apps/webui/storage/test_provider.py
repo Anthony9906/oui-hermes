@@ -56,6 +56,23 @@ def test_class_instantiation():
     provider.AzureStorageProvider()
 
 
+@pytest.mark.parametrize(
+    ('filename', 'content_type'),
+    [
+        ('sample.txt', 'text/plain'),
+        ('sample.md', 'text/markdown'),
+        ('sample.markdown', 'text/markdown'),
+        ('sample.pdf', 'application/pdf'),
+        ('sample.html', 'text/html'),
+        ('sample.png', 'image/png'),
+        ('sample.jpg', 'image/jpeg'),
+        ('sample.svg', 'image/svg+xml'),
+    ],
+)
+def test_s3_content_type_detection(filename, content_type):
+    assert provider.S3StorageProvider.get_content_type(filename) == content_type
+
+
 class TestLocalStorageProvider:
     Storage = provider.LocalStorageProvider()
     file_content = b'test content'
@@ -117,7 +134,9 @@ class TestS3StorageProvider:
         self.s3_client.create_bucket(Bucket=self.Storage.bucket_name)
         contents, s3_file_path = self.Storage.upload_file(io.BytesIO(self.file_content), self.filename)
         object = self.s3_client.Object(self.Storage.bucket_name, self.filename)
-        assert self.file_content == object.get()['Body'].read()
+        response = object.get()
+        assert self.file_content == response['Body'].read()
+        assert response['ContentType'] == 'text/plain'
         # local checks
         assert (upload_dir / self.filename).exists()
         assert (upload_dir / self.filename).read_bytes() == self.file_content
