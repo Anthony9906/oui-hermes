@@ -1,6 +1,10 @@
 import black
+import aiohttp
 import logging
 import markdown
+import os
+import re
+from urllib.parse import urlparse
 
 from open_webui.models.chats import ChatTitleMessagesForm
 from open_webui.config import DATA_DIR, ENABLE_ADMIN_EXPORT
@@ -19,10 +23,71 @@ log = logging.getLogger(__name__)
 
 router = APIRouter()
 
+LOCAL_ARTIFACT_BASE_URL = os.environ.get('LOCAL_ARTIFACT_BASE_URL', 'http://localhost:8787').rstrip('/')
+LOCAL_ARTIFACT_ID_RE = re.compile(r'^[A-Za-z0-9_-]+$')
+LOCAL_ARTIFACT_PATH_RE = re.compile(r'^/(?:v|api/artifacts)/([A-Za-z0-9_-]+)/?$')
+LOCAL_ARTIFACT_HOST_ALIASES = {'localhost', '127.0.0.1', '::1'}
+
+
+def _is_allowed_local_artifact_url(url: str) -> tuple[str, str]:
+    parsed = urlparse(url)
+    base = urlparse(LOCAL_ARTIFACT_BASE_URL)
+
+    if parsed.scheme not in {'http', 'https'} or not parsed.hostname:
+        raise HTTPException(status_code=400, detail='invalid_artifact_url')
+
+    base_host = (base.hostname or '').lower()
+    request_host = parsed.hostname.lower()
+    base_port = base.port
+    request_port = parsed.port
+
+    if base_host in LOCAL_ARTIFACT_HOST_ALIASES:
+        host_allowed = request_host in LOCAL_ARTIFACT_HOST_ALIASES
+    else:
+        host_allowed = request_host == base_host
+
+    if not host_allowed or request_port != base_port:
+        raise HTTPException(status_code=400, detail='artifact_host_not_allowed')
+
+    match = LOCAL_ARTIFACT_PATH_RE.match(parsed.path)
+    artifact_id = match.group(1) if match else ''
+    if not artifact_id or not LOCAL_ARTIFACT_ID_RE.match(artifact_id):
+        raise HTTPException(status_code=400, detail='invalid_artifact_id')
+
+    origin = f'{parsed.scheme}://{parsed.netloc}'
+    return origin, artifact_id
+
 
 @router.get('/gravatar')
 async def get_gravatar(email: str, user=Depends(get_verified_user)):
     return get_gravatar_url(email)
+
+
+@router.get('/artifacts/title')
+async def get_artifact_title(url: str, user=Depends(get_verified_user)):
+    origin, artifact_id = _is_allowed_local_artifact_url(url)
+    metadata_url = f'{origin}/api/artifacts/{artifact_id}'
+
+    try:
+        timeout = aiohttp.ClientTimeout(total=3)
+        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
+            async with session.get(metadata_url) as response:
+                if response.status == 404:
+                    raise HTTPException(status_code=404, detail='artifact_not_found')
+                if response.status == 410:
+                    raise HTTPException(status_code=410, detail='artifact_expired')
+                if response.status >= 400:
+                    raise HTTPException(status_code=502, detail='artifact_metadata_unavailable')
+
+                payload = await response.json()
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.debug(f'Failed to fetch artifact metadata from {metadata_url}: {e}')
+        raise HTTPException(status_code=502, detail='artifact_metadata_unavailable')
+
+    title = payload.get('artifact', {}).get('title')
+    return {'id': artifact_id, 'title': title if isinstance(title, str) else ''}
 
 
 class CodeForm(BaseModel):

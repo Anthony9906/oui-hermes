@@ -51,8 +51,8 @@ OUI Hermes 是基于 Open WebUI 裁剪的 Hermes Agent 对话 UI。当前项目�
 ### Expert Agent
 
 - Chat completions 通过 `HERMES_API_BASE_URL` 访问 Hermes gateway 8642；不要把它指向 Hermes Web UI 8787。
-- Expert Agent skill 列表和详情由 Open WebUI 后端读取本地 Hermes skill 目录；默认优先使用 `~/.hermes/profiles/expertagent/skills`，过滤 `.bundled_manifest` 里的 Hermes 自带技能。
-- 可用 `HERMES_EXPERT_AGENT_HIDDEN_SKILLS` 隐藏不需要显示的专家技能；需要强控制时可用 `HERMES_EXPERT_AGENT_VISIBLE_SKILLS` 设置白名单。
+- Expert Agent skill 列表和详情由 Open WebUI 后端读取本地 Hermes skill 目录下的 `experts/` 子目录；默认路径为 `~/.hermes/profiles/expertagent/skills/experts`。
+- `experts/` 是团队专家资产目录；Hermes Agent 仍可在 `experts/` 之外自行创建、管理和使用自有技能，二者互不作为前端卡片来源。
 - Expert Agent 面板位于聊天右侧 pane 中，和 Controls / Files / Overview 共用交互模型。
 - 普通用户启动 Expert Agent 通过 URL 参数 `expert-agent` 和 `expert-agent-start` 进入新会话，启动 nonce 使用项目内 `uuidv4()`，避免 `crypto.randomUUID()` 浏览器兼容问题。
 - 当前会话会在聊天内容 `meta.expert_skill_name` 中保存启用的专家技能，并在聊天顶部显示专家模式 badge。

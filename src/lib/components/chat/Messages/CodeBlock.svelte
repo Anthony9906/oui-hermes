@@ -3,6 +3,7 @@
 	import { toast } from 'svelte-sonner';
 	import { getContext, onMount, tick } from 'svelte';
 	import { config } from '$lib/stores';
+	import { getArtifactTitle as getRemoteArtifactTitle } from '$lib/apis/utils';
 
 	import {
 		copyToClipboard,
@@ -128,7 +129,7 @@
 		return /(^|\/)v\/[^/?#"' ]+|\/api\/artifacts\//i.test(src);
 	};
 
-	const getArtifactTitle = (value = '') => {
+	const getArtifactTitleFromHtml = (value = '') => {
 		const iframeTag = getArtifactIframeTag(value);
 		const iframeTitle =
 			getHtmlAttribute(iframeTag, 'title') || getHtmlAttribute(iframeTag, 'aria-label');
@@ -157,7 +158,43 @@
 	};
 
 	$: showArtifactIframeCard = preview && isArtifactIframe(code, lang);
-	$: artifactTitle = getArtifactTitle(code);
+	let remoteArtifactTitle = '';
+	let remoteArtifactTitleKey = '';
+	let loadingArtifactTitleKey = '';
+
+	const resolveArtifactTitle = async (value = '') => {
+		const src = getArtifactIframeSrc(value);
+		if (typeof localStorage === 'undefined') return;
+		if (!localStorage.token) return;
+		if (!src || remoteArtifactTitleKey === value || loadingArtifactTitleKey === value) return;
+
+		loadingArtifactTitleKey = value;
+		try {
+			const title = await getRemoteArtifactTitle(localStorage.token, src);
+			if (loadingArtifactTitleKey === value) {
+				remoteArtifactTitle = title;
+				remoteArtifactTitleKey = value;
+			}
+		} catch {
+			if (loadingArtifactTitleKey === value) {
+				remoteArtifactTitle = '';
+				remoteArtifactTitleKey = value;
+			}
+		} finally {
+			if (loadingArtifactTitleKey === value) {
+				loadingArtifactTitleKey = '';
+			}
+		}
+	};
+
+	$: localArtifactTitle = getArtifactTitleFromHtml(code);
+	$: artifactTitle =
+		remoteArtifactTitleKey === code && remoteArtifactTitle
+			? remoteArtifactTitle
+			: localArtifactTitle;
+	$: if (showArtifactIframeCard && code) {
+		void resolveArtifactTitle(code);
+	}
 
 	const checkPythonCode = (str) => {
 		// Check if the string contains typical Python syntax characters

@@ -10,17 +10,14 @@ import yaml
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from open_webui.config import (
-    HERMES_EXPERT_AGENT_HIDDEN_SKILLS,
-    HERMES_EXPERT_AGENT_SKILLS_DIR,
-    HERMES_EXPERT_AGENT_VISIBLE_SKILLS,
-)
+from open_webui.config import HERMES_EXPERT_AGENT_SKILLS_DIR
 from open_webui.utils.auth import get_verified_user
 
 log = logging.getLogger(__name__)
 
 router = APIRouter()
 
+EXPERT_AGENT_EXPERTS_DIR_NAME = "experts"
 EXCLUDED_SKILL_DIRS = frozenset((".git", ".github", ".hub", ".archive", "__pycache__"))
 EXPERT_AGENT_ICON_NAMES = frozenset(
     (
@@ -137,10 +134,6 @@ class ExpertAgentOpenDirectoryResponse(BaseModel):
     path: str
 
 
-def _split_env_list(value: str) -> set[str]:
-    return {item.strip() for item in value.split(",") if item.strip()}
-
-
 def _default_skills_root() -> Path:
     hermes_home = Path(os.environ.get("HERMES_HOME") or Path.home() / ".hermes")
     expertagent_root = hermes_home / "profiles" / "expertagent" / "skills"
@@ -157,21 +150,8 @@ def _skills_root() -> Path:
     )
 
 
-def _read_bundled_skill_names(root: Path) -> set[str]:
-    manifest = root / ".bundled_manifest"
-    if not manifest.exists():
-        return set()
-
-    bundled = set()
-    try:
-        for line in manifest.read_text(encoding="utf-8").splitlines():
-            name, _, _digest = line.partition(":")
-            name = name.strip()
-            if name:
-                bundled.add(name)
-    except OSError as e:
-        log.warning("Failed to read Hermes bundled skill manifest %s: %s", manifest, e)
-    return bundled
+def _expert_agents_root() -> Path:
+    return _skills_root() / EXPERT_AGENT_EXPERTS_DIR_NAME
 
 
 def _read_skill_frontmatter(content: str) -> dict[str, Any]:
@@ -443,30 +423,11 @@ def _is_excluded_path(path: Path, root: Path) -> bool:
     )
 
 
-def _is_visible_skill(
-    skill: dict[str, Any], bundled: set[str], hidden: set[str], visible: set[str]
-) -> bool:
-    names = {str(skill.get("name") or ""), skill["_skill_md"].parent.name}
-    names.discard("")
-
-    if names & bundled:
-        return False
-    if hidden and names & hidden:
-        return False
-    if visible and not (names & visible):
-        return False
-    return True
-
-
 def _load_visible_skills() -> list[dict[str, Any]]:
-    root = _skills_root()
+    root = _expert_agents_root()
     if not root.exists():
-        log.warning("Hermes expert agent skills directory does not exist: %s", root)
+        log.warning("Hermes Expert Agent experts directory does not exist: %s", root)
         return []
-
-    bundled = _read_bundled_skill_names(root)
-    hidden = _split_env_list(HERMES_EXPERT_AGENT_HIDDEN_SKILLS)
-    visible = _split_env_list(HERMES_EXPERT_AGENT_VISIBLE_SKILLS)
 
     skills = []
     for skill_md in sorted(root.rglob("SKILL.md")):
@@ -474,7 +435,7 @@ def _load_visible_skills() -> list[dict[str, Any]]:
             continue
 
         skill = _read_skill(skill_md)
-        if not skill or not _is_visible_skill(skill, bundled, hidden, visible):
+        if not skill:
             continue
         skills.append(skill)
 

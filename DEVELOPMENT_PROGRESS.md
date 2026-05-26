@@ -1,6 +1,6 @@
 # Development Progress
 
-Last updated: 2026-05-23
+Last updated: 2026-05-25
 
 This is the compact handoff log for Hermes-specific Open WebUI development. Keep it evidence-based: preserve current outcomes, active contracts, validation rules, and durable caveats. Do not append debugging chronology.
 
@@ -65,10 +65,10 @@ Status: patched and verified after `hermes update`
 
 Status: patched and verified
 
-- `GET /api/v1/expert-agents` and detail reads are implemented in Open WebUI and read local Hermes skills directly, defaulting to `~/.hermes/profiles/expertagent/skills` when present.
-- Bundled Hermes skills in `.bundled_manifest` are filtered out so the panel focuses on user-added/non-bundled skills.
-- `HERMES_EXPERT_AGENT_HIDDEN_SKILLS` hides individual skills; `HERMES_EXPERT_AGENT_VISIBLE_SKILLS` can act as a whitelist.
-- Local development pins `HERMES_EXPERT_AGENT_SKILLS_DIR` to `~/.hermes/profiles/expertagent/skills`; the current visible skill set is `artifact-delivery`, `cad-copilot`, `cylinder-selection`, `plc-flowchart`, and `standard-parts-selection`.
+- `GET /api/v1/expert-agents` and detail reads are implemented in Open WebUI and read only the `experts/` subdirectory under the configured Hermes skills root, defaulting to `~/.hermes/profiles/expertagent/skills/experts` when present.
+- `experts/` is the team Expert Agent asset boundary. Skills outside `experts/` remain available to Hermes Agent as its own assets but are not shown as Open WebUI Expert Agent cards.
+- Expert Builder should publish confirmed team expert skills into `experts/<skill-name>/`; no visible whitelist, bundled manifest, or hidden-skill filtering is needed for the frontend card list.
+- Local development pins `HERMES_EXPERT_AGENT_SKILLS_DIR` to `~/.hermes/profiles/expertagent/skills`; the current intended Expert Agent card set lives under `experts/`.
 - Skill cards and detail modals display `metadata.hermes.tags`; list cards request detail fallback when tags are missing from the list response, so pre-existing version/author/icon metadata does not suppress tag hydration.
 - Expert Agent card styling is aligned to the current white / pale-blue / deep-navy UI direction, and the detail preview/source line-number gutters use stable shared scrolling instead of textarea scroll mirroring.
 - Expert Agent UI lives in the chat right-side pane beside Controls / Files / Overview, not as a global overlay.
@@ -114,6 +114,14 @@ Status: patched and verified
 - Historical image attachments are no longer re-injected into every later chat turn; only the current user turn's images are added as `image_url` parts, preventing old image URLs from breaking unrelated later document turns.
 - Non-image attachments continue to use the established `<attached_files>` path: Open WebUI sends URL, content type, name, and lightweight pre-extracted text when supported.
 - Hermes dashboard black screens on image sessions were not caused by Open WebUI re-sending base64 after the fix; the remaining cause was dashboard rendering code assuming `message.content` is always a string. The Hermes dashboard was updated to render OpenAI-style multimodal content arrays.
+
+### Reusable Artifact Title Cards
+
+Status: patched and focused-verified
+
+- Fenced HTML iframe artifact cards first use explicit iframe `title` / `aria-label`, inline `<title>` / `<h1>`, and then the artifact id as a local fallback.
+- When a local artifact iframe only contains `/v/{artifact_id}`, Open WebUI now reads title metadata through `GET /api/v1/utils/artifacts/title?url=...`, which server-side proxies only allowed local artifact viewer URLs to `/api/artifacts/{artifact_id}`. This avoids browser cross-port CORS limits from `localhost:5173` to `localhost:8787`.
+- Validation confirmed `http://localhost:8787/v/art_1230a6?nocache=2` resolves to `气缸快速预选推荐 - 顶升`, rejects non-local artifact hosts, passes `py_compile` for `backend/open_webui/routers/utils.py`, and passes scoped `svelte-check` for `src/lib/components/chat/Messages`.
 
 ### Trimmed Open WebUI Surface
 

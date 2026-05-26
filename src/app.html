@@ -71,16 +71,6 @@
 					metaThemeColorTag.setAttribute('content', '#171717');
 				}
 
-				const preloadHref = document.documentElement.classList.contains('dark')
-					? '/static/splash-dark.png'
-					: '/static/splash.png';
-				const preload = document.createElement('link');
-				preload.rel = 'preload';
-				preload.as = 'image';
-				preload.href = preloadHref;
-				preload.setAttribute('fetchpriority', 'high');
-				document.head.appendChild(preload);
-
 				window.matchMedia('(prefers-color-scheme: dark)').addListener((e) => {
 					if (localStorage.theme === 'system') {
 						if (e.matches) {
@@ -94,15 +84,21 @@
 						}
 					}
 				});
-				const isDarkMode = document.documentElement.classList.contains('dark');
+				const preload = document.createElement('link');
+				preload.rel = 'preload';
+				preload.as = 'image';
+				preload.href = '/static/favicon.png';
+				preload.setAttribute('fetchpriority', 'high');
+				document.head.appendChild(preload);
 
 				const logo = document.createElement('img');
 				logo.id = 'logo';
 				logo.style =
-					'position: absolute; width: auto; height: 6rem; top: 44%; left: 50%; transform: translateX(-50%); display:block;';
+					'position: absolute; width: 4rem; height: 4rem; top: 44%; left: 50%; transform: translateX(-50%) scale(1.035); display:block; border-radius:1rem; object-fit:cover; background:#346aa8; box-shadow:0 10px 24px rgba(0,31,91,0.18);';
 				logo.loading = 'eager';
 				logo.fetchPriority = 'high';
-				logo.src = isDarkMode ? '/static/splash-dark.png' : '/static/splash.png';
+				logo.src = '/static/favicon.png';
+				logo.alt = '';
 
 				document.addEventListener('DOMContentLoaded', function () {
 					const splash = document.getElementById('splash-screen');
@@ -149,8 +145,15 @@
 			>
 				<img
 					id="logo-her"
-					style="width: auto; height: 13rem"
-					src="/static/splash.png"
+					style="
+						width: 7rem;
+						height: 7rem;
+						border-radius: 1.5rem;
+						object-fit: cover;
+						background: #346aa8;
+						transform: scale(1.035);
+					"
+					src="/static/favicon.png"
 					loading="eager"
 					fetchpriority="high"
 					class="animate-pulse-fast"
@@ -225,7 +228,6 @@
 
 		html.her #logo-her {
 			display: block;
-			filter: invert(1);
 		}
 
 		html.her #progress-background {
