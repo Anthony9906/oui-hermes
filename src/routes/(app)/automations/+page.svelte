@@ -4,6 +4,7 @@
 	import { toast } from 'svelte-sonner';
 	import { goto } from '$app/navigation';
 	import { WEBUI_NAME, mobile, showSidebar, user, config } from '$lib/stores';
+	import { showExpertAgentDrawer } from '$lib/stores/expertAgents';
 
 	import {
 		getAutomationItems,
@@ -215,9 +216,11 @@
 />
 
 <div
+	id="automations-container"
 	class="flex flex-col w-full h-screen max-h-[100dvh] transition-width duration-200 ease-in-out {$showSidebar
 		? 'md:max-w-[calc(100%-var(--sidebar-width)-20px)]'
 		: ''} max-w-full ml-5"
+	class:expert-agent-side-panel-open={$showExpertAgentDrawer}
 >
 	<div class="flex-1 max-h-full overflow-y-auto">
 		{#if loaded}
@@ -425,3 +428,30 @@
 		{/if}
 	</div>
 </div>
+
+<style>
+	:global(:root) {
+		--chat-side-panel-width: clamp(480px, 38vw, 760px);
+	}
+
+	#automations-container.expert-agent-side-panel-open {
+		max-width: calc(100vw - var(--chat-side-panel-width) - 60px) !important;
+		margin-right: calc(var(--chat-side-panel-width) + 20px) !important;
+	}
+
+	:global(
+		.app:has(#sidebar[data-state='true']) #automations-container.expert-agent-side-panel-open
+	) {
+		max-width: calc(100vw - var(--sidebar-width) - var(--chat-side-panel-width) - 80px) !important;
+	}
+
+	@media (max-width: 1023px) {
+		#automations-container.expert-agent-side-panel-open,
+		:global(
+			.app:has(#sidebar[data-state='true']) #automations-container.expert-agent-side-panel-open
+		) {
+			max-width: 100% !important;
+			margin-right: 0 !important;
+		}
+	}
+</style>

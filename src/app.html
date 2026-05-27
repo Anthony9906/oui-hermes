@@ -87,17 +87,17 @@
 				const preload = document.createElement('link');
 				preload.rel = 'preload';
 				preload.as = 'image';
-				preload.href = '/static/favicon.png';
+				preload.href = '/static/logo.png';
 				preload.setAttribute('fetchpriority', 'high');
 				document.head.appendChild(preload);
 
 				const logo = document.createElement('img');
 				logo.id = 'logo';
 				logo.style =
-					'position: absolute; width: 4rem; height: 4rem; top: 44%; left: 50%; transform: translateX(-50%) scale(1.035); display:block; border-radius:1rem; object-fit:cover; background:#346aa8; box-shadow:0 10px 24px rgba(0,31,91,0.18);';
+					'position: absolute; width: 4rem; height: 4rem; top: 44%; left: 50%; transform: translateX(-50%); display:block; border-radius:1rem; object-fit:contain; background:#346aa8; box-shadow:0 10px 24px rgba(0,31,91,0.18);';
 				logo.loading = 'eager';
 				logo.fetchPriority = 'high';
-				logo.src = '/static/favicon.png';
+				logo.src = '/static/logo.png';
 				logo.alt = '';
 
 				document.addEventListener('DOMContentLoaded', function () {
@@ -149,11 +149,10 @@
 						width: 7rem;
 						height: 7rem;
 						border-radius: 1.5rem;
-						object-fit: cover;
+						object-fit: contain;
 						background: #346aa8;
-						transform: scale(1.035);
 					"
-					src="/static/favicon.png"
+					src="/static/logo.png"
 					loading="eager"
 					fetchpriority="high"
 					class="animate-pulse-fast"

@@ -40,6 +40,7 @@
 	import ChangelogModal from '$lib/components/ChangelogModal.svelte';
 	import AccountPending from '$lib/components/layout/Overlay/AccountPending.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
+	import ExpertAgentSidePanel from '$lib/components/expert-agents/ExpertAgentSidePanel.svelte';
 	import { Shortcut, shortcuts } from '$lib/shortcuts';
 
 	const i18n = getContext('i18n');
@@ -47,6 +48,8 @@
 	let loaded = false;
 	let DB = null;
 	let localDBChats = [];
+
+	$: isChatRoute = $page.url.pathname === '/' || $page.url.pathname.startsWith('/c/');
 
 	const clearChatInputStorage = () => {
 		const chatInputKeys = Object.keys(localStorage).filter((key) => key.startsWith('chat-input'));
@@ -382,6 +385,9 @@
 				<Sidebar />
 				{#if loaded}
 					<slot />
+					{#if !isChatRoute}
+						<ExpertAgentSidePanel />
+					{/if}
 				{:else}
 					<div
 						class="w-full flex-1 h-full flex items-center justify-center ml-5 {$showSidebar

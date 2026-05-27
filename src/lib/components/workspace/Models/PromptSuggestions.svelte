@@ -9,15 +9,39 @@
 
 	let _promptSuggestions = [];
 
+	const emptyLocalizedSuggestion = () => ({
+		title: ['', ''],
+		content: ''
+	});
+
+	const normalizeTitle = (title) => {
+		if (typeof title === 'string') {
+			return [title, ''];
+		}
+
+		if (Array.isArray(title)) {
+			return [title[0] ?? '', title[1] ?? ''];
+		}
+
+		return ['', ''];
+	};
+
+	const normalizePromptSuggestion = (suggestion) => {
+		suggestion.title = normalizeTitle(suggestion.title);
+		suggestion.content = suggestion.content ?? '';
+		suggestion.locales =
+			suggestion.locales && typeof suggestion.locales === 'object' ? suggestion.locales : {};
+		suggestion.locales['zh-CN'] = {
+			...emptyLocalizedSuggestion(),
+			...(suggestion.locales['zh-CN'] ?? {}),
+			title: normalizeTitle(suggestion.locales['zh-CN']?.title)
+		};
+
+		return suggestion;
+	};
+
 	const setPromptSuggestions = () => {
-		_promptSuggestions = promptSuggestions.map((s) => {
-			if (typeof s.title === 'string') {
-				s.title = [s.title, ''];
-			} else if (!Array.isArray(s.title)) {
-				s.title = ['', ''];
-			}
-			return s;
-		});
+		_promptSuggestions = promptSuggestions.map(normalizePromptSuggestion);
 	};
 
 	$: if (promptSuggestions) {
@@ -50,15 +74,7 @@
 						try {
 							let suggestions = JSON.parse(event.target.result);
 
-							suggestions = suggestions.map((s) => {
-								if (typeof s.title === 'string') {
-									s.title = [s.title, ''];
-								} else if (!Array.isArray(s.title)) {
-									s.title = ['', ''];
-								}
-
-								return s;
-							});
+							suggestions = suggestions.map(normalizePromptSuggestion);
 
 							promptSuggestions = [...promptSuggestions, ...suggestions];
 						} catch (error) {
@@ -110,7 +126,16 @@
 				type="button"
 				on:click={() => {
 					if (promptSuggestions.length === 0 || promptSuggestions.at(-1).content !== '') {
-						promptSuggestions = [...promptSuggestions, { content: '', title: ['', ''] }];
+						promptSuggestions = [
+							...promptSuggestions,
+							{
+								content: '',
+								title: ['', ''],
+								locales: {
+									'zh-CN': emptyLocalizedSuggestion()
+								}
+							}
+						];
 					}
 				}}
 			>
@@ -123,39 +148,101 @@
 		<div class="flex flex-col gap-2">
 			{#each _promptSuggestions as prompt, promptIdx}
 				<div
-					class=" flex border rounded-2xl border-gray-100/30 dark:border-gray-850/30 bg-transparent p-2"
+					class="flex border rounded-2xl border-gray-100/30 dark:border-gray-850/30 bg-transparent p-2"
 				>
-					<div class="flex flex-col md:flex-row w-full gap-1 md:gap-2 px-2">
-						<div class="gap-0.5 min-w-60">
-							<Tooltip content={$i18n.t('e.g. Tell me a fun fact')} placement="top-start">
-								<input
-									class="text-sm w-full bg-transparent outline-hidden"
-									placeholder={$i18n.t('Title')}
-									bind:value={prompt.title[0]}
-								/>
-							</Tooltip>
+					<div class="flex w-full flex-col gap-2 px-2">
+						<div class="grid w-full grid-cols-1 gap-3 xl:grid-cols-2">
+							<div class="space-y-1.5">
+								<div class="text-[11px] font-semibold uppercase tracking-normal text-gray-500">
+									English
+								</div>
+								<div class="gap-0.5">
+									<Tooltip content={$i18n.t('e.g. Tell me a fun fact')} placement="top-start">
+										<input
+											class="text-sm w-full bg-transparent outline-hidden"
+											placeholder={$i18n.t('Title')}
+											bind:value={prompt.title[0]}
+										/>
+									</Tooltip>
 
-							<Tooltip content={$i18n.t('e.g. about the Roman Empire')} placement="top-start">
-								<input
-									class="text-sm w-full bg-transparent outline-hidden text-gray-600 dark:text-gray-400"
-									placeholder={$i18n.t('Subtitle')}
-									bind:value={prompt.title[1]}
-								/>
-							</Tooltip>
+									<Tooltip content={$i18n.t('e.g. about the Roman Empire')} placement="top-start">
+										<input
+											class="text-sm w-full bg-transparent outline-hidden text-gray-600 dark:text-gray-400"
+											placeholder={$i18n.t('Subtitle')}
+											bind:value={prompt.title[1]}
+										/>
+									</Tooltip>
+								</div>
+
+								<Tooltip
+									className="w-full self-center items-center flex"
+									content={$i18n.t('e.g. Tell me a fun fact about the Roman Empire')}
+									placement="top-start"
+								>
+									<textarea
+										class="text-sm w-full bg-transparent outline-hidden resize-none"
+										placeholder={$i18n.t('Prompt')}
+										rows="2"
+										bind:value={prompt.content}
+									></textarea>
+								</Tooltip>
+							</div>
+
+							<div
+								class="space-y-1.5 border-t border-gray-100 pt-3 dark:border-gray-850 xl:border-l xl:border-t-0 xl:pl-3 xl:pt-0"
+							>
+								<div class="text-[11px] font-semibold uppercase tracking-normal text-gray-500">
+									中文
+								</div>
+								<div class="gap-0.5">
+									<Tooltip content="例如：Tray 盘移载" placement="top-start">
+										<input
+											class="text-sm w-full bg-transparent outline-hidden"
+											placeholder={$i18n.t('Title')}
+											bind:value={prompt.locales['zh-CN'].title[0]}
+										/>
+									</Tooltip>
+
+									<Tooltip content="例如：推荐用于 Tray 盘移载的节省空间气缸" placement="top-start">
+										<input
+											class="text-sm w-full bg-transparent outline-hidden text-gray-600 dark:text-gray-400"
+											placeholder={$i18n.t('Subtitle')}
+											bind:value={prompt.locales['zh-CN'].title[1]}
+										/>
+									</Tooltip>
+								</div>
+
+								<Tooltip
+									className="w-full self-center items-center flex"
+									content="例如：使用 cylinder-selection-for-expo 专家技能进行选择气缸..."
+									placement="top-start"
+								>
+									<textarea
+										class="text-sm w-full bg-transparent outline-hidden resize-none"
+										placeholder={$i18n.t('Prompt')}
+										rows="2"
+										bind:value={prompt.locales['zh-CN'].content}
+									></textarea>
+								</Tooltip>
+							</div>
 						</div>
 
-						<Tooltip
-							className="w-full self-center items-center flex"
-							content={$i18n.t('e.g. Tell me a fun fact about the Roman Empire')}
-							placement="top-start"
-						>
-							<textarea
-								class="text-sm w-full bg-transparent outline-hidden resize-none"
-								placeholder={$i18n.t('Prompt')}
-								rows="2"
-								bind:value={prompt.content}
-							></textarea>
-						</Tooltip>
+						<div class="grid grid-cols-1 gap-2 text-[11px] text-gray-500 xl:grid-cols-2">
+							<div class="rounded-lg border border-gray-100 px-2 py-1.5 dark:border-gray-850">
+								<div class="font-medium text-gray-600 dark:text-gray-300">English preview</div>
+								<div class="line-clamp-1">{prompt.title[0] || $i18n.t('Title')}</div>
+								<div class="line-clamp-1">{prompt.title[1] || $i18n.t('Subtitle')}</div>
+							</div>
+							<div class="rounded-lg border border-gray-100 px-2 py-1.5 dark:border-gray-850">
+								<div class="font-medium text-gray-600 dark:text-gray-300">中文预览</div>
+								<div class="line-clamp-1">
+									{prompt.locales['zh-CN'].title[0] || $i18n.t('Title')}
+								</div>
+								<div class="line-clamp-1">
+									{prompt.locales['zh-CN'].title[1] || $i18n.t('Subtitle')}
+								</div>
+							</div>
+						</div>
 					</div>
 
 					<button

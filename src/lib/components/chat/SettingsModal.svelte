@@ -466,6 +466,10 @@
 
 	const getAvailableSettings = () => {
 		return allSettings.filter((tab) => {
+			if (tab.id === 'about') {
+				return false;
+			}
+
 			if (tab.id === 'tools') {
 				return (
 					$user?.role === 'admin' ||

@@ -17,6 +17,12 @@
 			'<circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12Z"/>',
 		workflow:
 			'<rect width="8" height="8" x="3" y="3" rx="2"/><rect width="8" height="8" x="13" y="13" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><path d="M13 7h4a2 2 0 0 1 2 2v4"/>',
+		'send-to-back':
+			'<rect x="14" y="14" width="8" height="8" rx="2"/><rect x="2" y="2" width="8" height="8" rx="2"/><path d="M7 14v1a2 2 0 0 0 2 2h1"/><path d="M14 7h1a2 2 0 0 1 2 2v1"/>',
+		'refresh-ccw-dot':
+			'<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/><circle cx="12" cy="12" r="1"/>',
+		'banknote-arrow-up':
+			'<path d="M12 18H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5"/><path d="M18 12h.01"/><path d="M19 22v-6"/><path d="m22 19-3-3-3 3"/><path d="M6 12h.01"/><circle cx="12" cy="12" r="2"/>',
 		'git-pull-request':
 			'<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M6 9v12"/>',
 		'swatch-book':
@@ -67,6 +73,7 @@
 		'messages-square':
 			'<path d="M14 9a2 2 0 0 1 2 2v6l-4-3H8a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/><path d="M18 9h1a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-1l-4 3v-3"/>'
 	};
+	const localIconNames = new Set(['send-to-back', 'refresh-ccw-dot', 'banknote-arrow-up']);
 
 	$: normalizedName = name
 		.trim()
@@ -78,6 +85,9 @@
 		.replace(/-+/g, '-')
 		.replace(/^-|-$/g, '')
 		.toLowerCase();
+	$: localIconUrl = localIconNames.has(normalizedName)
+		? `/assets/icons/lucide/${normalizedName}.svg`
+		: '';
 	$: iconSvg = icons[normalizedName];
 	$: remoteIconUrl =
 		normalizedName && /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(normalizedName)
@@ -85,7 +95,13 @@
 			: '';
 </script>
 
-{#if iconSvg}
+{#if localIconUrl}
+	<span
+		class={`inline-block bg-current ${className}`}
+		style={`mask: url("${localIconUrl}") center / contain no-repeat; -webkit-mask: url("${localIconUrl}") center / contain no-repeat;`}
+		aria-hidden="true"
+	></span>
+{:else if iconSvg}
 	<svg
 		xmlns="http://www.w3.org/2000/svg"
 		viewBox="0 0 24 24"

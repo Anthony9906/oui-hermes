@@ -107,7 +107,16 @@
 	let newFolderId = null;
 
 	$: pinnedItems = $settings?.pinnedMenuItems ?? DEFAULT_PINNED_ITEMS;
-	$: collapsedNewChatSelected = $page.url.pathname === '/' && !$showExpertAgentDrawer;
+	$: currentPath = $page.url.pathname;
+	$: collapsedNewChatSelected = currentPath === '/' && !$showExpertAgentDrawer;
+	const selectedSidebarButtonClass =
+		'bg-[#eaf4ff] text-[#001f5b] border border-[#8ab9ee]/70 shadow-[0_10px_24px_rgba(0,31,91,0.08),inset_0_1px_0_rgba(255,255,255,0.92)]';
+	const defaultSidebarButtonClass =
+		'text-[#2c3d63] border border-transparent hover:bg-[#f1f7ff] dark:hover:bg-gray-850';
+	const selectedSidebarRowClass =
+		'bg-[#eaf4ff] text-[#001f5b] border border-[#8ab9ee]/70 shadow-[0_8px_20px_rgba(0,31,91,0.07),inset_0_1px_0_rgba(255,255,255,0.92)]';
+	const defaultSidebarRowClass =
+		'border border-transparent hover:bg-gray-100 dark:hover:bg-gray-900';
 
 	const isMenuItemVisible = (id) => {
 		switch (id) {
@@ -138,6 +147,13 @@
 			playground: { label: 'Playground', href: '/playground', iconType: 'playground' }
 		};
 		return items[id];
+	};
+
+	const isMenuItemSelected = (id, path) => {
+		const meta = getMenuItemMeta(id);
+		if (!meta) return false;
+
+		return path === meta.href || path.startsWith(`${meta.href}/`);
 	};
 
 	const initPinnedMenuSortable = () => {
@@ -825,8 +841,8 @@
 					<Tooltip content={$i18n.t('New Chat')} placement="right">
 						<a
 							class=" cursor-pointer flex rounded-2xl transition group {collapsedNewChatSelected
-								? 'bg-[#eaf4ff] text-[#001f5b] shadow-[0_10px_24px_rgba(0,31,91,0.08)]'
-								: 'text-[#2c3d63] hover:bg-[#f1f7ff] dark:hover:bg-gray-850'}"
+								? selectedSidebarButtonClass
+								: defaultSidebarButtonClass}"
 							href="/"
 							draggable="false"
 							on:click={async (e) => {
@@ -869,8 +885,8 @@
 					<Tooltip content="Expert Agent" placement="right">
 						<button
 							class=" cursor-pointer flex rounded-2xl transition group {$showExpertAgentDrawer
-								? 'bg-[#eaf4ff] text-[#001f5b] shadow-[0_10px_24px_rgba(0,31,91,0.08)]'
-								: 'text-[#2c3d63] hover:bg-[#f1f7ff] dark:hover:bg-gray-850'}"
+								? selectedSidebarButtonClass
+								: defaultSidebarButtonClass}"
 							on:click={expertAgentClickHandler}
 							draggable="false"
 							aria-label="Expert Agent"
@@ -901,7 +917,12 @@
 						<div class="">
 							<Tooltip content={$i18n.t(meta.label)} placement="right">
 								<a
-									class=" cursor-pointer flex rounded-2xl text-[#2c3d63] hover:bg-[#f1f7ff] dark:hover:bg-gray-850 transition group"
+									class=" cursor-pointer flex rounded-2xl transition group {isMenuItemSelected(
+										itemId,
+										currentPath
+									)
+										? selectedSidebarButtonClass
+										: defaultSidebarButtonClass}"
 									href={meta.href}
 									on:click={async (e) => {
 										e.stopImmediatePropagation();
@@ -979,6 +1000,7 @@
 						<UserMenu
 							role={$user?.role}
 							profile={$config?.features?.enable_user_status ?? true}
+							help={true}
 							showActiveUsers={false}
 							on:show={(e) => {
 								if (e.detail === 'archived-chat') {
@@ -987,7 +1009,7 @@
 							}}
 						>
 							<div
-								class=" cursor-pointer flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
+								class=" cursor-pointer flex -translate-y-5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
 							>
 								<div class="self-center relative">
 									<img
@@ -1145,7 +1167,9 @@
 					<div class="px-[0.4375rem] flex justify-center text-gray-800 dark:text-gray-200">
 						<button
 							id="sidebar-expert-agent-button"
-							class="group grow flex items-center space-x-3 rounded-2xl px-2.5 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition outline-none"
+							class="group grow flex items-center space-x-3 rounded-2xl px-2.5 py-2 transition outline-none {$showExpertAgentDrawer
+								? selectedSidebarRowClass
+								: defaultSidebarRowClass}"
 							on:click={expertAgentClickHandler}
 							draggable="false"
 							aria-label="Expert Agent"
@@ -1183,7 +1207,12 @@
 								>
 									<a
 										id="sidebar-{itemId}-button"
-										class="grow flex items-center space-x-3 rounded-2xl px-2.5 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition"
+										class="grow flex items-center space-x-3 rounded-2xl px-2.5 py-2 transition {isMenuItemSelected(
+											itemId,
+											currentPath
+										)
+											? selectedSidebarRowClass
+											: defaultSidebarRowClass}"
 										href={meta.href}
 										on:click={itemClickHandler}
 										draggable="false"
@@ -1668,6 +1697,7 @@
 						<UserMenu
 							role={$user?.role}
 							profile={$config?.features?.enable_user_status ?? true}
+							help={true}
 							showActiveUsers={false}
 							className="w-[calc(var(--sidebar-width)-1rem)]"
 							on:show={(e) => {

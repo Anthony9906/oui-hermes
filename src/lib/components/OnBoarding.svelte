@@ -46,8 +46,8 @@
 					<img
 						id="logo"
 						crossorigin="anonymous"
-						src="{WEBUI_BASE_URL}/static/favicon.png"
-						class=" w-6 rounded-full"
+						src="{WEBUI_BASE_URL}/static/logo.png"
+						class="size-6 rounded-md object-contain"
 						alt="logo"
 					/>
 				</div>

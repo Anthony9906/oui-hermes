@@ -4,7 +4,7 @@
 	import { getLanguages, changeLanguage } from '$lib/i18n';
 	const dispatch = createEventDispatcher();
 
-	import { config, settings, theme } from '$lib/stores';
+	import { settings, theme } from '$lib/stores';
 
 	const i18n = getContext('i18n');
 
@@ -13,8 +13,17 @@
 	$: void getModels;
 
 	// General
-	let themes = ['dark', 'light', 'oled-dark'];
-	let selectedTheme = 'system';
+	const themeClassNames = ['dark', 'light', 'oled-dark', 'her'];
+	const allowedLanguageOptions = [
+		{ code: 'en-US', title: 'English' },
+		{ code: 'fr-FR', title: 'French' },
+		{ code: 'de-DE', title: 'German' },
+		{ code: 'ja-JP', title: 'Japanese' },
+		{ code: 'pt-BR', title: 'Portuguese' },
+		{ code: 'vi-VN', title: 'Vietnamese' },
+		{ code: 'zh-CN', title: 'Chinese' }
+	];
+	let selectedTheme = 'light';
 
 	let languages: Awaited<ReturnType<typeof getLanguages>> = [];
 	let lang = $i18n.language;
@@ -41,12 +50,19 @@
 	};
 
 	onMount(async () => {
-		selectedTheme = localStorage.theme ?? 'system';
+		selectedTheme = 'light';
+		if (localStorage.theme !== 'light') {
+			themeChangeHandler('light');
+		}
 
-		languages = await getLanguages();
-
-		if (!$config?.features?.enable_easter_eggs) {
-			languages = languages.filter((l) => l.code !== 'dg-DG');
+		const availableLanguages = await getLanguages();
+		languages = allowedLanguageOptions.map((option) => {
+			const language = availableLanguages.find((l) => l.code === option.code);
+			return { ...(language ?? option), title: option.title };
+		});
+		if (!allowedLanguageOptions.some((option) => option.code === lang)) {
+			lang = 'en-US';
+			changeLanguage(lang);
 		}
 
 		notificationEnabled = $settings.notificationEnabled ?? false;
@@ -66,7 +82,7 @@
 			document.documentElement.style.setProperty('--color-gray-950', '#0d0d0d');
 		}
 
-		themes
+		themeClassNames
 			.filter((e) => e !== themeToApply)
 			.forEach((e) => {
 				e.split(' ').forEach((e) => {
@@ -139,13 +155,7 @@
 						placeholder={$i18n.t('Select a theme')}
 						on:change={() => themeChangeHandler(selectedTheme)}
 					>
-						<option value="system">⚙️ {$i18n.t('System')}</option>
-						<option value="dark">🌑 {$i18n.t('Dark')}</option>
-						<option value="oled-dark">🌃 {$i18n.t('OLED Dark')}</option>
 						<option value="light">☀️ {$i18n.t('Light')}</option>
-						{#if $config?.features?.enable_easter_eggs}
-							<option value="her">🌷 Her</option>
-						{/if}
 					</select>
 				</div>
 			</div>
@@ -169,24 +179,6 @@
 					</select>
 				</div>
 			</div>
-			{#if $i18n.language === 'en-US' && !($config?.license_metadata ?? false)}
-				<div
-					class="mb-2 text-xs {($settings?.highContrastMode ?? false)
-						? 'text-gray-800 dark:text-gray-100'
-						: 'text-gray-400 dark:text-gray-500'}"
-				>
-					Couldn't find your language?
-					<a
-						class="font-medium underline {($settings?.highContrastMode ?? false)
-							? 'text-gray-700 dark:text-gray-200'
-							: 'text-gray-300'}"
-						href="https://github.com/open-webui/open-webui/blob/main/docs/CONTRIBUTING.md#-translations-and-internationalization"
-						target="_blank"
-					>
-						Help us translate Open WebUI!
-					</a>
-				</div>
-			{/if}
 
 			<div>
 				<div class=" py-0.5 flex w-full justify-between">
@@ -209,8 +201,16 @@
 					</button>
 				</div>
 			</div>
-		</div>
 
+			<div class="mt-8 flex w-full justify-start">
+				<img
+					src="/assets/images/expert-agent-cowain-logo.png"
+					alt=""
+					class="h-auto w-52 max-w-full opacity-95"
+					draggable="false"
+				/>
+			</div>
+		</div>
 	</div>
 
 	<div class="flex justify-end pt-3 text-sm font-medium">
