@@ -220,6 +220,7 @@ type Settings = {
 	speechAutoSend?: boolean;
 	responseAutoPlayback?: boolean;
 	audio?: AudioSettings;
+	experimentalVoiceCheck?: any;
 	showUsername?: boolean;
 	notificationEnabled?: boolean;
 	highContrastMode?: boolean;

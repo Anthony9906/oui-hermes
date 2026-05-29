@@ -202,13 +202,22 @@
 				</div>
 			</div>
 
-			<div class="mt-8 flex w-full justify-start">
+			<div class="mt-16 flex w-full flex-col items-start gap-3 text-left">
 				<img
 					src="/assets/images/expert-agent-cowain-logo.png"
-					alt=""
-					class="h-auto w-52 max-w-full opacity-95"
+					alt="Cowain AI"
+					class="size-16 shrink-0 object-contain opacity-95"
 					draggable="false"
 				/>
+				<div
+					class="w-max space-y-1 whitespace-nowrap text-xs leading-5 text-gray-500 dark:text-gray-400"
+				>
+					<p>
+						Expert Agent provided by Cowain AI team, a product whose code is entirely AI-generated.
+					</p>
+					<p>Integrates the Hermes Agent and Open WebUI open-source projects.</p>
+					<p>Copyright (c) 2026 Cowain All rights reserved</p>
+				</div>
 			</div>
 		</div>
 	</div>

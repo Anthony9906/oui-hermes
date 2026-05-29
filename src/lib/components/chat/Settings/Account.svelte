@@ -16,6 +16,7 @@
 	import Textarea from '$lib/components/common/Textarea.svelte';
 	import User from '$lib/components/icons/User.svelte';
 	import UserProfileImage from './Account/UserProfileImage.svelte';
+	import VoiceCheck from './Account/VoiceCheck.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -253,6 +254,10 @@
 				<UpdatePassword />
 			</div>
 		{/if}
+
+		<div class="mt-4">
+			<VoiceCheck {saveSettings} />
+		</div>
 
 		{#if ($config?.features?.enable_api_keys ?? true) && ($user?.role === 'admin' || ($user?.permissions?.features?.api_keys ?? false))}
 			<div class="flex justify-between items-center text-sm mt-2">
