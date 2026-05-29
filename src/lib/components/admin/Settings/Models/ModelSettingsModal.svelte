@@ -63,6 +63,29 @@
 	let builtinTools = {};
 	let promptSuggestions = [];
 
+	const hasChinesePromptSuggestionContent = (prompt) => {
+		const zhSuggestion = prompt?.locales?.['zh-CN'] ?? prompt?.locales?.zh;
+		const title = Array.isArray(zhSuggestion?.title) ? zhSuggestion.title : [];
+
+		return Boolean(title[0] || title[1] || zhSuggestion?.content);
+	};
+
+	const didSaveChinesePromptSuggestions = (sourceSuggestions, savedSuggestions) => {
+		const sourceHasChineseContent = sourceSuggestions.some(hasChinesePromptSuggestionContent);
+
+		if (!sourceHasChineseContent) {
+			return true;
+		}
+
+		return sourceSuggestions.every((sourceSuggestion, idx) => {
+			if (!hasChinesePromptSuggestionContent(sourceSuggestion)) {
+				return true;
+			}
+
+			return hasChinesePromptSuggestionContent(savedSuggestions?.[idx]);
+		});
+	};
+
 	$: if (show) {
 		init();
 	}
@@ -137,8 +160,21 @@
 		});
 
 		if (res) {
-			promptSuggestions = promptSuggestions.filter((p) => p.content !== '');
-			promptSuggestions = await setDefaultPromptSuggestions(localStorage.token, promptSuggestions);
+			const promptSuggestionsToSave = promptSuggestions.filter((p) => p.content !== '');
+			const savedPromptSuggestions = await setDefaultPromptSuggestions(
+				localStorage.token,
+				promptSuggestionsToSave
+			);
+
+			if (!didSaveChinesePromptSuggestions(promptSuggestionsToSave, savedPromptSuggestions)) {
+				toast.error(
+					'Failed to save Chinese prompt suggestions. Please restart the backend and try again.'
+				);
+				loading = false;
+				return;
+			}
+
+			promptSuggestions = savedPromptSuggestions;
 			await _config.set(await getBackendConfig());
 
 			toast.success($i18n.t('Models configuration saved successfully'));

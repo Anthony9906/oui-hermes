@@ -136,9 +136,10 @@ class ExpertAgentOpenDirectoryResponse(BaseModel):
 
 def _default_skills_root() -> Path:
     hermes_home = Path(os.environ.get("HERMES_HOME") or Path.home() / ".hermes")
-    expertagent_root = hermes_home / "profiles" / "expertagent" / "skills"
-    if expertagent_root.exists():
-        return expertagent_root
+    for profile_name in ("expertagent", "expert-agent"):
+        profile_skills_root = hermes_home / "profiles" / profile_name / "skills"
+        if profile_skills_root.exists():
+            return profile_skills_root
     return hermes_home / "skills"
 
 

@@ -1236,6 +1236,24 @@
 	const getContents = () => {
 		const messages = history ? createMessagesList(history, history.currentId) : [];
 		let contents = [];
+		const decodeEntityText = (value = '') =>
+			value
+				.replace(/&quot;/g, '"')
+				.replace(/&#39;/g, "'")
+				.replace(/&apos;/g, "'")
+				.replace(/&amp;/g, '&')
+				.replace(/&lt;/g, '<')
+				.replace(/&gt;/g, '>');
+		const getHtmlAttribute = (tag = '', name = '') => {
+			const match = tag.match(new RegExp(`${name}\\s*=\\s*("([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i'));
+			return decodeEntityText(match?.[2] ?? match?.[3] ?? match?.[4] ?? '').trim();
+		};
+		const getOnlyIframeTag = (value = '') => {
+			const trimmed = value.trim();
+			const match = trimmed.match(/^<iframe\b[\s\S]*?<\/iframe>\s*$/i);
+			return match?.[0]?.match(/<iframe\b[^>]*>/i)?.[0] ?? '';
+		};
+
 		messages.forEach((message) => {
 			if (message?.role !== 'user' && message?.content) {
 				const { codeBlocks: codeBlocks, htmlGroups: htmlGroups } = getCodeBlockContents(
@@ -1244,6 +1262,25 @@
 
 				if (htmlGroups && htmlGroups.length > 0) {
 					htmlGroups.forEach((group) => {
+						const iframeTag =
+							!group.css.trim() && !group.js.trim() ? getOnlyIframeTag(group.html) : '';
+						const iframeSrc = iframeTag ? getHtmlAttribute(iframeTag, 'src') : '';
+						if (iframeSrc) {
+							contents = [
+								...contents,
+								{
+									type: 'external-iframe',
+									content: iframeSrc,
+									source: group.html,
+									title:
+										getHtmlAttribute(iframeTag, 'title') ||
+										getHtmlAttribute(iframeTag, 'aria-label') ||
+										'Content'
+								}
+							];
+							return;
+						}
+
 						const renderedContent = `
                         <!DOCTYPE html>
                         <html lang="en">

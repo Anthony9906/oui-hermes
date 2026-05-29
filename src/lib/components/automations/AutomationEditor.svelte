@@ -8,6 +8,7 @@
 	import localizedFormat from 'dayjs/plugin/localizedFormat';
 
 	import { WEBUI_NAME, showSidebar } from '$lib/stores';
+	import { showExpertAgentDrawer } from '$lib/stores/expertAgents';
 
 	import {
 		updateAutomationById,
@@ -214,9 +215,11 @@
 </DeleteConfirmDialog>
 
 <div
+	id="automation-editor-container"
 	class="flex flex-col w-full h-screen max-h-[100dvh] transition-width duration-200 ease-in-out {$showSidebar
 		? 'md:max-w-[calc(100%-var(--sidebar-width))]'
 		: ''} max-w-full"
+	class:expert-agent-side-panel-open={$showExpertAgentDrawer}
 >
 	<div class="flex-1 max-h-full flex flex-col pt-3 pb-1 px-3 md:px-[18px]">
 		<!-- Header Segment (Shrink-0 so it doesn't compress) -->
@@ -460,3 +463,31 @@
 		</div>
 	</div>
 </div>
+
+<style>
+	:global(:root) {
+		--chat-side-panel-width: clamp(480px, 38vw, 760px);
+	}
+
+	#automation-editor-container.expert-agent-side-panel-open {
+		max-width: calc(100vw - var(--chat-side-panel-width) - 60px) !important;
+		margin-right: calc(var(--chat-side-panel-width) + 20px) !important;
+	}
+
+	:global(
+		.app:has(#sidebar[data-state='true']) #automation-editor-container.expert-agent-side-panel-open
+	) {
+		max-width: calc(100vw - var(--sidebar-width) - var(--chat-side-panel-width) - 80px) !important;
+	}
+
+	@media (max-width: 1023px) {
+		#automation-editor-container.expert-agent-side-panel-open,
+		:global(
+			.app:has(#sidebar[data-state='true'])
+				#automation-editor-container.expert-agent-side-panel-open
+		) {
+			max-width: 100% !important;
+			margin-right: 0 !important;
+		}
+	}
+</style>

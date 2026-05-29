@@ -4,7 +4,7 @@ import io
 import uuid
 import asyncio
 from fastapi import APIRouter, Depends, Request, HTTPException
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 import aiohttp
 
 from typing import Optional
@@ -774,9 +774,15 @@ async def set_models_config(request: Request, form_data: ModelsConfigForm, user=
     }
 
 
+class PromptSuggestionLocale(BaseModel):
+    title: list[str] = Field(default_factory=list)
+    content: str = ''
+
+
 class PromptSuggestion(BaseModel):
     title: list[str]
     content: str
+    locales: Optional[dict[str, PromptSuggestionLocale]] = None
 
 
 class SetDefaultSuggestionsForm(BaseModel):

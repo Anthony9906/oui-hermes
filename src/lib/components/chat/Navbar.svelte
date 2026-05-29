@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { getContext } from 'svelte';
-	import { toast } from 'svelte-sonner';
 
 	import {
 		WEBUI_NAME,
@@ -9,7 +8,6 @@
 		config,
 		mobile,
 		settings,
-		showArchivedChats,
 		showSidebar,
 		temporaryChatEnabled,
 		user
@@ -23,7 +21,6 @@
 	import ModelSelector from '../chat/ModelSelector.svelte';
 	import Tooltip from '../common/Tooltip.svelte';
 	import Menu from '$lib/components/layout/Navbar/Menu.svelte';
-	import UserMenu from '$lib/components/layout/Sidebar/UserMenu.svelte';
 	import AdjustmentsHorizontal from '../icons/AdjustmentsHorizontal.svelte';
 
 	import PencilSquare from '../icons/PencilSquare.svelte';
@@ -36,7 +33,6 @@
 	import EllipsisHorizontal from '../icons/EllipsisHorizontal.svelte';
 	import ChatPlus from '../icons/ChatPlus.svelte';
 	import ChatCheck from '../icons/ChatCheck.svelte';
-	import { WEBUI_API_BASE_URL } from '$lib/constants';
 
 	const i18n = getContext('i18n');
 
@@ -119,11 +115,12 @@
 				</div>
 
 				<div class="self-start flex flex-none items-center text-gray-600 dark:text-gray-400">
-					<span
-						class="mr-10 hidden shrink-0 select-none whitespace-nowrap text-[20px] font-semibold text-[#2563eb] sm:inline-flex"
-					>
-						Cowain
-					</span>
+					<img
+						src="/assets/images/cowain-logo-blue.png"
+						alt="Cowain"
+						class="mr-10 hidden h-7 w-auto shrink-0 translate-y-[10px] select-none object-contain sm:block"
+						draggable="false"
+					/>
 
 					<!-- <div class="md:hidden flex self-center w-[1px] h-5 mx-2 bg-gray-300 dark:bg-stone-700" /> -->
 
@@ -166,33 +163,6 @@
 								</div>
 							</button>
 						</Menu>
-					{/if}
-
-					{#if $user !== undefined && $user !== null}
-						<UserMenu
-							className="w-[240px]"
-							role={$user?.role}
-							help={true}
-							on:show={(e) => {
-								if (e.detail === 'archived-chat') {
-									showArchivedChats.set(true);
-								}
-							}}
-						>
-							<div
-								class="select-none flex rounded-xl p-1.5 w-full hover:bg-gray-50 dark:hover:bg-gray-850 transition"
-							>
-								<div class=" self-center">
-									<span class="sr-only">{$i18n.t('User menu')}</span>
-									<img
-										src={`${WEBUI_API_BASE_URL}/users/${$user?.id}/profile/image`}
-										class="size-6 object-cover rounded-full"
-										alt=""
-										draggable="false"
-									/>
-								</div>
-							</div>
-						</UserMenu>
 					{/if}
 				</div>
 			</div>

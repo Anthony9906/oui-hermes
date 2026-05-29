@@ -32,6 +32,8 @@
 			return 'w-[70rem]';
 		} else if (size === '2xl') {
 			return 'w-[84rem]';
+		} else if (size === '2xl-75') {
+			return 'w-[63rem]';
 		} else if (size === '3xl') {
 			return 'w-[100rem]';
 		} else {

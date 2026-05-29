@@ -239,7 +239,7 @@
 								<div class="auth-logo-mark" aria-hidden="true">
 									<img
 										id="logo"
-										src="{WEBUI_BASE_URL}/static/favicon.png"
+										src="{WEBUI_BASE_URL}/static/logo.png"
 										class="auth-logo-image"
 										alt=""
 										draggable="false"
@@ -656,7 +656,6 @@
 		align-items: center;
 		justify-content: center;
 		border-radius: 0.875rem;
-		overflow: hidden;
 		background: #346aa8;
 		box-shadow: 0 10px 24px rgba(0, 31, 91, 0.18);
 	}
@@ -665,9 +664,8 @@
 		display: block;
 		height: 100%;
 		width: 100%;
-		object-fit: cover;
-		transform: scale(1.035);
-		transform-origin: center;
+		border-radius: inherit;
+		object-fit: contain;
 	}
 
 	.auth-title {

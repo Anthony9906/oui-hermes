@@ -220,6 +220,7 @@ type Settings = {
 	speechAutoSend?: boolean;
 	responseAutoPlayback?: boolean;
 	audio?: AudioSettings;
+	experimentalVoiceCheck?: any;
 	showUsername?: boolean;
 	notificationEnabled?: boolean;
 	highContrastMode?: boolean;
@@ -309,9 +310,15 @@ type Config = {
 	};
 };
 
+type PromptSuggestionLocale = {
+	content: string;
+	title: [string, string];
+};
+
 type PromptSuggestion = {
 	content: string;
 	title: [string, string];
+	locales?: Record<string, PromptSuggestionLocale>;
 };
 
 export type SessionUser = {
