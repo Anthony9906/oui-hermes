@@ -3323,7 +3323,7 @@
 
 <style>
 	:global(:root) {
-		--chat-side-panel-width: clamp(480px, 38vw, 760px);
+		--chat-side-panel-width: clamp(640px, 58vw, 800px);
 	}
 
 	:global(#chat-container.chat-side-panel-open) {

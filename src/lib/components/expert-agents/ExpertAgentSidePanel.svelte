@@ -18,6 +18,7 @@
 	let isResizing = false;
 	let startClientX = 0;
 	let startWidth = DEFAULT_WIDTH;
+	let activePointerId: number | null = null;
 
 	const clampWidth = (width: number) => {
 		if (typeof window === 'undefined') return width;
@@ -30,21 +31,29 @@
 		document.documentElement.style.setProperty('--chat-side-panel-width', `${panelWidth}px`);
 	};
 
-	const resizeStartHandler = (event: MouseEvent) => {
+	const resizeStartHandler = (event: PointerEvent) => {
+		if (event.pointerType === 'mouse' && event.button !== 0) return;
+
+		event.preventDefault();
 		isResizing = true;
+		activePointerId = event.pointerId;
 		startClientX = event.clientX;
 		startWidth = panelWidth;
+		(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
 		document.body.style.userSelect = 'none';
 	};
 
-	const resizeMoveHandler = (event: MouseEvent) => {
-		if (!isResizing) return;
+	const resizeMoveHandler = (event: PointerEvent) => {
+		if (!isResizing || event.pointerId !== activePointerId) return;
+		event.preventDefault();
 		applyPanelWidth(startWidth + startClientX - event.clientX);
 	};
 
-	const resizeEndHandler = () => {
+	const resizeEndHandler = (event?: PointerEvent) => {
+		if (event && event.pointerId !== activePointerId) return;
 		if (!isResizing) return;
 		isResizing = false;
+		activePointerId = null;
 		document.body.style.userSelect = '';
 		localStorage.setItem('chatSidePanelWidth', String(panelWidth));
 	};
@@ -73,15 +82,17 @@
 
 		applyPanelWidth(Number(localStorage.getItem('chatSidePanelWidth')) || DEFAULT_WIDTH);
 		mediaQuery.addEventListener('change', handleMediaQuery);
-		window.addEventListener('mousemove', resizeMoveHandler);
-		window.addEventListener('mouseup', resizeEndHandler);
+		window.addEventListener('pointermove', resizeMoveHandler);
+		window.addEventListener('pointerup', resizeEndHandler);
+		window.addEventListener('pointercancel', resizeEndHandler);
 		window.addEventListener('resize', resizeViewportHandler);
 		handleMediaQuery(mediaQuery);
 
 		return () => {
 			mediaQuery.removeEventListener('change', handleMediaQuery);
-			window.removeEventListener('mousemove', resizeMoveHandler);
-			window.removeEventListener('mouseup', resizeEndHandler);
+			window.removeEventListener('pointermove', resizeMoveHandler);
+			window.removeEventListener('pointerup', resizeEndHandler);
+			window.removeEventListener('pointercancel', resizeEndHandler);
 			window.removeEventListener('resize', resizeViewportHandler);
 			document.body.style.userSelect = '';
 		};
@@ -95,7 +106,7 @@
 				type="button"
 				class="expert-agent-side-panel-resizer"
 				aria-label="Resize expert agent panel"
-				on:mousedown|preventDefault={resizeStartHandler}
+				on:pointerdown={resizeStartHandler}
 			></button>
 			<div
 				in:fly={{ x: 56, duration: 320, opacity: 0.72 }}
@@ -151,6 +162,7 @@
 		width: 12px;
 		cursor: col-resize;
 		pointer-events: auto;
+		touch-action: none;
 		border: 0;
 		background: transparent;
 	}

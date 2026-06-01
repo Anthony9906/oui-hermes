@@ -16,7 +16,7 @@
 
 	const MIN_WIDTH = 420;
 	const MAX_WIDTH = 920;
-	const DEFAULT_WIDTH = 640;
+	const DEFAULT_WIDTH = 800;
 
 	let largeScreen = false;
 	let activePanel: 'artifacts' | 'expertAgents' = 'expertAgents';
@@ -26,6 +26,7 @@
 	let isResizing = false;
 	let startClientX = 0;
 	let startWidth = DEFAULT_WIDTH;
+	let activePointerId: number | null = null;
 
 	$: visible = $showArtifacts || $showExpertAgentDrawer;
 
@@ -40,21 +41,29 @@
 		document.documentElement.style.setProperty('--chat-side-panel-width', `${panelWidth}px`);
 	};
 
-	const resizeStartHandler = (event: MouseEvent) => {
+	const resizeStartHandler = (event: PointerEvent) => {
+		if (event.pointerType === 'mouse' && event.button !== 0) return;
+
+		event.preventDefault();
 		isResizing = true;
+		activePointerId = event.pointerId;
 		startClientX = event.clientX;
 		startWidth = panelWidth;
+		(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
 		document.body.style.userSelect = 'none';
 	};
 
-	const resizeMoveHandler = (event: MouseEvent) => {
-		if (!isResizing) return;
+	const resizeMoveHandler = (event: PointerEvent) => {
+		if (!isResizing || event.pointerId !== activePointerId) return;
+		event.preventDefault();
 		applyPanelWidth(startWidth + startClientX - event.clientX);
 	};
 
-	const resizeEndHandler = () => {
+	const resizeEndHandler = (event?: PointerEvent) => {
+		if (event && event.pointerId !== activePointerId) return;
 		if (!isResizing) return;
 		isResizing = false;
+		activePointerId = null;
 		document.body.style.userSelect = '';
 		localStorage.setItem('chatSidePanelWidth', String(panelWidth));
 	};
@@ -115,15 +124,17 @@
 
 		applyPanelWidth(Number(localStorage.getItem('chatSidePanelWidth')) || DEFAULT_WIDTH);
 		mediaQuery.addEventListener('change', handleMediaQuery);
-		window.addEventListener('mousemove', resizeMoveHandler);
-		window.addEventListener('mouseup', resizeEndHandler);
+		window.addEventListener('pointermove', resizeMoveHandler);
+		window.addEventListener('pointerup', resizeEndHandler);
+		window.addEventListener('pointercancel', resizeEndHandler);
 		window.addEventListener('resize', resizeViewportHandler);
 		handleMediaQuery(mediaQuery);
 
 		return () => {
 			mediaQuery.removeEventListener('change', handleMediaQuery);
-			window.removeEventListener('mousemove', resizeMoveHandler);
-			window.removeEventListener('mouseup', resizeEndHandler);
+			window.removeEventListener('pointermove', resizeMoveHandler);
+			window.removeEventListener('pointerup', resizeEndHandler);
+			window.removeEventListener('pointercancel', resizeEndHandler);
 			window.removeEventListener('resize', resizeViewportHandler);
 			document.body.style.userSelect = '';
 		};
@@ -136,9 +147,12 @@
 			<button
 				type="button"
 				class="chat-side-panel-resizer"
+				class:chat-side-panel-resizer-artifacts={activePanel === 'artifacts'}
 				aria-label="Resize side panel"
-				on:mousedown|preventDefault={resizeStartHandler}
-			></button>
+				on:pointerdown={resizeStartHandler}
+			>
+				<span class="chat-side-panel-resizer-grip" aria-hidden="true"></span>
+			</button>
 			<div
 				in:fly={{ x: 56, duration: 320, opacity: 0.72 }}
 				out:fly={{ x: 44, duration: 220, opacity: 0.62 }}
@@ -195,24 +209,55 @@
 
 	.chat-side-panel-resizer {
 		position: absolute;
-		top: 20px;
-		bottom: 20px;
-		left: -6px;
+		top: 50%;
+		left: -16px;
 		z-index: 2;
-		width: 12px;
+		width: 32px;
+		height: 88px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transform: translateY(-50%);
 		cursor: col-resize;
 		pointer-events: auto;
+		touch-action: none;
 		border: 0;
 		background: transparent;
 	}
 
-	.chat-side-panel-resizer:hover {
-		background: linear-gradient(
-			90deg,
-			transparent 0%,
-			rgba(148, 163, 184, 0.34) 48%,
-			transparent 100%
-		);
+	.chat-side-panel-resizer-grip {
+		width: 14px;
+		height: 58px;
+		border: 1px solid rgba(47, 84, 157, 0.28);
+		border-radius: 999px;
+		background:
+			radial-gradient(circle at 50% 17px, rgba(47, 84, 157, 0.78) 0 2px, transparent 2.4px),
+			radial-gradient(circle at 50% 29px, rgba(47, 84, 157, 0.78) 0 2px, transparent 2.4px),
+			radial-gradient(circle at 50% 41px, rgba(47, 84, 157, 0.78) 0 2px, transparent 2.4px),
+			linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(239, 246, 255, 0.92));
+		box-shadow:
+			0 10px 26px rgba(15, 42, 89, 0.18),
+			0 0 0 1px rgba(255, 255, 255, 0.86) inset;
+		opacity: 0.72;
+		transition:
+			opacity 160ms ease,
+			border-color 160ms ease,
+			box-shadow 160ms ease,
+			transform 160ms ease;
+	}
+
+	.chat-side-panel-resizer:hover .chat-side-panel-resizer-grip,
+	.chat-side-panel-resizer:focus-visible .chat-side-panel-resizer-grip,
+	.chat-side-panel-resizer-artifacts .chat-side-panel-resizer-grip {
+		border-color: rgba(37, 99, 235, 0.5);
+		opacity: 0.96;
+		box-shadow:
+			0 14px 30px rgba(15, 42, 89, 0.22),
+			0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+	}
+
+	.chat-side-panel-resizer:active .chat-side-panel-resizer-grip {
+		transform: scale(0.96);
 	}
 
 	.chat-side-panel-shell {
@@ -238,5 +283,17 @@
 	:global(.dark) .chat-side-panel-shell {
 		background: #111827;
 		box-shadow: -18px 18px 45px rgba(0, 0, 0, 0.26);
+	}
+
+	:global(.dark) .chat-side-panel-resizer-grip {
+		border-color: rgba(148, 163, 184, 0.42);
+		background:
+			radial-gradient(circle at 50% 17px, rgba(191, 219, 254, 0.85) 0 2px, transparent 2.4px),
+			radial-gradient(circle at 50% 29px, rgba(191, 219, 254, 0.85) 0 2px, transparent 2.4px),
+			radial-gradient(circle at 50% 41px, rgba(191, 219, 254, 0.85) 0 2px, transparent 2.4px),
+			linear-gradient(180deg, rgba(30, 41, 59, 0.96), rgba(17, 24, 39, 0.94));
+		box-shadow:
+			0 10px 26px rgba(0, 0, 0, 0.34),
+			0 0 0 1px rgba(255, 255, 255, 0.08) inset;
 	}
 </style>
