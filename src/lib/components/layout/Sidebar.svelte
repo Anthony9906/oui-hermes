@@ -497,26 +497,33 @@
 
 	let startWidth = 0;
 	let startClientX = 0;
+	let activePointerId: number | null = null;
 
-	const resizeStartHandler = (e: MouseEvent) => {
+	const resizeStartHandler = (e: PointerEvent) => {
 		if ($mobile) return;
+		if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+		e.preventDefault();
 		isResizing = true;
+		activePointerId = e.pointerId;
 
 		startClientX = e.clientX;
 		startWidth = $sidebarWidth ?? 260;
 
+		(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
 		document.body.style.userSelect = 'none';
 	};
 
 	const resizeEndHandler = () => {
 		if (!isResizing) return;
 		isResizing = false;
+		activePointerId = null;
 
 		document.body.style.userSelect = '';
 		localStorage.setItem('sidebarWidth', String($sidebarWidth));
 	};
 
-	const resizeSidebarHandler = (endClientX) => {
+	const resizeSidebarHandler = (endClientX: number) => {
 		const dx = endClientX - startClientX;
 		const newSidebarWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidth + dx));
 
@@ -798,11 +805,17 @@
 ></button>
 
 <svelte:window
-	on:mousemove={(e) => {
-		if (!isResizing) return;
+	on:pointermove={(e) => {
+		if (!isResizing || e.pointerId !== activePointerId) return;
+		e.preventDefault();
 		resizeSidebarHandler(e.clientX);
 	}}
-	on:mouseup={() => {
+	on:pointerup={(e) => {
+		if (e.pointerId !== activePointerId) return;
+		resizeEndHandler();
+	}}
+	on:pointercancel={(e) => {
+		if (e.pointerId !== activePointerId) return;
 		resizeEndHandler();
 	}}
 />
@@ -1740,9 +1753,9 @@
 
 	{#if !$mobile}
 		<div
-			class="relative flex items-center justify-center group border-l border-gray-50 dark:border-gray-850/30 hover:border-gray-200 dark:hover:border-gray-800 transition z-20"
+			class="relative flex items-center justify-center group border-l border-gray-50 dark:border-gray-850/30 hover:border-gray-200 dark:hover:border-gray-800 transition z-20 touch-none"
 			id="sidebar-resizer"
-			on:mousedown={resizeStartHandler}
+			on:pointerdown={resizeStartHandler}
 			on:keydown={(e) => {
 				if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
 					e.preventDefault();
@@ -1759,7 +1772,7 @@
 			aria-valuenow={$sidebarWidth ?? 260}
 		>
 			<div
-				class=" absolute -left-1.5 -right-1.5 -top-0 -bottom-0 z-20 cursor-col-resize bg-transparent"
+				class=" absolute -left-1.5 -right-1.5 -top-0 -bottom-0 z-20 cursor-col-resize bg-transparent touch-none"
 			></div>
 		</div>
 	{/if}
