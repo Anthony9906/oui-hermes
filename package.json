@@ -21,6 +21,7 @@
 		"lint:backend": "pylint backend/",
 		"format": "prettier --write \"**/*.{js,ts,svelte,css,md,html,json}\"",
 		"format:backend": "ruff format . --exclude .venv --exclude venv",
+		"icons:sync:lucide": "node scripts/sync-lucide-icons.mjs",
 		"i18n:parse": "node scripts/i18n-parse.mjs && prettier --write \"src/lib/i18n/**/*.{js,json}\"",
 		"test:frontend": "vitest --passWithNoTests"
 	},
@@ -39,6 +40,7 @@
 		"eslint": "^8.56.0",
 		"eslint-config-prettier": "^9.1.0",
 		"eslint-plugin-svelte": "^2.45.1",
+		"lucide-static": "^1.17.0",
 		"postcss": "^8.4.31",
 		"prettier": "^3.3.3",
 		"prettier-plugin-svelte": "^3.2.6",

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { isLocalLucideIconName } from './lucideIconNames';
+
 	export let name = 'sparkles';
 	export let className = 'size-5';
 	export let strokeWidth = '1.9';
@@ -73,7 +75,6 @@
 		'messages-square':
 			'<path d="M14 9a2 2 0 0 1 2 2v6l-4-3H8a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/><path d="M18 9h1a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-1l-4 3v-3"/>'
 	};
-	const localIconNames = new Set(['send-to-back', 'refresh-ccw-dot', 'banknote-arrow-up']);
 
 	$: normalizedName = name
 		.trim()
@@ -85,14 +86,10 @@
 		.replace(/-+/g, '-')
 		.replace(/^-|-$/g, '')
 		.toLowerCase();
-	$: localIconUrl = localIconNames.has(normalizedName)
+	$: localIconUrl = isLocalLucideIconName(normalizedName)
 		? `/assets/icons/lucide/${normalizedName}.svg`
 		: '';
 	$: iconSvg = icons[normalizedName];
-	$: remoteIconUrl =
-		normalizedName && /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(normalizedName)
-			? `https://unpkg.com/lucide-static@latest/icons/${normalizedName}.svg`
-			: '';
 </script>
 
 {#if localIconUrl}
@@ -115,12 +112,6 @@
 	>
 		{@html iconSvg}
 	</svg>
-{:else if remoteIconUrl}
-	<span
-		class={`inline-block bg-current ${className}`}
-		style={`mask: url("${remoteIconUrl}") center / contain no-repeat; -webkit-mask: url("${remoteIconUrl}") center / contain no-repeat;`}
-		aria-hidden="true"
-	></span>
 {:else}
 	<svg
 		xmlns="http://www.w3.org/2000/svg"

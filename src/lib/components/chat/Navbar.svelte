@@ -118,7 +118,7 @@
 					<img
 						src="/assets/images/cowain-logo-blue.png"
 						alt="Cowain"
-						class="mr-10 hidden h-7 w-auto shrink-0 translate-y-[10px] select-none object-contain sm:block"
+						class="mr-10 hidden h-[1.4rem] w-auto shrink-0 translate-y-[10px] select-none object-contain sm:block"
 						draggable="false"
 					/>
 

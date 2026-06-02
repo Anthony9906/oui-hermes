@@ -27,6 +27,7 @@
 	};
 
 	const normalizePromptSuggestion = (suggestion) => {
+		suggestion.id = typeof suggestion.id === 'string' ? suggestion.id : '';
 		suggestion.title = normalizeTitle(suggestion.title);
 		suggestion.content = suggestion.content ?? '';
 		suggestion.locales =

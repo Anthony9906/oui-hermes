@@ -316,6 +316,7 @@ type PromptSuggestionLocale = {
 };
 
 type PromptSuggestion = {
+	id?: string;
 	content: string;
 	title: [string, string];
 	locales?: Record<string, PromptSuggestionLocale>;
