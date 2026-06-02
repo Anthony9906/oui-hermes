@@ -780,6 +780,7 @@ class PromptSuggestionLocale(BaseModel):
 
 
 class PromptSuggestion(BaseModel):
+    id: Optional[str] = None
     title: list[str]
     content: str
     locales: Optional[dict[str, PromptSuggestionLocale]] = None

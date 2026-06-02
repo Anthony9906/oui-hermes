@@ -18,6 +18,7 @@
 	import { toast } from 'svelte-sonner';
 	import ExpertSkillCardComponent from './ExpertSkillCard.svelte';
 	import LucideIcon from './LucideIcon.svelte';
+	import { isLocalLucideIconName } from './lucideIconNames';
 
 	export let show = false;
 
@@ -130,7 +131,10 @@
 	};
 
 	const isValidLucideIconName = (value: string) =>
-		value.length > 0 && value.length <= 64 && /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(value);
+		value.length > 0 &&
+		value.length <= 64 &&
+		/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(value) &&
+		isLocalLucideIconName(value);
 
 	const getLineCount = (content: string) =>
 		content.length ? content.split(/\r\n|\r|\n/).length : 1;
