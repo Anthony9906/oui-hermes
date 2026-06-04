@@ -96,6 +96,34 @@
 		motor: 'motor'
 	};
 
+	const DEFAULT_EFFICIENCY_TIMES = {
+		human: '15-30分钟',
+		ai: '1-3分钟'
+	};
+
+	const PROMPT_EFFICIENCY_TIMES = {
+		[PROMPT_CARD_IDS.trayTransfer]: {
+			human: '12-25分钟',
+			ai: '0.8-1.5分钟'
+		},
+		[PROMPT_CARD_IDS.rotaryFixture]: {
+			human: '14-30分钟',
+			ai: '1.5-2.8分钟'
+		},
+		[PROMPT_CARD_IDS.palletLifter]: {
+			human: '10-22分钟',
+			ai: '0.6-1.2分钟'
+		},
+		[PROMPT_CARD_IDS.kkModuleHighSpeed]: {
+			human: '25-45分钟',
+			ai: '1.8-3分钟'
+		},
+		[PROMPT_CARD_IDS.flipMotorSelection]: {
+			human: '28-50分钟',
+			ai: '2-3分钟'
+		}
+	};
+
 	const getPromptCase = (prompt) => {
 		const promptId = normalizePromptId(prompt?.id);
 		if (promptCardIdSet.has(promptId)) {
@@ -222,6 +250,18 @@
 		}
 
 		return '';
+	};
+
+	const getEfficiencyComparisonCopy = (prompt) => {
+		const times = PROMPT_EFFICIENCY_TIMES[getPromptCase(prompt)] ?? DEFAULT_EFFICIENCY_TIMES;
+
+		return {
+			humanLabel: '工程师用时',
+			humanTime: times.human,
+			aiLabel: 'AI用时',
+			aiTime: times.ai,
+			ariaLabel: `工程师用时 ${times.human}，AI用时 ${times.ai}`
+		};
 	};
 
 	const sortPromptSuggestions = (prompts) =>
@@ -389,66 +429,84 @@
 			class="grid w-full max-w-none grid-cols-1 items-stretch gap-4 @2xl:grid-cols-2 @4xl:grid-cols-3 {className}"
 		>
 			{#each displayedPrompts as prompt, idx (prompt.id || `${prompt.content}-${idx}`)}
-				<!-- svelte-ignore a11y-no-interactive-element-to-noninteractive-role -->
-				<button
+				{@const efficiencyComparison = getEfficiencyComparisonCopy(prompt)}
+				<div
 					role="listitem"
-					class="suggestion-card waterfall group flex min-h-[131px] w-full items-start gap-4 overflow-hidden rounded-lg px-4 py-4 text-left transition duration-200"
+					class="suggestion-card-stack waterfall w-full"
 					style="animation-delay: {idx * 60}ms"
-					on:click={() => openPromptConfirmation(prompt)}
 				>
-					{#if getPromptTypeLabel(prompt)}
-						<div
-							class="suggestion-type-badge"
-							class:suggestion-type-badge--motor={getPromptType(prompt) === PROMPT_CARD_TYPES.motor}
-						>
-							{getPromptTypeLabel(prompt)}
-						</div>
-					{/if}
-
-					<div class="suggestion-content flex min-w-0 flex-col text-left">
-						{#if prompt.title && prompt.title[0] !== ''}
-							<div class="flex min-w-0 items-center gap-2.5">
-								<LucideIcon
-									name={getPromptIconName(prompt)}
-									className="suggestion-icon size-5 shrink-0 text-[#31506b]"
-									strokeWidth="1.9"
-								/>
-								<div
-									class="text-[1.12rem] font-semibold leading-6 text-[#071f4d] transition line-clamp-1 dark:text-gray-300 dark:group-hover:text-gray-100"
-								>
-									{prompt.title[0]}
-								</div>
-							</div>
+					<button
+						type="button"
+						class="suggestion-card group flex min-h-[131px] w-full items-start gap-4 overflow-hidden rounded-lg px-4 py-4 text-left transition duration-200"
+						on:click={() => openPromptConfirmation(prompt)}
+					>
+						{#if getPromptTypeLabel(prompt)}
 							<div
-								class="mt-2 text-[13px] leading-5 text-[#61708f] dark:text-gray-400 font-normal line-clamp-3"
+								class="suggestion-type-badge"
+								class:suggestion-type-badge--motor={getPromptType(prompt) ===
+									PROMPT_CARD_TYPES.motor}
 							>
-								{prompt.title[1]}
-							</div>
-						{:else}
-							<div class="flex min-w-0 items-center gap-2.5">
-								<LucideIcon
-									name={getPromptIconName(prompt)}
-									className="suggestion-icon size-5 shrink-0 text-[#31506b]"
-									strokeWidth="1.9"
-								/>
-								<div
-									class="text-[1.12rem] font-semibold leading-6 text-[#071f4d] transition line-clamp-1 dark:text-gray-300 dark:group-hover:text-gray-100"
-								>
-									{prompt.content}
-								</div>
-							</div>
-							<div
-								class="mt-2 text-[13px] leading-5 text-[#61708f] dark:text-gray-400 font-normal line-clamp-3"
-							>
-								{$i18n.t('Prompt')}
+								{getPromptTypeLabel(prompt)}
 							</div>
 						{/if}
-					</div>
 
-					<div class="suggestion-sketch" aria-hidden="true">
-						<img src={getPromptSketchImage(prompt)} alt="" loading="lazy" draggable="false" />
+						<div class="suggestion-content flex min-w-0 flex-col text-left">
+							{#if prompt.title && prompt.title[0] !== ''}
+								<div class="flex min-w-0 items-center gap-2.5">
+									<LucideIcon
+										name={getPromptIconName(prompt)}
+										className="suggestion-icon size-5 shrink-0 text-[#31506b]"
+										strokeWidth="1.9"
+									/>
+									<div
+										class="text-[1.12rem] font-semibold leading-6 text-[#071f4d] transition line-clamp-1 dark:text-gray-300 dark:group-hover:text-gray-100"
+									>
+										{prompt.title[0]}
+									</div>
+								</div>
+								<div
+									class="mt-2 text-[13px] leading-5 text-[#61708f] dark:text-gray-400 font-normal line-clamp-3"
+								>
+									{prompt.title[1]}
+								</div>
+							{:else}
+								<div class="flex min-w-0 items-center gap-2.5">
+									<LucideIcon
+										name={getPromptIconName(prompt)}
+										className="suggestion-icon size-5 shrink-0 text-[#31506b]"
+										strokeWidth="1.9"
+									/>
+									<div
+										class="text-[1.12rem] font-semibold leading-6 text-[#071f4d] transition line-clamp-1 dark:text-gray-300 dark:group-hover:text-gray-100"
+									>
+										{prompt.content}
+									</div>
+								</div>
+								<div
+									class="mt-2 text-[13px] leading-5 text-[#61708f] dark:text-gray-400 font-normal line-clamp-3"
+								>
+									{$i18n.t('Prompt')}
+								</div>
+							{/if}
+						</div>
+
+						<div class="suggestion-sketch" aria-hidden="true">
+							<img src={getPromptSketchImage(prompt)} alt="" loading="lazy" draggable="false" />
+						</div>
+					</button>
+
+					<div class="efficiency-tab" aria-label={efficiencyComparison.ariaLabel}>
+						<span class="efficiency-tab__metric efficiency-tab__metric--human">
+							<span>{efficiencyComparison.humanLabel}</span>
+							<strong>{efficiencyComparison.humanTime}</strong>
+						</span>
+						<span class="efficiency-tab__divider" aria-hidden="true">/</span>
+						<span class="efficiency-tab__metric efficiency-tab__metric--ai">
+							<span>{efficiencyComparison.aiLabel}</span>
+							<strong>{efficiencyComparison.aiTime}</strong>
+						</span>
 					</div>
-				</button>
+				</div>
 			{/each}
 		</div>
 	{/if}
@@ -519,8 +577,23 @@
 		animation-timing-function: ease;
 	}
 
+	.suggestion-card-stack {
+		display: flex;
+		position: relative;
+		flex-direction: column;
+		align-items: stretch;
+		overflow: visible;
+	}
+
+	.suggestion-card:focus-visible {
+		outline: 2px solid rgba(47, 111, 196, 0.68);
+		outline-offset: 4px;
+		border-radius: 0.75rem;
+	}
+
 	.suggestion-card {
 		position: relative;
+		z-index: 1;
 		isolation: isolate;
 		border: 1px solid rgba(138, 185, 238, 0.46);
 		background:
@@ -531,6 +604,7 @@
 			inset 0 1px 0 rgba(255, 255, 255, 0.88);
 		backdrop-filter: blur(14px);
 		min-height: 131px;
+		cursor: pointer;
 	}
 
 	.suggestion-content {
@@ -570,7 +644,7 @@
 		pointer-events: none;
 	}
 
-	.suggestion-card:hover {
+	.suggestion-card-stack:hover .suggestion-card {
 		border-color: rgba(47, 111, 196, 0.42);
 		background:
 			linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(238, 248, 255, 0.92) 100%),
@@ -598,8 +672,78 @@
 		user-select: none;
 	}
 
-	.suggestion-card:hover .suggestion-sketch {
+	.suggestion-card-stack:hover .suggestion-sketch {
 		transform: translate(-2px, -2px);
+	}
+
+	.efficiency-tab {
+		display: flex;
+		position: relative;
+		z-index: 0;
+		align-items: center;
+		align-self: center;
+		justify-content: center;
+		width: calc(100% - 2rem);
+		min-height: 1.55rem;
+		margin-top: -0.45rem;
+		border: 1px solid rgba(144, 190, 242, 0.44);
+		border-top: 0;
+		border-radius: 0 0 0.55rem 0.55rem;
+		background: linear-gradient(
+			90deg,
+			rgba(239, 244, 250, 0.95) 0%,
+			rgba(239, 244, 250, 0.95) 50%,
+			rgba(219, 245, 255, 0.98) 50%,
+			rgba(219, 245, 255, 0.98) 100%
+		);
+		box-shadow:
+			0 12px 22px rgba(16, 67, 132, 0.08),
+			inset 0 -1px 0 rgba(255, 255, 255, 0.82);
+		color: #53647f;
+		font-size: 10px;
+		font-weight: 400;
+		line-height: 1;
+		letter-spacing: 0;
+		overflow: hidden;
+		padding: 0.5rem 0.62rem 0.28rem;
+		white-space: nowrap;
+	}
+
+	.efficiency-tab__metric {
+		display: inline-flex;
+		min-width: 0;
+		flex: 1 1 0;
+		align-items: center;
+		justify-content: center;
+		gap: 0.28rem;
+	}
+
+	.efficiency-tab__metric span {
+		font-weight: 400;
+	}
+
+	.efficiency-tab__metric strong {
+		color: #37465f;
+		font-weight: 800;
+	}
+
+	.efficiency-tab__metric--ai {
+		color: #075985;
+	}
+
+	.efficiency-tab__metric--ai strong {
+		color: #0369a1;
+	}
+
+	.efficiency-tab__divider {
+		display: inline-flex;
+		width: auto;
+		height: auto;
+		margin: 0 0.4rem;
+		align-items: center;
+		color: rgba(83, 100, 127, 0.62);
+		font-weight: 750;
+		background: transparent;
 	}
 
 	.experience-confirm-backdrop {
@@ -748,7 +892,43 @@
 		background: rgba(75, 85, 99, 0.94);
 	}
 
+	:global(.dark) .efficiency-tab {
+		border-color: rgba(96, 165, 250, 0.34);
+		background: linear-gradient(
+			90deg,
+			rgba(30, 41, 59, 0.96) 0%,
+			rgba(30, 41, 59, 0.96) 50%,
+			rgba(12, 74, 110, 0.92) 50%,
+			rgba(12, 74, 110, 0.92) 100%
+		);
+		color: #cbd5e1;
+	}
+
+	:global(.dark) .efficiency-tab__metric strong {
+		color: #e2e8f0;
+	}
+
+	:global(.dark) .efficiency-tab__metric--ai,
+	:global(.dark) .efficiency-tab__metric--ai strong {
+		color: #bae6fd;
+	}
+
 	@media (max-width: 767px) {
+		.efficiency-tab {
+			width: calc(100% - 1.5rem);
+			font-size: 10px;
+			padding-right: 0.42rem;
+			padding-left: 0.42rem;
+		}
+
+		.efficiency-tab__metric {
+			gap: 0.2rem;
+		}
+
+		.efficiency-tab__divider {
+			margin: 0 0.28rem;
+		}
+
 		.experience-confirm-dialog {
 			width: min(92vw, 28rem);
 		}
@@ -760,11 +940,11 @@
 			opacity: 1;
 		}
 
-		.suggestion-card:hover {
+		.suggestion-card-stack:hover .suggestion-card {
 			transform: none;
 		}
 
-		.suggestion-card:hover .suggestion-sketch {
+		.suggestion-card-stack:hover .suggestion-sketch {
 			transform: none;
 		}
 
