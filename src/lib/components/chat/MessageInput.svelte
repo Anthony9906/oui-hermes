@@ -342,7 +342,7 @@
 			}
 
 			chatInputElement?.setText(text);
-			if (!$showCallOverlay) {
+			if (!$showCallOverlay && !$mobile) {
 				chatInputElement?.focus();
 			}
 
@@ -1040,6 +1040,10 @@
 		loaded = true;
 
 		window.setTimeout(() => {
+			if ($mobile) {
+				return;
+			}
+
 			const chatInput = document.getElementById('chat-input');
 			chatInput?.focus();
 		}, 0);

@@ -132,6 +132,21 @@
 	let messagesContainerElement: HTMLDivElement;
 	let activeExpertSkillName = '';
 
+	const focusChatInput = ({ defer = false } = {}) => {
+		if ($mobile || $showCallOverlay) {
+			return;
+		}
+
+		const focus = () => document.getElementById('chat-input')?.focus();
+
+		if (defer) {
+			setTimeout(focus, 0);
+			return;
+		}
+
+		focus();
+	};
+
 	const buildChatMeta = (meta = chat?.chat?.meta ?? {}) => {
 		const nextMeta = { ...(meta ?? {}) };
 
@@ -375,8 +390,7 @@
 				await setDefaults();
 			}
 
-			const chatInput = document.getElementById('chat-input');
-			chatInput?.focus();
+			focusChatInput();
 		} else {
 			await goto('/');
 		}
@@ -795,11 +809,9 @@
 		if (type === 'input:prompt') {
 			console.debug(event.data.text);
 
-			const inputElement = document.getElementById('chat-input');
-
-			if (inputElement) {
+			if (document.getElementById('chat-input')) {
 				messageInput?.setText(event.data.text);
-				inputElement.focus();
+				focusChatInput();
 			}
 		}
 
@@ -997,8 +1009,7 @@
 				} catch (e) {}
 			}
 
-			const chatInput = document.getElementById('chat-input');
-			chatInput?.focus();
+			focusChatInput();
 		};
 		init();
 
@@ -1554,8 +1565,7 @@
 			$models.map((m) => m.id).includes(modelId) ? modelId : ''
 		);
 
-		const chatInput = document.getElementById('chat-input');
-		setTimeout(() => chatInput?.focus(), 0);
+		focusChatInput({ defer: true });
 	};
 
 	const loadChat = async () => {
@@ -2117,11 +2127,7 @@
 
 		history.currentId = userMessageId;
 
-		// focus on chat input (skip during voice call to avoid triggering mobile keyboard)
-		if (!$showCallOverlay) {
-			const chatInput = document.getElementById('chat-input');
-			chatInput?.focus();
-		}
+		focusChatInput();
 
 		saveSessionSelectedModels();
 

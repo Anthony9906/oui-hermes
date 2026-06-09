@@ -15,6 +15,7 @@
 		theme,
 		WEBUI_NAME,
 		mobile,
+		mobileModeOverride,
 		socket,
 		socketConnected,
 		chatId,
@@ -519,14 +520,23 @@
 
 		theme.set(localStorage.theme);
 
-		mobile.set(window.innerWidth < BREAKPOINT);
+		const storedMobileModeOverride = localStorage.mobileModeOverride;
+		mobileModeOverride.set(
+			storedMobileModeOverride === 'mobile'
+				? true
+				: storedMobileModeOverride === 'desktop'
+					? false
+					: null
+		);
+
+		const syncMobileMode = () => {
+			mobile.set($mobileModeOverride ?? window.innerWidth < BREAKPOINT);
+		};
+
+		syncMobileMode();
 
 		const onResize = () => {
-			if (window.innerWidth < BREAKPOINT) {
-				mobile.set(true);
-			} else {
-				mobile.set(false);
-			}
+			syncMobileMode();
 		};
 		window.addEventListener('resize', onResize);
 

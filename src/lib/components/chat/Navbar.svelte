@@ -7,7 +7,9 @@
 		chatId,
 		config,
 		mobile,
+		mobileModeOverride,
 		settings,
+		showControls,
 		showSidebar,
 		temporaryChatEnabled,
 		user
@@ -55,6 +57,19 @@
 
 	let showShareChatModal = false;
 	let showDownloadChatModal = false;
+
+	const toggleResponsiveMode = () => {
+		const nextMobile = !$mobile;
+
+		mobileModeOverride.set(nextMobile);
+		localStorage.mobileModeOverride = nextMobile ? 'mobile' : 'desktop';
+		mobile.set(nextMobile);
+		showSidebar.set(false);
+
+		if (nextMobile) {
+			showControls.set(false);
+		}
+	};
 </script>
 
 <ShareChatModal bind:show={showShareChatModal} chatId={$chatId} />
@@ -115,12 +130,19 @@
 				</div>
 
 				<div class="self-start flex flex-none items-center text-gray-600 dark:text-gray-400">
-					<img
-						src="/assets/images/cowain-logo-blue.png"
-						alt="Cowain"
-						class="mr-10 hidden h-[1.4rem] w-auto shrink-0 translate-y-[10px] select-none object-contain sm:block"
-						draggable="false"
-					/>
+					<button
+						type="button"
+						class="no-drag-region mr-2 flex shrink-0 translate-y-[10px] rounded-md transition hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-blue-500/40 sm:mr-10"
+						on:click={toggleResponsiveMode}
+						aria-label={$mobile ? 'Switch to desktop mode' : 'Switch to mobile mode'}
+					>
+						<img
+							src="/assets/images/cowain-logo-blue.png"
+							alt="Cowain"
+							class="h-[1.4rem] w-auto select-none object-contain"
+							draggable="false"
+						/>
+					</button>
 
 					<!-- <div class="md:hidden flex self-center w-[1px] h-5 mx-2 bg-gray-300 dark:bg-stone-700" /> -->
 
