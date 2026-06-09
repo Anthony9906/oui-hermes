@@ -873,6 +873,59 @@
 			{/if}
 		</div>
 
+		<div class="shrink-0 px-4 pb-3">
+			<div
+				class="flex h-9 items-center gap-2 rounded-xl border border-[#d7e7f7] bg-white/72 px-3 text-[#6f819d] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] dark:border-gray-800 dark:bg-gray-900/72 dark:text-gray-400"
+			>
+				<LucideIcon name="search" className="size-4 shrink-0" strokeWidth="1.8" />
+				<input
+					class="min-w-0 flex-1 bg-transparent text-[12px] font-medium text-[#314461] outline-none placeholder:text-[#8da0ba] dark:text-gray-100 dark:placeholder:text-gray-500"
+					bind:value={searchQuery}
+					placeholder="搜索专家技能"
+					aria-label="搜索专家技能"
+					spellcheck="false"
+				/>
+				{#if searchQuery}
+					<button
+						type="button"
+						class="flex size-5 shrink-0 items-center justify-center rounded-md text-[#9db0c7] transition hover:bg-[#eef6ff] hover:text-[#4f6f98] dark:hover:bg-gray-800"
+						aria-label="清空专家技能搜索"
+						on:click={() => {
+							searchQuery = '';
+						}}
+					>
+						<XMark className="size-3.5" />
+					</button>
+				{/if}
+				<button
+					type="button"
+					class="flex size-6 shrink-0 items-center justify-center rounded-md text-[#8da0ba] transition hover:bg-[#eef6ff] hover:text-[#4f6f98] dark:hover:bg-gray-800"
+					aria-label={showCategoryFilters ? '隐藏专家技能筛选标签' : '显示专家技能筛选标签'}
+					aria-pressed={showCategoryFilters}
+					on:click={() => {
+						showCategoryFilters = !showCategoryFilters;
+					}}
+				>
+					<LucideIcon name="filter" className="size-3.5" strokeWidth="1.8" />
+				</button>
+			</div>
+
+			{#if showCategoryFilters}
+				<div class="mt-2 flex flex-wrap items-center gap-1.5">
+					{#each categoryFilters as filterLabel, filterIdx}
+						<span
+							class="expert-agent-filter-chip inline-flex h-6 items-center rounded-full border px-2.5 text-[11px] font-semibold transition {filterIdx ===
+							0
+								? 'border-[#90c2f2] bg-[#eaf6ff] text-[#0f4f96]'
+								: 'border-[#d7e7f7] bg-white/72 text-[#6f819d] dark:border-gray-800 dark:bg-gray-900/72 dark:text-gray-400'}"
+						>
+							{filterLabel}
+						</span>
+					{/each}
+				</div>
+			{/if}
+		</div>
+
 		<div class="expert-agent-card-list min-h-0 flex-1 overflow-y-auto px-4 pb-4">
 			{#if loading}
 				<div
@@ -910,6 +963,15 @@
 					</div>
 					<div class="mt-2 max-w-64 text-sm text-gray-500 dark:text-gray-400">
 						{copy.noMatchDescription}
+					</div>
+				</div>
+			{:else if filteredItems.length === 0}
+				<div class="flex h-full flex-col items-center justify-center text-center">
+					<div class="text-base font-medium text-gray-900 dark:text-gray-100">
+						没有匹配的专家技能
+					</div>
+					<div class="mt-2 max-w-64 text-sm text-gray-500 dark:text-gray-400">
+						请尝试按专家名称或标签搜索。
 					</div>
 				</div>
 			{:else}
