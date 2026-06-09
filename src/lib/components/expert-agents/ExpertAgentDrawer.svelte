@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { createEventDispatcher, onMount } from 'svelte';
+	import { createEventDispatcher, getContext, onMount } from 'svelte';
+	import type { Readable } from 'svelte/store';
 	import { parseDocument } from 'yaml';
 
 	import {
@@ -22,6 +23,7 @@
 
 	export let show = false;
 
+	const i18n = getContext<Readable<{ language?: string }>>('i18n');
 	const dispatch = createEventDispatcher<{
 		start: ExpertSkillCard;
 		close: void;
@@ -53,38 +55,38 @@
 	let showCategoryFilters = false;
 
 	const iconOptions = [
-		{ name: 'bot', label: 'AI 专家' },
-		{ name: 'brain-circuit', label: '知识推理' },
-		{ name: 'messages-square', label: '访谈沟通' },
-		{ name: 'book-open', label: '知识库' },
-		{ name: 'search', label: '搜索研究' },
-		{ name: 'scan-search', label: '检查识别' },
-		{ name: 'clipboard-list', label: '需求清单' },
-		{ name: 'file-text', label: '文档报告' },
-		{ name: 'table', label: '表格数据' },
-		{ name: 'chart-no-axes-combined', label: '分析图表' },
-		{ name: 'presentation', label: '演示文稿' },
-		{ name: 'workflow', label: '流程编排' },
-		{ name: 'database', label: '数据资产' },
-		{ name: 'package', label: '制品交付' },
-		{ name: 'boxes', label: '组件模块' },
-		{ name: 'blocks', label: '系统结构' },
-		{ name: 'code', label: '代码开发' },
-		{ name: 'terminal', label: '命令工具' },
-		{ name: 'wrench', label: '工具维护' },
-		{ name: 'cog', label: '配置工程' },
-		{ name: 'cpu', label: '控制硬件' },
-		{ name: 'circuit-board', label: '电气控制' },
-		{ name: 'factory', label: '制造现场' },
-		{ name: 'ruler', label: '尺寸规范' },
-		{ name: 'pencil-ruler', label: '设计绘制' },
-		{ name: 'drafting-compass', label: '工程制图' },
-		{ name: 'compass', label: '方案导航' },
-		{ name: 'shield-check', label: '质量校验' },
-		{ name: 'lightbulb', label: '创意方案' },
-		{ name: 'rocket', label: '发布交付' },
-		{ name: 'hammer', label: '构建实施' },
-		{ name: 'sparkles', label: '智能生成' }
+		'bot',
+		'brain-circuit',
+		'messages-square',
+		'book-open',
+		'search',
+		'scan-search',
+		'clipboard-list',
+		'file-text',
+		'table',
+		'chart-no-axes-combined',
+		'presentation',
+		'workflow',
+		'database',
+		'package',
+		'boxes',
+		'blocks',
+		'code',
+		'terminal',
+		'wrench',
+		'cog',
+		'cpu',
+		'circuit-board',
+		'factory',
+		'ruler',
+		'pencil-ruler',
+		'drafting-compass',
+		'compass',
+		'shield-check',
+		'lightbulb',
+		'rocket',
+		'hammer',
+		'sparkles'
 	];
 	const iconBackgroundOptions = [
 		'#e6edf7',
@@ -107,7 +109,156 @@
 	const hashString = (value: string) =>
 		Array.from(value || 'expert-agent').reduce((acc, char) => acc + char.charCodeAt(0), 0);
 	const featuredSkillName = 'expert-agent-builder';
-	const categoryFilters = ['全部', '设计需求', '设计选型', '风险分析', 'BOM'];
+	const isChineseLanguage = (language?: string) => language?.toLowerCase().startsWith('zh');
+	const drawerCopy = {
+		zh: {
+			subtitle: '开始使用专家技能，或创建一个新的专家',
+			closePanel: '关闭专家面板',
+			refreshPanel: '刷新专家技能列表',
+			searchPlaceholder: '搜索专家技能',
+			searchAria: '搜索专家技能',
+			clearSearch: '清空专家技能搜索',
+			showFilters: '显示专家技能筛选标签',
+			hideFilters: '隐藏专家技能筛选标签',
+			categoryFilters: ['全部', '设计需求', '设计选型', '风险分析', 'BOM'],
+			loading: '正在加载专家技能...',
+			loadError: '无法加载专家技能',
+			retry: '重试',
+			emptyTitle: '还没有可用的专家技能',
+			emptyDescription: '创建 Hermes Skill 后，它会显示在这里。',
+			noMatchTitle: '没有匹配的专家技能',
+			noMatchDescription: '请尝试按专家名称或标签搜索。',
+			invalidIconName: '请输入有效的 lucide icon 名称',
+			unversioned: '未标版本',
+			detailTitle: '专家技能详情',
+			chooseIcon: '选择专家技能图标',
+			chooseBackground: '选择背景色',
+			chooseIconOption: '选择',
+			customIconPlaceholder: '输入 lucide icon 名称',
+			add: '添加',
+			sourceStatsTitle: '源文件总行数 / 总字数',
+			sourceStats: (lines: number, characters: number) => `${lines} 行 / ${characters} 字`,
+			closeDetail: '关闭专家技能详情',
+			preview: '预览',
+			source: '源文件',
+			saving: '保存中...',
+			save: '保存',
+			openDirectory: '打开目录',
+			saved: '专家技能已保存',
+			detailLoadError: '无法加载专家技能详情',
+			detailLoading: '正在加载完整技能文档...',
+			detailEmpty: '暂无完整技能文档',
+			iconLabels: {
+				bot: 'AI 专家',
+				'brain-circuit': '知识推理',
+				'messages-square': '访谈沟通',
+				'book-open': '知识库',
+				search: '搜索研究',
+				'scan-search': '检查识别',
+				'clipboard-list': '需求清单',
+				'file-text': '文档报告',
+				table: '表格数据',
+				'chart-no-axes-combined': '分析图表',
+				presentation: '演示文稿',
+				workflow: '流程编排',
+				database: '数据资产',
+				package: '制品交付',
+				boxes: '组件模块',
+				blocks: '系统结构',
+				code: '代码开发',
+				terminal: '命令工具',
+				wrench: '工具维护',
+				cog: '配置工程',
+				cpu: '控制硬件',
+				'circuit-board': '电气控制',
+				factory: '制造现场',
+				ruler: '尺寸规范',
+				'pencil-ruler': '设计绘制',
+				'drafting-compass': '工程制图',
+				compass: '方案导航',
+				'shield-check': '质量校验',
+				lightbulb: '创意方案',
+				rocket: '发布交付',
+				hammer: '构建实施',
+				sparkles: '智能生成'
+			}
+		},
+		en: {
+			subtitle: 'Start with an expert skill, or create a new expert',
+			closePanel: 'Close expert panel',
+			refreshPanel: 'Refresh expert skill list',
+			searchPlaceholder: 'Search expert skills',
+			searchAria: 'Search expert skills',
+			clearSearch: 'Clear expert skill search',
+			showFilters: 'Show expert skill filters',
+			hideFilters: 'Hide expert skill filters',
+			categoryFilters: ['All', 'Requirements', 'Selection', 'Risk Analysis', 'BOM'],
+			loading: 'Loading expert skills...',
+			loadError: 'Unable to load expert skills',
+			retry: 'Retry',
+			emptyTitle: 'No expert skills available yet',
+			emptyDescription: 'Create a Hermes Skill and it will appear here.',
+			noMatchTitle: 'No matching expert skills',
+			noMatchDescription: 'Try searching by expert name or tag.',
+			invalidIconName: 'Enter a valid lucide icon name',
+			unversioned: 'Unversioned',
+			detailTitle: 'Expert skill details',
+			chooseIcon: 'Choose expert skill icon',
+			chooseBackground: 'Choose background color',
+			chooseIconOption: 'Choose',
+			customIconPlaceholder: 'Enter lucide icon name',
+			add: 'Add',
+			sourceStatsTitle: 'Source lines / words',
+			sourceStats: (lines: number, characters: number) => `${lines} lines / ${characters} words`,
+			closeDetail: 'Close expert skill details',
+			preview: 'Preview',
+			source: 'Source',
+			saving: 'Saving...',
+			save: 'Save',
+			openDirectory: 'Open directory',
+			saved: 'Expert skill saved',
+			detailLoadError: 'Unable to load expert skill details',
+			detailLoading: 'Loading full skill document...',
+			detailEmpty: 'No full skill document available',
+			iconLabels: {
+				bot: 'AI expert',
+				'brain-circuit': 'Knowledge reasoning',
+				'messages-square': 'Conversation',
+				'book-open': 'Knowledge base',
+				search: 'Search research',
+				'scan-search': 'Inspection',
+				'clipboard-list': 'Requirements',
+				'file-text': 'Documents',
+				table: 'Tables',
+				'chart-no-axes-combined': 'Analytics',
+				presentation: 'Presentation',
+				workflow: 'Workflow',
+				database: 'Data assets',
+				package: 'Delivery',
+				boxes: 'Components',
+				blocks: 'System structure',
+				code: 'Code',
+				terminal: 'Command tools',
+				wrench: 'Maintenance',
+				cog: 'Configuration',
+				cpu: 'Hardware control',
+				'circuit-board': 'Electrical control',
+				factory: 'Manufacturing',
+				ruler: 'Dimensions',
+				'pencil-ruler': 'Design drafting',
+				'drafting-compass': 'Engineering drawing',
+				compass: 'Solution navigation',
+				'shield-check': 'Quality check',
+				lightbulb: 'Ideation',
+				rocket: 'Launch',
+				hammer: 'Build',
+				sparkles: 'Generation'
+			}
+		}
+	};
+	$: copy = isChineseLanguage($i18n.language) ? drawerCopy.zh : drawerCopy.en;
+	$: categoryFilters = copy.categoryFilters;
+
 	const skillMatchesSearch = (skill: ExpertSkillCard, query: string) => {
 		if (!query) return true;
 		return [skill.skill_name, ...(skill.tags ?? [])].some((value) =>
@@ -125,9 +276,12 @@
 		iconBackgroundOptions[hashString(skillName) % iconBackgroundOptions.length];
 
 	const formatVersion = (version?: string | null) => {
-		if (!version) return '未标版本';
+		if (!version) return copy.unversioned;
 		return version.toLowerCase().startsWith('v') ? version : `v${version}`;
 	};
+
+	const getIconLabel = (iconName: string) =>
+		copy.iconLabels[iconName as keyof typeof copy.iconLabels] ?? iconName;
 
 	const normalizeLucideIconName = (value: string) => {
 		const urlMatch = value.trim().match(/lucide\.dev\/icons\/([a-z0-9-]+)/i);
@@ -163,7 +317,7 @@
 	const addCustomIcon = () => {
 		const iconName = normalizeLucideIconName(customIconName);
 		if (!isValidLucideIconName(iconName)) {
-			toast.error('请输入有效的 lucide icon 名称');
+			toast.error(copy.invalidIconName);
 			return;
 		}
 
@@ -492,10 +646,15 @@
 			loaded = true;
 		} catch (err) {
 			console.error(err);
-			error = '无法加载专家技能';
+			error = copy.loadError;
 		} finally {
 			loading = false;
 		}
+	};
+
+	const refreshExpertAgents = async () => {
+		loaded = false;
+		await loadExpertAgents();
 	};
 
 	const openSkillDetail = async (skill: ExpertSkillCard) => {
@@ -532,7 +691,7 @@
 			};
 		} catch (err) {
 			console.error(err);
-			detailError = '无法加载专家技能详情';
+			detailError = copy.detailLoadError;
 		} finally {
 			detailLoading = false;
 		}
@@ -590,7 +749,7 @@
 
 			applyUpdatedDetail(updatedDetail, previousSkillName);
 			sourceDirty = false;
-			toast.success('专家技能已保存');
+			toast.success(copy.saved);
 		} catch (err) {
 			console.error(err);
 			toast.error(`${err}`);
@@ -628,18 +787,37 @@
 					Expert Agent
 				</div>
 				<div class="mt-1 text-[13px] leading-5 text-[#718097] dark:text-gray-400">
-					开始使用专家技能，或创建一个新的专家
+					{copy.subtitle}
 				</div>
 			</div>
 
-			<button
-				type="button"
-				class="rounded-lg p-1.5 text-[#7f8aa0] transition hover:bg-[#edf1f7] hover:text-[#293246] dark:hover:bg-gray-800 dark:hover:text-gray-100"
-				aria-label="关闭专家面板"
-				on:click={close}
-			>
-				<XMark className="size-4" />
-			</button>
+			<div class="flex shrink-0 items-center gap-2">
+				<button
+					type="button"
+					class="rounded-lg p-1.5 text-[#7f8aa0] transition hover:bg-[#edf1f7] hover:text-[#293246] disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+					aria-label={copy.refreshPanel}
+					title={copy.refreshPanel}
+					disabled={loading}
+					on:click={() => {
+						void refreshExpertAgents();
+					}}
+				>
+					<LucideIcon
+						name="refresh-cw"
+						className="size-4 {loading ? 'animate-spin' : ''}"
+						strokeWidth="1.9"
+					/>
+				</button>
+				<button
+					type="button"
+					class="rounded-lg p-1.5 text-[#7f8aa0] transition hover:bg-[#edf1f7] hover:text-[#293246] dark:hover:bg-gray-800 dark:hover:text-gray-100"
+					aria-label={copy.closePanel}
+					title={copy.closePanel}
+					on:click={close}
+				>
+					<XMark className="size-4" />
+				</button>
+			</div>
 		</div>
 
 		<div class="shrink-0 px-4 pb-3">
@@ -650,15 +828,15 @@
 				<input
 					class="min-w-0 flex-1 bg-transparent text-[12px] font-medium text-[#314461] outline-none placeholder:text-[#8da0ba] dark:text-gray-100 dark:placeholder:text-gray-500"
 					bind:value={searchQuery}
-					placeholder="搜索专家技能"
-					aria-label="搜索专家技能"
+					placeholder={copy.searchPlaceholder}
+					aria-label={copy.searchAria}
 					spellcheck="false"
 				/>
 				{#if searchQuery}
 					<button
 						type="button"
 						class="flex size-5 shrink-0 items-center justify-center rounded-md text-[#9db0c7] transition hover:bg-[#eef6ff] hover:text-[#4f6f98] dark:hover:bg-gray-800"
-						aria-label="清空专家技能搜索"
+						aria-label={copy.clearSearch}
 						on:click={() => {
 							searchQuery = '';
 						}}
@@ -669,7 +847,7 @@
 				<button
 					type="button"
 					class="flex size-6 shrink-0 items-center justify-center rounded-md text-[#8da0ba] transition hover:bg-[#eef6ff] hover:text-[#4f6f98] dark:hover:bg-gray-800"
-					aria-label={showCategoryFilters ? '隐藏专家技能筛选标签' : '显示专家技能筛选标签'}
+					aria-label={showCategoryFilters ? copy.hideFilters : copy.showFilters}
 					aria-pressed={showCategoryFilters}
 					on:click={() => {
 						showCategoryFilters = !showCategoryFilters;
@@ -701,38 +879,37 @@
 					class="flex h-full flex-col items-center justify-center gap-3 text-sm text-gray-500 dark:text-gray-400"
 				>
 					<Spinner className="size-5" />
-					<div>正在加载专家技能...</div>
+					<div>{copy.loading}</div>
 				</div>
 			{:else if error}
 				<div class="flex h-full flex-col items-center justify-center text-center">
-					<div class="text-base font-medium text-gray-900 dark:text-gray-100">无法加载专家技能</div>
+					<div class="text-base font-medium text-gray-900 dark:text-gray-100">{copy.loadError}</div>
 					<button
 						type="button"
 						class="mt-4 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 dark:border-gray-800 dark:text-gray-200 dark:hover:bg-gray-800"
 						on:click={() => {
-							loaded = false;
-							void loadExpertAgents();
+							void refreshExpertAgents();
 						}}
 					>
-						重试
+						{copy.retry}
 					</button>
 				</div>
 			{:else if items.length === 0}
 				<div class="flex h-full flex-col items-center justify-center text-center">
 					<div class="text-base font-medium text-gray-900 dark:text-gray-100">
-						还没有可用的专家技能
+						{copy.emptyTitle}
 					</div>
 					<div class="mt-2 max-w-64 text-sm text-gray-500 dark:text-gray-400">
-						创建 Hermes Skill 后，它会显示在这里。
+						{copy.emptyDescription}
 					</div>
 				</div>
 			{:else if filteredItems.length === 0}
 				<div class="flex h-full flex-col items-center justify-center text-center">
 					<div class="text-base font-medium text-gray-900 dark:text-gray-100">
-						没有匹配的专家技能
+						{copy.noMatchTitle}
 					</div>
 					<div class="mt-2 max-w-64 text-sm text-gray-500 dark:text-gray-400">
-						请尝试按专家名称或标签搜索。
+						{copy.noMatchDescription}
 					</div>
 				</div>
 			{:else}
@@ -786,7 +963,7 @@
 						type="button"
 						class="skill-detail-icon flex h-12 w-12 items-center justify-center rounded-xl text-[#31506b] transition hover:ring-2 hover:ring-[#2f3a52]/15 focus:outline-none focus:ring-2 focus:ring-[#2f3a52]/20 dark:hover:ring-gray-200/20"
 						style:background-color={selectedIconBackground}
-						aria-label="选择专家技能图标"
+						aria-label={copy.chooseIcon}
 						on:click={() => {
 							showIconPicker = !showIconPicker;
 						}}
@@ -808,7 +985,7 @@
 											? 'border-[#2f3a52] ring-2 ring-[#2f3a52]/20 dark:border-gray-200 dark:ring-gray-200/20'
 											: 'border-[#d8deea] hover:border-[#aeb9cc] dark:border-gray-700'}"
 										style:background-color={background}
-										aria-label={`选择背景色 ${background}`}
+										aria-label={`${copy.chooseBackground} ${background}`}
 										on:click={() => {
 											updateDraftIconMetadata(selectedIcon, background);
 										}}
@@ -817,20 +994,20 @@
 							</div>
 
 							<div class="mt-3 grid grid-cols-8 gap-1.5">
-								{#each iconOptions as iconOption}
+								{#each iconOptions as iconName}
 									<button
 										type="button"
 										class="flex size-9 items-center justify-center rounded-lg border transition {selectedIcon ===
-										iconOption.name
+										iconName
 											? 'border-[#2f3a52] bg-[#2f3a52] text-white dark:border-gray-200 dark:bg-gray-200 dark:text-gray-900'
 											: 'border-[#d8deea] bg-white text-[#667289] hover:border-[#aeb9cc] hover:bg-[#f7f9fc] dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800'}"
-										title={iconOption.label}
-										aria-label={`选择 ${iconOption.label} 图标`}
+										title={getIconLabel(iconName)}
+										aria-label={`${copy.chooseIconOption} ${getIconLabel(iconName)} icon`}
 										on:click={() => {
-											updateDraftIconMetadata(iconOption.name, selectedIconBackground);
+											updateDraftIconMetadata(iconName, selectedIconBackground);
 										}}
 									>
-										<LucideIcon name={iconOption.name} className="size-4" strokeWidth="1.9" />
+										<LucideIcon name={iconName} className="size-4" strokeWidth="1.9" />
 									</button>
 								{/each}
 							</div>
@@ -841,7 +1018,7 @@
 								<input
 									class="h-8 min-w-0 flex-1 rounded-lg border border-[#d8deea] bg-[#fbfcff] px-2.5 text-xs text-[#293246] outline-none transition placeholder:text-[#9aa4b5] focus:border-[#8b96aa] focus:ring-2 focus:ring-[#8b96aa]/15 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"
 									bind:value={customIconName}
-									placeholder="输入 lucide icon 名称"
+									placeholder={copy.customIconPlaceholder}
 									spellcheck="false"
 									on:keydown={(event) => {
 										if (event.key === 'Enter') {
@@ -855,7 +1032,7 @@
 									class="inline-flex h-8 shrink-0 items-center justify-center rounded-lg bg-[#2f3a52] px-3 text-xs font-semibold text-white transition hover:bg-[#222b3f] dark:bg-gray-200 dark:text-gray-900 dark:hover:bg-white"
 									on:click={addCustomIcon}
 								>
-									添加
+									{copy.add}
 								</button>
 							</div>
 						</div>
@@ -864,7 +1041,7 @@
 
 				<div class="min-w-0">
 					<div class="line-clamp-2 text-lg font-semibold leading-6">
-						{selectedSkillDetail?.name || selectedSkill?.skill_name || '专家技能详情'}
+						{selectedSkillDetail?.name || selectedSkill?.skill_name || copy.detailTitle}
 					</div>
 					<div class="mt-2 flex flex-wrap items-center gap-2">
 						<div
@@ -903,14 +1080,14 @@
 			<div class="flex shrink-0 items-start gap-2">
 				<div
 					class="mt-0.5 whitespace-nowrap rounded-md border border-[#d8deea] bg-white/70 px-2.5 py-1 text-[11px] font-semibold text-[#667289] shadow-xs dark:border-gray-700 dark:bg-gray-900/60 dark:text-gray-300"
-					title="源文件总行数 / 总字数"
+					title={copy.sourceStatsTitle}
 				>
-					{detailSourceStats.lines} 行 / {detailSourceStats.characters} 字
+					{copy.sourceStats(detailSourceStats.lines, detailSourceStats.characters)}
 				</div>
 				<button
 					type="button"
 					class="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-gray-100"
-					aria-label="关闭专家技能详情"
+					aria-label={copy.closeDetail}
 					on:click={() => {
 						showIconPicker = false;
 						showDetailModal = false;
@@ -936,7 +1113,7 @@
 							detailMode = 'preview';
 						}}
 					>
-						预览
+						{copy.preview}
 					</button>
 					<button
 						type="button"
@@ -947,7 +1124,7 @@
 							detailMode = 'source';
 						}}
 					>
-						源文件
+						{copy.source}
 					</button>
 				</div>
 
@@ -958,7 +1135,7 @@
 						disabled={savingDetail || detailLoading || !!detailError}
 						on:click={saveSkillDetail}
 					>
-						{savingDetail ? '保存中...' : '保存'}
+						{savingDetail ? copy.saving : copy.save}
 					</button>
 				{:else}
 					<button
@@ -967,7 +1144,7 @@
 						disabled={detailLoading || !!detailError}
 						on:click={openSkillDirectory}
 					>
-						打开目录
+						{copy.openDirectory}
 					</button>
 				{/if}
 			</div>
@@ -979,7 +1156,7 @@
 					class="flex h-full min-h-72 flex-col items-center justify-center gap-3 text-sm text-gray-500"
 				>
 					<Spinner className="size-5" />
-					<div>正在加载完整技能文档...</div>
+					<div>{copy.detailLoading}</div>
 				</div>
 			{:else if detailError}
 				<div class="flex h-full min-h-72 flex-col items-center justify-center text-center">
@@ -993,7 +1170,7 @@
 							}
 						}}
 					>
-						重试
+						{copy.retry}
 					</button>
 				</div>
 			{:else if detailMode === 'source'}
@@ -1041,7 +1218,7 @@
 				</div>
 			{:else}
 				<div class="flex h-full min-h-72 items-center justify-center text-sm text-gray-500">
-					暂无完整技能文档
+					{copy.detailEmpty}
 				</div>
 			{/if}
 		</div>
