@@ -1,8 +1,11 @@
+import json
 import logging
 import os
 import re
+import sqlite3
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -90,10 +93,12 @@ class ExpertAgentItem(BaseModel):
     skill_name: str
     description: str = ""
     version: str | None = None
+    updated_at: str | None = None
     author: str | None = None
     icon: str | None = None
     icon_background: str | None = None
     tags: list[str] = Field(default_factory=list)
+    usage_count: int | None = None
 
 
 class ExpertAgentListResponse(BaseModel):
@@ -104,6 +109,7 @@ class ExpertAgentDetailResponse(BaseModel):
     name: str
     description: str = ""
     version: str | None = None
+    updated_at: str | None = None
     author: str | None = None
     icon: str | None = None
     icon_background: str | None = None
@@ -153,6 +159,69 @@ def _skills_root() -> Path:
 
 def _expert_agents_root() -> Path:
     return _skills_root() / EXPERT_AGENT_EXPERTS_DIR_NAME
+
+
+def _hermes_state_db_path() -> Path:
+    configured = os.environ.get("HERMES_EXPERT_AGENT_STATE_DB", "").strip()
+    if configured:
+        return Path(configured).expanduser()
+
+    skills_root = _skills_root().expanduser()
+    if skills_root.name == "skills":
+        profile_state_db = skills_root.parent / "state.db"
+        if profile_state_db.exists():
+            return profile_state_db
+
+    hermes_home = Path(os.environ.get("HERMES_HOME") or Path.home() / ".hermes")
+    for profile_name in ("expertagent", "expert-agent"):
+        profile_state_db = hermes_home / "profiles" / profile_name / "state.db"
+        if profile_state_db.exists():
+            return profile_state_db
+
+    return hermes_home / "profiles" / "expertagent" / "state.db"
+
+
+def _load_skill_usage_counts(skill_names: list[str]) -> dict[str, int]:
+    tracked_names = {name for name in skill_names if name}
+    if not tracked_names:
+        return {}
+
+    state_db = _hermes_state_db_path()
+    if not state_db.exists():
+        log.warning("Hermes state DB does not exist: %s", state_db)
+        return {}
+
+    usage_sessions: dict[str, set[str]] = {name: set() for name in tracked_names}
+    try:
+        conn = sqlite3.connect(f"file:{state_db}?mode=ro", uri=True, timeout=1)
+        try:
+            rows = conn.execute(
+                """
+                SELECT session_id, content
+                FROM messages
+                WHERE tool_name = 'skill_view'
+                    AND content IS NOT NULL
+                """
+            )
+            for session_id, content in rows:
+                try:
+                    payload = json.loads(content)
+                except (TypeError, json.JSONDecodeError):
+                    continue
+
+                if not isinstance(payload, dict) or not payload.get("success"):
+                    continue
+
+                skill_name = str(payload.get("name") or "")
+                if skill_name in usage_sessions and session_id:
+                    usage_sessions[skill_name].add(str(session_id))
+        finally:
+            conn.close()
+    except sqlite3.Error as e:
+        log.warning("Failed to load Hermes expert skill usage counts: %s", e)
+        return {}
+
+    return {name: len(session_ids) for name, session_ids in usage_sessions.items()}
 
 
 def _read_skill_frontmatter(content: str) -> dict[str, Any]:
@@ -361,6 +430,10 @@ def _apply_expert_agent_ui_metadata(
 def _read_skill(skill_md: Path) -> dict[str, Any] | None:
     try:
         content = skill_md.read_text(encoding="utf-8")
+        updated_at = datetime.fromtimestamp(
+            skill_md.stat().st_mtime,
+            timezone.utc,
+        ).isoformat()
     except OSError as e:
         log.warning("Failed to read Hermes skill %s: %s", skill_md, e)
         return None
@@ -382,6 +455,7 @@ def _read_skill(skill_md: Path) -> dict[str, Any] | None:
         "version": (
             str(frontmatter.get("version")) if frontmatter.get("version") else None
         ),
+        "updated_at": updated_at,
         "author": str(frontmatter.get("author")) if frontmatter.get("author") else None,
         "icon": (
             str(expert_agent_metadata.get("icon"))
@@ -454,17 +528,23 @@ def _find_visible_skill(skill_name: str) -> dict[str, Any] | None:
 @router.get("", response_model=ExpertAgentListResponse)
 @router.get("/", response_model=ExpertAgentListResponse)
 async def get_expert_agents(user=Depends(get_verified_user)):
+    skills = _load_visible_skills()
+    usage_counts = _load_skill_usage_counts(
+        [str(skill.get("name") or "") for skill in skills]
+    )
     items = [
         ExpertAgentItem(
             skill_name=skill["name"],
             description=skill.get("description") or "",
             version=skill.get("version"),
+            updated_at=skill.get("updated_at"),
             author=skill.get("author"),
             icon=skill.get("icon"),
             icon_background=skill.get("icon_background"),
             tags=skill.get("tags") or [],
+            usage_count=usage_counts.get(skill["name"], 0),
         )
-        for skill in _load_visible_skills()
+        for skill in skills
     ]
     return ExpertAgentListResponse(items=items)
 
@@ -482,6 +562,7 @@ async def get_expert_agent_detail(skill_name: str, user=Depends(get_verified_use
         name=skill["name"],
         description=skill.get("description") or "",
         version=skill.get("version"),
+        updated_at=skill.get("updated_at"),
         author=skill.get("author"),
         icon=skill.get("icon"),
         icon_background=skill.get("icon_background"),
@@ -592,6 +673,7 @@ def _expert_agent_detail_response(skill: dict[str, Any]) -> ExpertAgentDetailRes
         name=skill["name"],
         description=skill.get("description") or "",
         version=skill.get("version"),
+        updated_at=skill.get("updated_at"),
         author=skill.get("author"),
         icon=skill.get("icon"),
         icon_background=skill.get("icon_background"),

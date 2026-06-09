@@ -4,16 +4,19 @@ export type ExpertSkillCard = {
 	skill_name: string;
 	description: string;
 	version?: string | null;
+	updated_at?: string | null;
 	author?: string | null;
 	icon?: string | null;
 	icon_background?: string | null;
 	tags?: string[];
+	usage_count?: number | null;
 };
 
 export type ExpertSkillDetail = {
 	name: string;
 	description: string;
 	version?: string | null;
+	updated_at?: string | null;
 	author?: string | null;
 	icon?: string | null;
 	icon_background?: string | null;

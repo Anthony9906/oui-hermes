@@ -171,6 +171,7 @@
 	import FormattingButtons from './RichTextInput/FormattingButtons.svelte';
 
 	import { PASTED_TEXT_CHARACTER_LIMIT } from '$lib/constants';
+	import { mobile } from '$lib/stores';
 	import { createLowlight } from 'lowlight';
 	import hljs from 'highlight.js';
 
@@ -554,6 +555,10 @@
 	};
 
 	export const focus = () => {
+		if (messageInput && $mobile) {
+			return;
+		}
+
 		if (editor && editor.view) {
 			// Check if the editor is destroyed
 			if (editor.isDestroyed) {
@@ -638,7 +643,7 @@
 			// After updating the state, try to find and select the next template
 			setTimeout(() => {
 				const templateFound = selectNextTemplate(editor.view.state, editor.view.dispatch);
-				if (!templateFound) {
+				if (!templateFound && !$mobile) {
 					editor.commands.focus('end');
 				}
 			}, 0);
@@ -863,7 +868,7 @@
 				...(collaboration && provider ? [provider.getEditorExtension()] : [])
 			],
 			content: collaboration ? undefined : content,
-			autofocus: messageInput ? true : false,
+			autofocus: messageInput && !$mobile ? true : false,
 			onTransaction: () => {
 				// force re-render so `editor.isActive` works as expected
 				editor = editor;

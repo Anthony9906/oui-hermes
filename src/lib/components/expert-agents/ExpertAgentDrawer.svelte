@@ -49,6 +49,8 @@
 	let iconPickerPanel: HTMLDivElement | null = null;
 	let sourceEditor: HTMLTextAreaElement | null = null;
 	let sourceDirty = false;
+	let searchQuery = '';
+	let showCategoryFilters = false;
 
 	const iconOptions = [
 		{ name: 'bot', label: 'AI 专家' },
@@ -104,6 +106,19 @@
 
 	const hashString = (value: string) =>
 		Array.from(value || 'expert-agent').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+	const featuredSkillName = 'expert-agent-builder';
+	const categoryFilters = ['全部', '设计需求', '设计选型', '风险分析', 'BOM'];
+	const skillMatchesSearch = (skill: ExpertSkillCard, query: string) => {
+		if (!query) return true;
+		return [skill.skill_name, ...(skill.tags ?? [])].some((value) =>
+			value.toLowerCase().includes(query)
+		);
+	};
+	const sortExpertSkillsByUsage = (skills: ExpertSkillCard[]) =>
+		[...skills].sort(
+			(a, b) =>
+				(b.usage_count ?? 0) - (a.usage_count ?? 0) || a.skill_name.localeCompare(b.skill_name)
+		);
 
 	const fallbackIcon = (skillName: string) => iconOptions[hashString(skillName) % 8].name;
 	const fallbackIconBackground = (skillName: string) =>
@@ -321,7 +336,11 @@
 	};
 
 	const applyUpdatedDetail = (updatedDetail: ExpertSkillDetail, previousSkillName: string) => {
-		selectedSkillDetail = withSourceFallbackMetadata(updatedDetail);
+		const savedAt = updatedDetail.updated_at || new Date().toISOString();
+		selectedSkillDetail = {
+			...withSourceFallbackMetadata(updatedDetail),
+			updated_at: savedAt
+		};
 		detailSourceContent = selectedSkillDetail.content ?? '';
 		detailMarkdownContent = formatSkillDetailContent(
 			selectedSkillDetail,
@@ -336,6 +355,7 @@
 			skill_name: selectedSkillDetail.name || previousSkillName,
 			description: selectedSkillDetail.description || selectedSkill?.description || '',
 			version: selectedSkillDetail.version,
+			updated_at: savedAt,
 			author: selectedSkillDetail.author,
 			icon: selectedSkillDetail.icon,
 			icon_background: selectedSkillDetail.icon_background,
@@ -366,9 +386,11 @@
 
 			if (requestId !== appearanceSaveRequest) return;
 
+			const savedAt = updatedDetail.updated_at || new Date().toISOString();
 			const mergedDetail = withSourceFallbackMetadata(updatedDetail);
 			selectedSkillDetail = {
 				...mergedDetail,
+				updated_at: savedAt,
 				content: sourceDirty ? detailSourceContent : mergedDetail.content
 			};
 
@@ -377,6 +399,7 @@
 				skill_name: mergedDetail.name || previousSkillName,
 				description: mergedDetail.description || selectedSkill.description,
 				version: mergedDetail.version,
+				updated_at: savedAt,
 				author: mergedDetail.author,
 				icon: mergedDetail.icon || icon,
 				icon_background: mergedDetail.icon_background || iconBackground,
@@ -455,6 +478,7 @@
 						return {
 							...item,
 							version: item.version || detail.version,
+							updated_at: item.updated_at || detail.updated_at,
 							author: item.author || detail.author,
 							icon: item.icon || detail.icon,
 							icon_background: item.icon_background || detail.icon_background,
@@ -500,6 +524,7 @@
 			selectedSkill = {
 				...skill,
 				version: skill.version || loadedDetail.version,
+				updated_at: skill.updated_at || loadedDetail.updated_at,
 				author: skill.author || loadedDetail.author,
 				icon: skill.icon || loadedDetail.icon,
 				icon_background: skill.icon_background || loadedDetail.icon_background,
@@ -585,17 +610,25 @@
 	$: sourceLineNumbers = getLineNumbers(detailSourceContent);
 	$: previewLineNumbers = getLineNumbers(detailMarkdownContent);
 	$: detailSourceStats = getContentStats(detailSourceContent);
+	$: normalizedSearchQuery = searchQuery.trim().toLowerCase();
+	$: filteredItems = items.filter((item) => skillMatchesSearch(item, normalizedSearchQuery));
+	$: featuredSkill = filteredItems.find((item) => item.skill_name === featuredSkillName);
+	$: regularItems = featuredSkill
+		? sortExpertSkillsByUsage(filteredItems.filter((item) => item.skill_name !== featuredSkillName))
+		: sortExpertSkillsByUsage(filteredItems);
 </script>
 
 {#if show}
-	<div class="flex h-full min-h-0 flex-col bg-transparent text-gray-900 dark:text-gray-100">
-		<div class="flex shrink-0 items-start justify-between gap-3 px-4 pb-3 pt-4">
+	<div
+		class="expert-agent-drawer flex h-full min-h-0 flex-col bg-transparent text-gray-900 dark:text-gray-100"
+	>
+		<div class="flex shrink-0 items-start justify-between gap-3 px-4 pb-2 pt-4">
 			<div class="min-w-0">
-				<div class="text-base font-semibold leading-6 text-[#20283a] dark:text-gray-100">
+				<div class="text-xl font-semibold leading-7 text-[#20283a] dark:text-gray-100">
 					Expert Agent
 				</div>
 				<div class="mt-1 text-[13px] leading-5 text-[#718097] dark:text-gray-400">
-					选择一个专家技能开始会话
+					开始使用专家技能，或创建一个新的专家
 				</div>
 			</div>
 
@@ -607,6 +640,59 @@
 			>
 				<XMark className="size-4" />
 			</button>
+		</div>
+
+		<div class="shrink-0 px-4 pb-3">
+			<div
+				class="flex h-9 items-center gap-2 rounded-xl border border-[#d7e7f7] bg-white/72 px-3 text-[#6f819d] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] dark:border-gray-800 dark:bg-gray-900/72 dark:text-gray-400"
+			>
+				<LucideIcon name="search" className="size-4 shrink-0" strokeWidth="1.8" />
+				<input
+					class="min-w-0 flex-1 bg-transparent text-[12px] font-medium text-[#314461] outline-none placeholder:text-[#8da0ba] dark:text-gray-100 dark:placeholder:text-gray-500"
+					bind:value={searchQuery}
+					placeholder="搜索专家技能"
+					aria-label="搜索专家技能"
+					spellcheck="false"
+				/>
+				{#if searchQuery}
+					<button
+						type="button"
+						class="flex size-5 shrink-0 items-center justify-center rounded-md text-[#9db0c7] transition hover:bg-[#eef6ff] hover:text-[#4f6f98] dark:hover:bg-gray-800"
+						aria-label="清空专家技能搜索"
+						on:click={() => {
+							searchQuery = '';
+						}}
+					>
+						<XMark className="size-3.5" />
+					</button>
+				{/if}
+				<button
+					type="button"
+					class="flex size-6 shrink-0 items-center justify-center rounded-md text-[#8da0ba] transition hover:bg-[#eef6ff] hover:text-[#4f6f98] dark:hover:bg-gray-800"
+					aria-label={showCategoryFilters ? '隐藏专家技能筛选标签' : '显示专家技能筛选标签'}
+					aria-pressed={showCategoryFilters}
+					on:click={() => {
+						showCategoryFilters = !showCategoryFilters;
+					}}
+				>
+					<LucideIcon name="filter" className="size-3.5" strokeWidth="1.8" />
+				</button>
+			</div>
+
+			{#if showCategoryFilters}
+				<div class="mt-2 flex flex-wrap items-center gap-1.5">
+					{#each categoryFilters as filterLabel, filterIdx}
+						<span
+							class="expert-agent-filter-chip inline-flex h-6 items-center rounded-full border px-2.5 text-[11px] font-semibold transition {filterIdx ===
+							0
+								? 'border-[#90c2f2] bg-[#eaf6ff] text-[#0f4f96]'
+								: 'border-[#d7e7f7] bg-white/72 text-[#6f819d] dark:border-gray-800 dark:bg-gray-900/72 dark:text-gray-400'}"
+						>
+							{filterLabel}
+						</span>
+					{/each}
+				</div>
+			{/if}
 		</div>
 
 		<div class="expert-agent-card-list min-h-0 flex-1 overflow-y-auto px-4 pb-4">
@@ -640,11 +726,21 @@
 						创建 Hermes Skill 后，它会显示在这里。
 					</div>
 				</div>
+			{:else if filteredItems.length === 0}
+				<div class="flex h-full flex-col items-center justify-center text-center">
+					<div class="text-base font-medium text-gray-900 dark:text-gray-100">
+						没有匹配的专家技能
+					</div>
+					<div class="mt-2 max-w-64 text-sm text-gray-500 dark:text-gray-400">
+						请尝试按专家名称或标签搜索。
+					</div>
+				</div>
 			{:else}
-				<div class="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3 pb-4">
-					{#each items as item (item.skill_name)}
+				<div class="flex flex-col gap-3 pb-4">
+					{#if featuredSkill}
 						<ExpertSkillCardComponent
-							skill={item}
+							skill={featuredSkill}
+							variant="featured"
 							onStart={(skill) => {
 								dispatch('start', skill);
 							}}
@@ -652,7 +748,21 @@
 								void openSkillDetail(skill);
 							}}
 						/>
-					{/each}
+					{/if}
+
+					<div class="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-3">
+						{#each regularItems as item (item.skill_name)}
+							<ExpertSkillCardComponent
+								skill={item}
+								onStart={(skill) => {
+									dispatch('start', skill);
+								}}
+								onDetails={(skill) => {
+									void openSkillDetail(skill);
+								}}
+							/>
+						{/each}
+					</div>
 				</div>
 			{/if}
 		</div>
@@ -939,6 +1049,42 @@
 </Modal>
 
 <style>
+	.expert-agent-drawer {
+		background: linear-gradient(
+			180deg,
+			rgba(255, 255, 255, 0.96) 0%,
+			rgba(243, 249, 255, 0.86) 100%
+		);
+	}
+
+	.expert-agent-card-list {
+		scrollbar-width: thin;
+		scrollbar-color: rgba(116, 155, 200, 0.42) transparent;
+	}
+
+	.expert-agent-card-list::-webkit-scrollbar {
+		width: 8px;
+	}
+
+	.expert-agent-card-list::-webkit-scrollbar-track {
+		background: transparent;
+	}
+
+	.expert-agent-card-list::-webkit-scrollbar-thumb {
+		border: 2px solid transparent;
+		border-radius: 999px;
+		background: rgba(116, 155, 200, 0.42);
+		background-clip: padding-box;
+	}
+
+	.expert-agent-filter-chip {
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
+	}
+
+	:global(.dark) .expert-agent-drawer {
+		background: linear-gradient(180deg, rgba(17, 24, 39, 0.96) 0%, rgba(17, 24, 39, 0.9) 100%);
+	}
+
 	.expert-skill-detail-header {
 		background:
 			radial-gradient(circle at 12% 12%, rgba(134, 144, 175, 0.16), transparent 44%),

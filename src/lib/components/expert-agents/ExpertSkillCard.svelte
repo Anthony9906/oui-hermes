@@ -1,12 +1,12 @@
 <script lang="ts">
 	import type { ExpertSkillCard } from '$lib/apis/expert-agents';
 	import ChatBubble from '$lib/components/icons/ChatBubble.svelte';
-	import InfoCircle from '$lib/components/icons/InfoCircle.svelte';
 	import LucideIcon from './LucideIcon.svelte';
 
 	export let skill: ExpertSkillCard;
 	export let onStart: (skill: ExpertSkillCard) => void = () => {};
 	export let onDetails: (skill: ExpertSkillCard) => void = () => {};
+	export let variant: 'default' | 'featured' = 'default';
 
 	const iconOptions = [
 		'bot',
@@ -59,6 +59,7 @@
 		{ background: '#f1f0f5', color: '#6d6681', border: '#e3e0eb' },
 		{ background: '#edf3f4', color: '#5f7479', border: '#dce8ea' }
 	];
+	const recentUpdateWindowMs = 3 * 24 * 60 * 60 * 1000;
 
 	const hashString = (value: string) =>
 		Array.from(value || 'expert-agent').reduce((acc, char) => acc + char.charCodeAt(0), 0);
@@ -72,49 +73,111 @@
 			: `v${skill.version}`
 		: '未标版本';
 	$: skillTags = skill.tags ?? [];
+	$: isFeatured = variant === 'featured';
+	$: usageCount = skill.usage_count ?? 0;
+	$: updatedAtMs = skill.updated_at ? new Date(skill.updated_at).getTime() : Number.NaN;
+	$: updatedAgeMs = Date.now() - updatedAtMs;
+	$: isRecentlyUpdated =
+		Number.isFinite(updatedAtMs) && updatedAgeMs >= 0 && updatedAgeMs <= recentUpdateWindowMs;
 </script>
 
 <div
-	class="expert-skill-card group relative flex min-h-[10rem] w-full min-w-[240px] flex-col overflow-hidden rounded-lg border border-[#b9d3ee]/80 bg-white p-3.5 shadow-[0_10px_28px_rgba(16,67,132,0.07),inset_0_1px_0_rgba(255,255,255,0.88)] transition duration-200 hover:-translate-y-0.5 hover:border-[#5f91c7]/60 hover:bg-[#fbfdff] hover:shadow-[0_18px_40px_rgba(16,67,132,0.12),inset_0_1px_0_rgba(255,255,255,0.95)] focus-within:border-[#5f91c7]/60 focus-within:bg-[#fbfdff] focus-within:shadow-[0_18px_40px_rgba(16,67,132,0.12),inset_0_1px_0_rgba(255,255,255,0.95)] dark:border-gray-800 dark:bg-gray-900/92 dark:hover:border-gray-700 dark:hover:bg-gray-900"
+	class="expert-skill-card group relative flex w-full min-w-[240px] flex-col overflow-hidden rounded-xl border border-[#b9d3ee]/80 bg-white shadow-[0_10px_28px_rgba(16,67,132,0.07),inset_0_1px_0_rgba(255,255,255,0.88)] transition duration-200 hover:-translate-y-0.5 hover:border-[#5f91c7]/60 hover:bg-[#fbfdff] hover:shadow-[0_18px_40px_rgba(16,67,132,0.12),inset_0_1px_0_rgba(255,255,255,0.95)] focus-within:border-[#5f91c7]/60 focus-within:bg-[#fbfdff] focus-within:shadow-[0_18px_40px_rgba(16,67,132,0.12),inset_0_1px_0_rgba(255,255,255,0.95)] dark:border-gray-800 dark:bg-gray-900/92 dark:hover:border-gray-700 dark:hover:bg-gray-900 {isFeatured
+		? 'expert-skill-card-featured min-h-[14rem] p-3.5'
+		: 'min-h-[9.75rem] p-3.5'}"
 >
 	<div class="flex items-start justify-between gap-3">
-		<div class="flex min-w-0 items-start gap-3">
+		<div class="flex min-w-0 gap-3 {isFeatured ? 'items-start' : 'items-center pr-1'}">
 			<div
-				class="skill-icon-block flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[#31506b]"
+				class="skill-icon-block flex shrink-0 items-center justify-center rounded-xl text-[#31506b] {isFeatured
+					? 'h-14 w-14'
+					: 'h-8 w-8 rounded-lg'}"
 				style:background-color={iconBackground}
 			>
-				<LucideIcon name={skillIcon} className="size-5" strokeWidth="1.9" />
+				<LucideIcon
+					name={skillIcon}
+					className={isFeatured ? 'size-7' : 'size-4'}
+					strokeWidth="1.9"
+				/>
 			</div>
 
 			<div class="min-w-0">
-				<div
-					class="line-clamp-1 text-[15px] font-semibold leading-5 text-[#071f4d] dark:text-gray-100"
-				>
-					{skill.skill_name}
-				</div>
-				<div class="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#5f6f8f]">
-					{skillVersion}
-				</div>
+				{#if isFeatured}
+					<button
+						type="button"
+						class="line-clamp-1 max-w-full text-left text-[24px] font-semibold leading-8 text-[#071f4d] transition hover:text-[#0f5ca8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#83bdf1]/60 dark:text-gray-100 dark:hover:text-[#b9d8ff]"
+						aria-label={`查看 ${skill.skill_name} 技能详情`}
+						title={skill.skill_name}
+						on:click|stopPropagation={() => {
+							onDetails(skill);
+						}}
+					>
+						{skill.skill_name}
+					</button>
+					<div
+						class="mt-0.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#5f6f8f]"
+					>
+						<span class="version-badge">{skillVersion}</span>
+						{#if isRecentlyUpdated}
+							<span class="updated-badge">UPDATED</span>
+						{/if}
+					</div>
+				{:else}
+					<button
+						type="button"
+						class="line-clamp-1 max-w-full text-left text-[15px] font-semibold leading-5 text-[#071f4d] transition hover:text-[#0f5ca8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#83bdf1]/60 dark:text-gray-100 dark:hover:text-[#b9d8ff]"
+						aria-label={`查看 ${skill.skill_name} 技能详情`}
+						title={skill.skill_name}
+						on:click|stopPropagation={() => {
+							onDetails(skill);
+						}}
+					>
+						{skill.skill_name}
+					</button>
+				{/if}
 			</div>
 		</div>
 
-		<button
-			type="button"
-			class="flex size-7 shrink-0 items-center justify-center rounded-lg border border-transparent text-[#7f8aa0] transition hover:border-[#d8deea] hover:bg-[#f3f6fb] hover:text-[#3f4a62] dark:text-gray-500 dark:hover:border-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-			aria-label={`查看 ${skill.skill_name} 技能详情`}
-			on:click|stopPropagation={() => {
-				onDetails(skill);
-			}}
-		>
-			<InfoCircle className="size-3.5" strokeWidth="1.8" />
-		</button>
+		{#if isFeatured}
+			<button
+				type="button"
+				class="start-chat-button inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-[#001f5b] bg-[#001f5b] px-3.5 text-[12px] font-semibold text-white shadow-[0_10px_22px_rgba(0,31,91,0.22)] transition hover:border-[#071f4d] hover:bg-[#071f4d] dark:border-gray-100 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
+				on:click={() => onStart(skill)}
+			>
+				<ChatBubble className="size-4" strokeWidth="1.9" />
+				开始对话
+			</button>
+		{:else}
+			<button
+				type="button"
+				class="start-chat-button inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-[#b9d3ee] bg-white text-[#001f5b] shadow-none transition group-hover:border-[#001f5b] group-hover:bg-[#001f5b] group-hover:text-white group-hover:shadow-[0_10px_24px_rgba(0,31,91,0.18)] hover:bg-[#071f4d] dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:group-hover:border-[#d9e2f5] dark:group-hover:bg-[#d9e2f5] dark:group-hover:text-[#1e2637]"
+				aria-label={`开始 ${skill.skill_name} 对话`}
+				title="开始对话"
+				on:click={() => onStart(skill)}
+			>
+				<ChatBubble className="size-4" strokeWidth="1.9" />
+			</button>
+		{/if}
 	</div>
 
-	{#if skillTags.length}
-		<div class="mt-3 flex flex-wrap items-center gap-1.5">
+	{#if isFeatured}
+		<div class="featured-core-visual" aria-hidden="true">
+			<img
+				src="/assets/images/expert-agent/expert-agent-builder-agent-icons-only-transparent.png"
+				alt=""
+				loading="lazy"
+				draggable="false"
+			/>
+		</div>
+	{/if}
+
+	{#if !isFeatured && skillTags.length}
+		<div
+			class="expert-skill-tags-scroll mt-3 flex flex-nowrap items-center gap-1 overflow-x-auto overflow-y-hidden"
+		>
 			{#each skillTags as tag, tagIdx}
 				<span
-					class="expert-skill-tag inline-flex h-5 min-w-0 max-w-full items-center truncate rounded-md border px-1.5 text-[10px] font-medium leading-none tracking-normal shadow-none"
+					class="expert-skill-tag inline-flex h-[18px] max-w-[9rem] shrink-0 items-center truncate rounded border px-1 text-[9.5px] font-medium leading-none tracking-normal shadow-none"
 					style:background-color={tagStyles[tagIdx % tagStyles.length].background}
 					style:border-color={tagStyles[tagIdx % tagStyles.length].border}
 					style:color={tagStyles[tagIdx % tagStyles.length].color}
@@ -127,34 +190,60 @@
 	{/if}
 
 	<div
-		class="skill-description-preview mt-2.5 flex-1 text-[13px] leading-5 text-[#61708f] dark:text-gray-500"
+		class="skill-description-preview flex-1 dark:text-gray-500 {isFeatured
+			? 'mt-3 max-w-[65%] text-[13px] leading-5 text-[#61708f]'
+			: 'mt-2.5 text-[11px] leading-4 text-[#8a99b0]'}"
 	>
 		{skill.description || '暂无描述'}
 	</div>
 
-	<div
-		class="mt-3 flex items-center justify-between gap-2 border-t border-[#edf1f6] pt-2.5 dark:border-gray-800"
-	>
-		{#if skill.author}
-			<div
-				class="min-w-0 truncate text-[11px] font-medium leading-4 text-[#7b8ba8] dark:text-gray-500"
-				title={skill.author}
-			>
-				{skill.author}
-			</div>
-		{:else}
-			<div aria-hidden="true"></div>
-		{/if}
-
-		<button
-			type="button"
-			class="start-chat-button inline-flex h-7 min-w-0 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-[#b9d3ee] bg-white px-3 text-[12px] font-semibold text-[#001f5b] shadow-none transition group-hover:border-[#001f5b] group-hover:bg-[#001f5b] group-hover:text-white group-hover:shadow-[0_10px_24px_rgba(0,31,91,0.18)] hover:bg-[#071f4d] dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:group-hover:border-[#d9e2f5] dark:group-hover:bg-[#d9e2f5] dark:group-hover:text-[#1e2637]"
-			on:click={() => onStart(skill)}
+	{#if isFeatured}
+		<div
+			class="featured-meta-row mt-3 flex max-w-[55%] items-center gap-3 text-[11px] font-medium leading-4 text-[#6f84a4] dark:text-gray-500"
 		>
-			<ChatBubble className="size-3.5" strokeWidth="1.9" />
-			开始会话
-		</button>
-	</div>
+			{#if skill.author}
+				<div class="min-w-0 flex items-center gap-1.5 truncate" title={skill.author}>
+					<LucideIcon name="user" className="size-3.5 shrink-0 text-[#9db0c7]" strokeWidth="1.8" />
+					<span class="truncate">{skill.author}</span>
+				</div>
+			{/if}
+			<div
+				class="shrink-0 flex items-center gap-1.5 text-[#7d91ae]"
+				title={`使用次数 ${usageCount}`}
+			>
+				<LucideIcon name="bookmark-check" className="size-3.5" strokeWidth="1.8" />
+				<span>使用 {usageCount} 次</span>
+			</div>
+		</div>
+	{:else}
+		<div class="mt-3 flex items-center gap-3 border-t border-[#edf1f6] pt-2.5 dark:border-gray-800">
+			<div
+				class="min-w-0 flex items-center gap-3 text-[11px] font-medium leading-4 text-[#7b8ba8] dark:text-gray-500"
+			>
+				{#if skill.author}
+					<div class="min-w-0 flex items-center gap-1.5 truncate" title={skill.author}>
+						<LucideIcon
+							name="user"
+							className="size-3.5 shrink-0 text-[#9db0c7]"
+							strokeWidth="1.8"
+						/>
+						<span class="truncate">{skill.author}</span>
+					</div>
+				{/if}
+				<div
+					class="shrink-0 flex items-center gap-1.5 text-[#8da0ba]"
+					title={`使用次数 ${usageCount}，版本 ${skillVersion}`}
+				>
+					<LucideIcon name="bookmark-check" className="size-3.5" strokeWidth="1.8" />
+					<span>使用 {usageCount} 次</span>
+					<span class="version-badge">{skillVersion}</span>
+					{#if isRecentlyUpdated}
+						<span class="updated-badge">UPDATED</span>
+					{/if}
+				</div>
+			</div>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -164,6 +253,41 @@
 			rgba(255, 255, 255, 0.98) 0%,
 			rgba(244, 250, 255, 0.9) 100%
 		);
+	}
+
+	.expert-skill-card-featured {
+		background:
+			radial-gradient(
+				ellipse at 6% 0%,
+				rgba(112, 188, 255, 0.34) 0%,
+				rgba(185, 226, 255, 0.18) 36%,
+				transparent 58%
+			),
+			linear-gradient(
+				135deg,
+				rgba(255, 255, 255, 0.98) 0%,
+				rgba(241, 248, 255, 0.94) 56%,
+				rgba(255, 255, 255, 0.98) 100%
+			);
+	}
+
+	.featured-core-visual {
+		position: absolute;
+		right: 0.45rem;
+		bottom: 0.25rem;
+		width: auto;
+		height: 66%;
+		z-index: 0;
+		pointer-events: none;
+		opacity: 0.78;
+	}
+
+	.featured-core-visual img {
+		width: auto;
+		height: 100%;
+		object-fit: contain;
+		transform: scale(1);
+		transform-origin: right bottom;
 	}
 
 	.expert-skill-card::before {
@@ -207,15 +331,60 @@
 		z-index: 1;
 	}
 
+	.expert-skill-card > .featured-core-visual {
+		position: absolute;
+		z-index: 0;
+	}
+
 	.skill-description-preview {
 		display: -webkit-box;
 		overflow: hidden;
 		-webkit-box-orient: vertical;
-		-webkit-line-clamp: 2;
-		line-clamp: 2;
+		-webkit-line-clamp: 3;
+		line-clamp: 3;
+	}
+
+	.expert-skill-card-featured .skill-description-preview {
+		-webkit-line-clamp: 3;
+		line-clamp: 3;
 	}
 
 	.expert-skill-tag {
-		flex: 0 1 auto;
+		flex: 0 0 auto;
+	}
+
+	.expert-skill-tags-scroll {
+		-webkit-overflow-scrolling: touch;
+		scrollbar-width: none;
+		touch-action: pan-x;
+	}
+
+	.expert-skill-tags-scroll::-webkit-scrollbar {
+		display: none;
+	}
+
+	.version-badge,
+	.updated-badge {
+		display: inline-flex;
+		height: 0.8125rem;
+		align-items: center;
+		border-radius: 0.1875rem;
+		padding: 0 0.2rem;
+		font-size: 0.5rem;
+		font-weight: 700;
+		letter-spacing: 0.035em;
+		line-height: 1;
+	}
+
+	.version-badge {
+		background: rgba(100, 116, 139, 0.075);
+		border: 1px solid rgba(100, 116, 139, 0.14);
+		color: #738199;
+	}
+
+	.updated-badge {
+		background: rgba(34, 197, 94, 0.075);
+		border: 1px solid rgba(34, 197, 94, 0.14);
+		color: #22a35a;
 	}
 </style>
