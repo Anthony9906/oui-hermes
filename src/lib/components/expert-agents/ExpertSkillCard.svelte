@@ -1,7 +1,4 @@
 <script lang="ts">
-	import { getContext } from 'svelte';
-	import type { Readable } from 'svelte/store';
-
 	import type { ExpertSkillCard } from '$lib/apis/expert-agents';
 	import ChatBubble from '$lib/components/icons/ChatBubble.svelte';
 	import LucideIcon from './LucideIcon.svelte';
@@ -11,7 +8,6 @@
 	export let onDetails: (skill: ExpertSkillCard) => void = () => {};
 	export let variant: 'default' | 'featured' = 'default';
 
-	const i18n = getContext<Readable<{ language?: string }>>('i18n');
 	const iconOptions = [
 		'bot',
 		'brain-circuit',
@@ -67,32 +63,6 @@
 
 	const hashString = (value: string) =>
 		Array.from(value || 'expert-agent').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-	const isChineseLanguage = (language?: string) => language?.toLowerCase().startsWith('zh');
-	const cardCopy = {
-		zh: {
-			unversioned: '未标版本',
-			viewDetails: (skillName: string) => `查看 ${skillName} 技能详情`,
-			startChat: '开始对话',
-			startChatWith: (skillName: string) => `开始 ${skillName} 对话`,
-			noDescription: '暂无描述',
-			usageTitle: (count: number) => `使用次数 ${count}`,
-			usageWithVersionTitle: (count: number, version: string) =>
-				`使用次数 ${count}，版本 ${version}`,
-			usageLabel: (count: number) => `使用 ${count}`
-		},
-		en: {
-			unversioned: 'Unversioned',
-			viewDetails: (skillName: string) => `View ${skillName} skill details`,
-			startChat: 'Start chat',
-			startChatWith: (skillName: string) => `Start chat with ${skillName}`,
-			noDescription: 'No description',
-			usageTitle: (count: number) => `Used ${count}`,
-			usageWithVersionTitle: (count: number, version: string) =>
-				`Used ${count}, version ${version}`,
-			usageLabel: (count: number) => `Used ${count}`
-		}
-	};
-	$: copy = isChineseLanguage($i18n.language) ? cardCopy.zh : cardCopy.en;
 
 	$: skillHash = hashString(skill.skill_name);
 	$: skillIcon = skill.icon || iconOptions[skillHash % iconOptions.length];
@@ -101,7 +71,7 @@
 		? skill.version.toLowerCase().startsWith('v')
 			? skill.version
 			: `v${skill.version}`
-		: copy.unversioned;
+		: '未标版本';
 	$: skillTags = skill.tags ?? [];
 	$: isFeatured = variant === 'featured';
 	$: usageCount = skill.usage_count ?? 0;
@@ -136,7 +106,7 @@
 					<button
 						type="button"
 						class="line-clamp-1 max-w-full text-left text-[24px] font-semibold leading-8 text-[#071f4d] transition hover:text-[#0f5ca8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#83bdf1]/60 dark:text-gray-100 dark:hover:text-[#b9d8ff]"
-						aria-label={copy.viewDetails(skill.skill_name)}
+						aria-label={`查看 ${skill.skill_name} 技能详情`}
 						title={skill.skill_name}
 						on:click|stopPropagation={() => {
 							onDetails(skill);
@@ -156,7 +126,7 @@
 					<button
 						type="button"
 						class="line-clamp-1 max-w-full text-left text-[15px] font-semibold leading-5 text-[#071f4d] transition hover:text-[#0f5ca8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#83bdf1]/60 dark:text-gray-100 dark:hover:text-[#b9d8ff]"
-						aria-label={copy.viewDetails(skill.skill_name)}
+						aria-label={`查看 ${skill.skill_name} 技能详情`}
 						title={skill.skill_name}
 						on:click|stopPropagation={() => {
 							onDetails(skill);
@@ -175,14 +145,14 @@
 				on:click={() => onStart(skill)}
 			>
 				<ChatBubble className="size-4" strokeWidth="1.9" />
-				{copy.startChat}
+				开始对话
 			</button>
 		{:else}
 			<button
 				type="button"
 				class="start-chat-button inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-[#b9d3ee] bg-white text-[#001f5b] shadow-none transition group-hover:border-[#001f5b] group-hover:bg-[#001f5b] group-hover:text-white group-hover:shadow-[0_10px_24px_rgba(0,31,91,0.18)] hover:bg-[#071f4d] dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:group-hover:border-[#d9e2f5] dark:group-hover:bg-[#d9e2f5] dark:group-hover:text-[#1e2637]"
-				aria-label={copy.startChatWith(skill.skill_name)}
-				title={copy.startChat}
+				aria-label={`开始 ${skill.skill_name} 对话`}
+				title="开始对话"
 				on:click={() => onStart(skill)}
 			>
 				<ChatBubble className="size-4" strokeWidth="1.9" />
@@ -224,7 +194,7 @@
 			? 'mt-3 max-w-[65%] text-[13px] leading-5 text-[#61708f]'
 			: 'mt-2.5 text-[11px] leading-4 text-[#8a99b0]'}"
 	>
-		{skill.description || copy.noDescription}
+		{skill.description || '暂无描述'}
 	</div>
 
 	{#if isFeatured}
@@ -239,10 +209,10 @@
 			{/if}
 			<div
 				class="shrink-0 flex items-center gap-1.5 text-[#7d91ae]"
-				title={copy.usageTitle(usageCount)}
+				title={`使用次数 ${usageCount}`}
 			>
 				<LucideIcon name="bookmark-check" className="size-3.5" strokeWidth="1.8" />
-				<span>{copy.usageLabel(usageCount)}</span>
+				<span>使用 {usageCount} 次</span>
 			</div>
 		</div>
 	{:else}
@@ -262,10 +232,10 @@
 				{/if}
 				<div
 					class="shrink-0 flex items-center gap-1.5 text-[#8da0ba]"
-					title={copy.usageWithVersionTitle(usageCount, skillVersion)}
+					title={`使用次数 ${usageCount}，版本 ${skillVersion}`}
 				>
 					<LucideIcon name="bookmark-check" className="size-3.5" strokeWidth="1.8" />
-					<span>{copy.usageLabel(usageCount)}</span>
+					<span>使用 {usageCount} 次</span>
 					<span class="version-badge">{skillVersion}</span>
 					{#if isRecentlyUpdated}
 						<span class="updated-badge">UPDATED</span>

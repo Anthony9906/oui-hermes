@@ -3,6 +3,8 @@
 	import Bolt from '$lib/components/icons/Bolt.svelte';
 	import { getContext } from 'svelte';
 	import LucideIcon from '$lib/components/expert-agents/LucideIcon.svelte';
+	import { showArtifacts } from '$lib/stores';
+	import { showExpertAgentDrawer } from '$lib/stores/expertAgents';
 
 	const i18n = getContext('i18n');
 
@@ -24,6 +26,7 @@
 	let filteredPrompts = [];
 	let pendingPrompt = null;
 	let showSelectionGuide = false;
+	$: sidePanelOpen = $showArtifacts || $showExpertAgentDrawer;
 	$: displayedPrompts = filteredPrompts.slice(0, MAX_DISPLAYED_PROMPTS);
 	$: activeLanguage = $i18n.language;
 	$: showSelectionGuideCard =
@@ -626,6 +629,7 @@
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div
 		class="experience-confirm-backdrop"
+		class:chat-side-panel-open={sidePanelOpen}
 		role="presentation"
 		on:pointerdown={closePromptConfirmation}
 	>
@@ -668,7 +672,12 @@
 
 {#if showSelectionGuide}
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<div class="selection-help-backdrop" role="presentation" on:pointerdown={closeSelectionGuide}>
+	<div
+		class="selection-help-backdrop"
+		class:chat-side-panel-open={sidePanelOpen}
+		role="presentation"
+		on:pointerdown={closeSelectionGuide}
+	>
 		<div
 			class="selection-help-dialog"
 			role="dialog"
@@ -1561,6 +1570,25 @@
 
 	:global(.dark) .experience-confirm-button--cancel:hover {
 		background: rgba(75, 85, 99, 0.94);
+	}
+
+	@media (min-width: 1024px) {
+		.selection-help-backdrop.chat-side-panel-open,
+		.experience-confirm-backdrop.chat-side-panel-open {
+			right: var(--chat-side-panel-width, clamp(640px, 58vw, 800px));
+			width: auto;
+		}
+
+		.selection-help-backdrop.chat-side-panel-open .selection-help-dialog {
+			width: min(
+				59.4rem,
+				calc(100vw - var(--chat-side-panel-width, clamp(640px, 58vw, 800px)) - 2rem)
+			);
+		}
+
+		.experience-confirm-backdrop.chat-side-panel-open .experience-confirm-dialog {
+			max-width: calc(100vw - var(--chat-side-panel-width, clamp(640px, 58vw, 800px)) - 2rem);
+		}
 	}
 
 	:global(.dark) .efficiency-tab {

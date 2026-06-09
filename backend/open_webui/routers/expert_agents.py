@@ -87,9 +87,6 @@ EXPERT_AGENT_ICON_BACKGROUNDS = frozenset(
     )
 )
 EXPERT_AGENT_ICON_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
-SKILL_USAGE_SUBSTRING_EXCLUSIONS = {
-    "cylinder-selection": "cylinder-selection-for-expo",
-}
 
 
 class ExpertAgentItem(BaseModel):
@@ -184,26 +181,6 @@ def _hermes_state_db_path() -> Path:
     return hermes_home / "profiles" / "expertagent" / "state.db"
 
 
-def _table_column_names(conn: sqlite3.Connection, table_name: str) -> set[str]:
-    rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
-    return {str(row[1]) for row in rows}
-
-
-def _build_skill_usage_filter(skill_name: str) -> tuple[str, list[str]]:
-    clauses = [
-        "tool_calls LIKE '%\"name\": \"skill_view\"%'",
-        "tool_calls LIKE ?",
-    ]
-    params = [f"%{skill_name}%"]
-
-    exclusion = SKILL_USAGE_SUBSTRING_EXCLUSIONS.get(skill_name)
-    if exclusion:
-        clauses.append("tool_calls NOT LIKE ?")
-        params.append(f"%{exclusion}%")
-
-    return " AND ".join(clauses), params
-
-
 def _load_skill_usage_counts(skill_names: list[str]) -> dict[str, int]:
     tracked_names = {name for name in skill_names if name}
     if not tracked_names:
@@ -214,35 +191,37 @@ def _load_skill_usage_counts(skill_names: list[str]) -> dict[str, int]:
         log.warning("Hermes state DB does not exist: %s", state_db)
         return {}
 
-    usage_counts: dict[str, int] = {name: 0 for name in tracked_names}
+    usage_sessions: dict[str, set[str]] = {name: set() for name in tracked_names}
     try:
         conn = sqlite3.connect(f"file:{state_db}?mode=ro", uri=True, timeout=1)
         try:
-            columns = _table_column_names(conn, "messages")
-            if not {"session_id", "tool_calls"}.issubset(columns):
-                return {}
+            rows = conn.execute(
+                """
+                SELECT session_id, content
+                FROM messages
+                WHERE tool_name = 'skill_view'
+                    AND content IS NOT NULL
+                """
+            )
+            for session_id, content in rows:
+                try:
+                    payload = json.loads(content)
+                except (TypeError, json.JSONDecodeError):
+                    continue
 
-            for skill_name in tracked_names:
-                filter_clause, params = _build_skill_usage_filter(skill_name)
-                row = conn.execute(
-                    f"""
-                    SELECT COUNT(*) AS load_count
-                    FROM (
-                        SELECT DISTINCT session_id
-                        FROM messages
-                        WHERE {filter_clause}
-                    )
-                    """,
-                    params,
-                ).fetchone()
-                usage_counts[skill_name] = int(row[0] if row else 0)
+                if not isinstance(payload, dict) or not payload.get("success"):
+                    continue
+
+                skill_name = str(payload.get("name") or "")
+                if skill_name in usage_sessions and session_id:
+                    usage_sessions[skill_name].add(str(session_id))
         finally:
             conn.close()
     except sqlite3.Error as e:
         log.warning("Failed to load Hermes expert skill usage counts: %s", e)
         return {}
 
-    return usage_counts
+    return {name: len(session_ids) for name, session_ids in usage_sessions.items()}
 
 
 def _read_skill_frontmatter(content: str) -> dict[str, Any]:
