@@ -206,7 +206,7 @@
 				<img
 					src="/assets/images/expert-agent-cowain-logo.png"
 					alt="Cowain AI"
-					class="size-16 shrink-0 object-contain opacity-95"
+					class="size-10 shrink-0 object-contain opacity-95"
 					draggable="false"
 				/>
 				<div
