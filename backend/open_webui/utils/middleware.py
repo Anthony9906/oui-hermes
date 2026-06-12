@@ -56,6 +56,12 @@ from open_webui.models.models import Models
 
 from open_webui.utils.sanitize import sanitize_code
 from open_webui.utils.chat import generate_chat_completion
+from open_webui.utils.agui import (
+    AguiEventEmitter,
+    extract_artifact_payload,
+    extract_interaction_request,
+    is_artifact_writer,
+)
 from open_webui.utils.task import (
     get_task_model_id,
     rag_template,
@@ -4449,6 +4455,9 @@ async def streaming_chat_response_handler(response, ctx):
     event_emitter = ctx['event_emitter']
     event_caller = ctx['event_caller']
 
+    # ── AG-UI event emitter (Phase 1) ──────────────────────────────────
+    agui = AguiEventEmitter(event_emitter) if event_emitter else None
+
     extra_params = {
         '__event_emitter__': event_emitter,
         '__event_call__': event_caller,
@@ -4845,6 +4854,23 @@ async def streaming_chat_response_handler(response, ctx):
                                 if _is_hermes_tool_event(data, current_sse_event_type):
                                     await flush_pending_delta_data()
                                     output = _upsert_hermes_tool_event(output, data, current_sse_event_type)
+
+                                    # ── AG-UI: process Hermes tool events ──────
+                                    if agui:
+                                        tool_payload = _extract_hermes_tool_payload(data)
+                                        tool_name = _extract_hermes_tool_name(tool_payload)
+                                        tool_args = _extract_hermes_tool_arguments(tool_payload)
+                                        tool_call_id = str(time.time())
+                                        await agui.on_tool_start(tool_name, tool_call_id, tool_args)
+                                        # Check for artifact payload in tool arguments
+                                        artifact = extract_artifact_payload(tool_args)
+                                        if artifact:
+                                            await agui.on_artifact_detected(
+                                                artifact["artifact_type"],
+                                                artifact["payload"],
+                                            )
+                                        await agui.on_tool_complete(tool_name, tool_call_id)
+
                                     await event_emitter(
                                         {
                                             'type': 'chat:completion',
@@ -4857,7 +4883,14 @@ async def streaming_chat_response_handler(response, ctx):
                                     continue
 
                                 if 'event' in data and not getattr(request.state, 'direct', False):
-                                    await event_emitter(data.get('event', {}))
+                                    if agui:
+                                        interaction = extract_interaction_request(data)
+                                        if interaction:
+                                            await agui.on_interaction_requested(interaction)
+
+                                    event_payload = data.get('event', {})
+                                    if isinstance(event_payload, dict):
+                                        await event_emitter(event_payload)
 
                                 if 'selected_model_id' in data:
                                     model_id = data['selected_model_id']
@@ -5053,6 +5086,30 @@ async def streaming_chat_response_handler(response, ctx):
                                         if response_tool_calls:
                                             # Flush any pending text first
                                             await flush_pending_delta_data()
+
+                                            # ── AG-UI: detect artifact payloads ────────
+                                            if agui:
+                                                log.info("AG-UI: checking %d response_tool_calls", len(response_tool_calls))
+                                                for tc in response_tool_calls:
+                                                    func = tc.get('function', {})
+                                                    name = func.get('name', '')
+                                                    call_id = tc.get('id', '')
+                                                    args_str = func.get('arguments', '')
+                                                    log.info("AG-UI: tool=%s call_id=%s args_len=%d is_artifact=%s",
+                                                        name, call_id, len(args_str) if args_str else 0,
+                                                        is_artifact_writer(name))
+                                                    if name and call_id:
+                                                        await agui.on_tool_start(name, call_id, args_str)
+                                                        if args_str and is_artifact_writer(name):
+                                                            log.info("AG-UI: extracting artifact from write_file args...")
+                                                            artifact = extract_artifact_payload(args_str)
+                                                            log.info("AG-UI: artifact detected=%s", bool(artifact))
+                                                            if artifact:
+                                                                await agui.on_artifact_detected(
+                                                                    artifact['artifact_type'],
+                                                                    artifact['payload'],
+                                                                )
+                                                        await agui.on_tool_complete(name, call_id)
 
                                             # Build pending function_call output items for display
                                             pending_fc_items = []
@@ -5486,6 +5543,28 @@ async def streaming_chat_response_handler(response, ctx):
                         log.debug(f'Parsed args from {tool_args} to {tool_function_params}')
                         tool_call.setdefault('function', {})['arguments'] = json.dumps(tool_function_params)
 
+                        # AG-UI: final tool-call execution path.
+                        #
+                        # Some OpenAI-compatible providers expose tool calls as
+                        # finalized function_call output items rather than
+                        # choices[].delta.tool_calls or Hermes-native tool
+                        # events. In that path the chat body can show a Tool
+                        # Call while the AG-UI panel stays silent unless we
+                        # inspect the parsed arguments here.
+                        if agui and tool_function_name:
+                            await agui.on_tool_start(
+                                tool_function_name,
+                                tool_call_id,
+                                tool_function_params or tool_args,
+                            )
+                            if is_artifact_writer(tool_function_name):
+                                artifact = extract_artifact_payload(tool_function_params or tool_args)
+                                if artifact:
+                                    await agui.on_artifact_detected(
+                                        artifact['artifact_type'],
+                                        artifact['payload'],
+                                    )
+
                         tool_result = None
                         tool = None
                         tool_type = None
@@ -5549,6 +5628,9 @@ async def streaming_chat_response_handler(response, ctx):
                             tool_result,
                             event_emitter,
                         )
+
+                        if agui and tool_function_name:
+                            await agui.on_tool_complete(tool_function_name, tool_call_id)
 
                         # Extract citation sources from tool results
                         if (
@@ -6006,6 +6088,10 @@ async def streaming_chat_response_handler(response, ctx):
                     }
                 )
 
+                # ── AG-UI: flush pending steps ──────────────────────
+                if agui:
+                    await agui.flush()
+
                 await background_tasks_handler(ctx)
                 ctx['assistant_message'] = {
                     'content': serialize_output(output),
@@ -6015,6 +6101,13 @@ async def streaming_chat_response_handler(response, ctx):
                 await outlet_filter_handler(ctx)
             except asyncio.CancelledError:
                 log.warning('Task was cancelled!')
+
+                # ── AG-UI: flush on cancellation ────────────────────
+                if agui:
+                    try:
+                        await agui.flush()
+                    except Exception:
+                        pass
 
                 # Close the response body iterator to trigger cleanup
                 # in stream_wrapper's finally block and release the

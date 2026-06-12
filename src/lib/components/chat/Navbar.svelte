@@ -33,8 +33,10 @@
 	import ChatBubbleDottedChecked from '../icons/ChatBubbleDottedChecked.svelte';
 
 	import EllipsisHorizontal from '../icons/EllipsisHorizontal.svelte';
+	import LucideIcon from '$lib/components/expert-agents/LucideIcon.svelte';
 	import ChatPlus from '../icons/ChatPlus.svelte';
 	import ChatCheck from '../icons/ChatCheck.svelte';
+	import { aguiPanelVisible, aguiStore, hasArtifact } from '$lib/agui/stores/agui';
 
 	const i18n = getContext('i18n');
 
@@ -177,14 +179,30 @@
 							{moveChatHandler}
 						>
 							<button
-								class="flex cursor-pointer px-2 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-850 transition"
+								class="flex translate-y-[10px] cursor-pointer rounded-xl p-2.5 transition hover:bg-gray-50 dark:hover:bg-gray-850"
 								id="chat-context-menu-button"
 							>
 								<div class=" m-auto self-center">
-									<EllipsisHorizontal className=" size-5" strokeWidth="1.5" />
+									<EllipsisHorizontal className=" size-6" strokeWidth="1.5" />
 								</div>
 							</button>
 						</Menu>
+					{/if}
+
+					{#if $hasArtifact}
+						<Tooltip content={$aguiPanelVisible ? '隐藏 AI 工作区' : '显示 AI 工作区'}>
+							<button
+								type="button"
+								class="flex h-10 w-10 translate-y-[10px] cursor-pointer items-center justify-center rounded-xl border transition {$aguiPanelVisible
+									? 'border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-700/60 dark:bg-blue-900/30 dark:text-blue-200'
+									: 'border-transparent hover:bg-gray-50 dark:hover:bg-gray-850'}"
+								aria-label={$aguiPanelVisible ? '隐藏 AI 工作区' : '显示 AI 工作区'}
+								aria-pressed={$aguiPanelVisible}
+								on:click={() => aguiStore.togglePanel()}
+							>
+								<LucideIcon name="sparkles" className="size-6" strokeWidth="1.45" />
+							</button>
+						</Tooltip>
 					{/if}
 				</div>
 			</div>

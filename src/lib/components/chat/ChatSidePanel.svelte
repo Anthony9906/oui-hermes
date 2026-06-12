@@ -10,7 +10,9 @@
 
 	import Drawer from '../common/Drawer.svelte';
 	import Artifacts from './Artifacts.svelte';
+	import AguiPanel from '../../agui/components/AguiPanel.svelte';
 	import ExpertAgentDrawer from '$lib/components/expert-agents/ExpertAgentDrawer.svelte';
+	import { aguiPanelVisible, aguiStore } from '$lib/agui/stores/agui';
 
 	export let history;
 
@@ -19,16 +21,18 @@
 	const DEFAULT_WIDTH = 800;
 
 	let largeScreen = false;
-	let activePanel: 'artifacts' | 'expertAgents' = 'expertAgents';
+	let activePanel: 'artifacts' | 'expertAgents' | 'agui' = 'expertAgents';
 	let previousArtifacts = false;
 	let previousExpertAgent = false;
+	let previousAgui = false;
 	let panelWidth = DEFAULT_WIDTH;
 	let isResizing = false;
 	let startClientX = 0;
 	let startWidth = DEFAULT_WIDTH;
 	let activePointerId: number | null = null;
 
-	$: visible = $showArtifacts || $showExpertAgentDrawer;
+	$: aguiVisible = $aguiPanelVisible;
+	$: visible = $showArtifacts || $showExpertAgentDrawer || aguiVisible;
 
 	const clampWidth = (width: number) => {
 		if (typeof window === 'undefined') return width;
@@ -76,29 +80,24 @@
 		const artifactsVisible = $showArtifacts;
 		const expertAgentVisible = $showExpertAgentDrawer;
 
-		if (artifactsVisible && !previousArtifacts) {
+		if (aguiVisible && !previousAgui) {
+			activePanel = 'agui';
+		} else if (artifactsVisible && !previousArtifacts) {
 			activePanel = 'artifacts';
-		}
-
-		if (expertAgentVisible && !previousExpertAgent) {
+		} else if (expertAgentVisible && !previousExpertAgent) {
 			activePanel = 'expertAgents';
-		}
-
-		if (!artifactsVisible && expertAgentVisible && activePanel === 'artifacts') {
-			activePanel = 'expertAgents';
-		}
-
-		if (!expertAgentVisible && artifactsVisible && activePanel === 'expertAgents') {
-			activePanel = 'artifacts';
 		}
 
 		previousArtifacts = artifactsVisible;
 		previousExpertAgent = expertAgentVisible;
+		previousAgui = aguiVisible;
 	}
 
 	const closeActivePanel = () => {
 		if (activePanel === 'artifacts') {
 			showArtifacts.set(false);
+		} else if (activePanel === 'agui') {
+			aguiStore.hidePanel();
 		} else {
 			closeExpertAgentDrawer();
 		}
@@ -161,6 +160,8 @@
 			>
 				{#if activePanel === 'artifacts'}
 					<Artifacts {history} on:close={closeActivePanel} />
+				{:else if activePanel === 'agui'}
+					<AguiPanel />
 				{:else}
 					<ExpertAgentDrawer
 						show={$showExpertAgentDrawer}
@@ -181,6 +182,8 @@
 			<div class="h-[100dvh] min-h-0">
 				{#if activePanel === 'artifacts'}
 					<Artifacts {history} on:close={closeActivePanel} />
+				{:else if activePanel === 'agui'}
+					<AguiPanel />
 				{:else}
 					<ExpertAgentDrawer
 						show={$showExpertAgentDrawer}

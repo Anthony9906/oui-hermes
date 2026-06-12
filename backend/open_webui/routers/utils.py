@@ -7,7 +7,13 @@ import re
 from urllib.parse import parse_qs, urlparse
 
 from open_webui.models.chats import ChatTitleMessagesForm
-from open_webui.config import DATA_DIR, ENABLE_ADMIN_EXPORT, S3_PUBLIC_BASE_URL
+from open_webui.config import (
+    DATA_DIR,
+    ENABLE_ADMIN_EXPORT,
+    HERMES_API_BASE_URL,
+    HERMES_API_KEY,
+    S3_PUBLIC_BASE_URL,
+)
 from open_webui.constants import ERROR_MESSAGES
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
@@ -28,6 +34,12 @@ LOCAL_ARTIFACT_ID_RE = re.compile(r'^[A-Za-z0-9_-]+$')
 LOCAL_ARTIFACT_PATH_RE = re.compile(r'^/(?:v|api/artifacts)/([A-Za-z0-9_-]+)/?$')
 LOCAL_ARTIFACT_HOST_ALIASES = {'localhost', '127.0.0.1', '::1'}
 MINIO_ARTIFACT_VIEWER_PATH = '/artifact-viewer/index.html'
+
+
+class AguiApprovalForm(BaseModel):
+    run_id: str
+    choice: str
+    resolve_all: bool = False
 
 
 def _is_allowed_local_artifact_url(url: str) -> tuple[str, str]:
@@ -150,6 +162,43 @@ async def get_artifact_title(url: str, user=Depends(get_verified_user)):
 
     title = payload.get('artifact', {}).get('title') or payload.get('title')
     return {'id': artifact_id, 'title': title if isinstance(title, str) else ''}
+
+
+@router.post('/agui/approval')
+async def resolve_agui_approval(form_data: AguiApprovalForm, user=Depends(get_verified_user)):
+    run_id = (form_data.run_id or '').strip()
+    choice = (form_data.choice or '').strip().lower()
+
+    if not run_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='missing_run_id')
+
+    if choice not in {'once', 'session', 'always', 'deny'}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='invalid_approval_choice')
+
+    headers = {'Content-Type': 'application/json'}
+    if HERMES_API_KEY:
+        headers['Authorization'] = f'Bearer {HERMES_API_KEY}'
+
+    try:
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
+            async with session.post(
+                f'{HERMES_API_BASE_URL}/v1/runs/{run_id}/approval',
+                headers=headers,
+                json={
+                    'choice': choice,
+                    'resolve_all': bool(form_data.resolve_all),
+                },
+            ) as response:
+                payload = await response.json(content_type=None)
+                if response.status >= 400:
+                    raise HTTPException(status_code=response.status, detail=payload)
+                return payload
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.exception('Failed to resolve AG-UI approval')
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(e))
 
 
 class CodeForm(BaseModel):

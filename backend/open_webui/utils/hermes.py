@@ -20,6 +20,13 @@ IMAGE_FILE_EXTENSIONS = {
     '.heif',
 }
 
+OPEN_WEBUI_AGUI_INTERACTION_PROMPT = """You are running inside Open WebUI, which supports AG-UI interaction cards.
+When you need the user to choose from options, confirm a direction, or answer a multiple-choice decision, do not use clarify and do not only write a text list.
+Instead, call emit_agui_artifact directly with artifact_type="interaction-request".
+The payload must be an object with kind="choice", title, message, and options.
+Each option must include id, label, and value.
+Use normal text only when no user choice is needed."""
+
 
 def is_temporary_chat_id(chat_id: Any) -> bool:
     return isinstance(chat_id, str) and chat_id.startswith('local:')
@@ -112,5 +119,8 @@ def build_hermes_delta_payload(payload: dict, metadata: dict | None) -> dict:
             'instructions',
         }
     }
-    sanitized['messages'] = [user_message]
+    sanitized['messages'] = [
+        {'role': 'system', 'content': OPEN_WEBUI_AGUI_INTERACTION_PROMPT},
+        user_message,
+    ]
     return sanitized

@@ -1,4 +1,8 @@
-from open_webui.utils.hermes import build_hermes_delta_payload, is_valid_client_chat_id
+from open_webui.utils.hermes import (
+    OPEN_WEBUI_AGUI_INTERACTION_PROMPT,
+    build_hermes_delta_payload,
+    is_valid_client_chat_id,
+)
 
 
 def test_build_hermes_delta_payload_preserves_processed_user_context():
@@ -31,10 +35,14 @@ def test_build_hermes_delta_payload_preserves_processed_user_context():
 
     result = build_hermes_delta_payload(payload, metadata)
 
-    assert result['messages'] == payload['messages']
-    assert '<system_default_context>' in result['messages'][0]['content']
-    assert '<current_conversation_user' in result['messages'][0]['content']
-    assert '<attached_files>' in result['messages'][0]['content']
+    assert result['messages'][0] == {
+        'role': 'system',
+        'content': OPEN_WEBUI_AGUI_INTERACTION_PROMPT,
+    }
+    assert result['messages'][1] == payload['messages'][0]
+    assert '<system_default_context>' in result['messages'][1]['content']
+    assert '<current_conversation_user' in result['messages'][1]['content']
+    assert '<attached_files>' in result['messages'][1]['content']
     assert 'tools' not in result
 
 

@@ -53,6 +53,12 @@
 		chatRequestQueues,
 		desktopEvent
 	} from '$lib/stores';
+	import {
+		activeInteraction,
+		aguiPanelVisible,
+		aguiStore,
+		normalizeInteractionRequest
+	} from '$lib/agui/stores/agui';
 
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
 
@@ -110,6 +116,7 @@
 	import Messages from '$lib/components/chat/Messages.svelte';
 	import Navbar from '$lib/components/chat/Navbar.svelte';
 	import ChatSidePanel from './ChatSidePanel.svelte';
+	import InteractionCard from '$lib/agui/components/InteractionCard.svelte';
 	import EventConfirmDialog from '../common/ConfirmDialog.svelte';
 	import Placeholder from './Placeholder.svelte';
 	import FilesOverlay from './MessageInput/FilesOverlay.svelte';
@@ -125,6 +132,7 @@
 	let loading = true;
 
 	const eventTarget = new EventTarget();
+	const AGUI_ARTIFACT_STORAGE_PREFIX = 'open-webui:agui-artifact:';
 	let messageInput: MessageInput | undefined;
 
 	let autoScroll = true;
@@ -217,9 +225,7 @@
 		for (const message of messages) {
 			const content = typeof message?.content === 'string' ? message.content : '';
 
-			const templateMatch = content.match(
-				/当前对话启用专家技能：\s+(?:\*\*)?(.+?)(?:\*\*)?(?:\n|$)/
-			);
+			const templateMatch = content.match(/专家模式\s*:\s*(.+?)(?:\n|$)/);
 			if (templateMatch?.[1]) {
 				return templateMatch[1];
 			}
@@ -598,6 +604,120 @@
 		}
 	};
 
+	const getAguiArtifactStorageKey = (id: string) =>
+		id ? `${AGUI_ARTIFACT_STORAGE_PREFIX}${id}` : '';
+
+	const persistAguiArtifact = (id: string, artifact: any) => {
+		const key = getAguiArtifactStorageKey(id);
+		if (!key || typeof localStorage === 'undefined') return;
+
+		try {
+			localStorage.setItem(key, JSON.stringify(artifact));
+		} catch (error) {
+			console.warn('Failed to persist AG-UI artifact', error);
+		}
+	};
+
+	let restoredAguiChatId = '';
+	const restoreAguiArtifact = (id: string) => {
+		if (typeof localStorage === 'undefined') return;
+
+		if (restoredAguiChatId === id) return;
+		restoredAguiChatId = id;
+
+		const key = getAguiArtifactStorageKey(id);
+		if (!key) {
+			if (!generating) {
+				aguiStore.reset();
+			}
+			return;
+		}
+
+		const raw = localStorage.getItem(key);
+		if (!raw) {
+			const currentAgui = get(aguiStore);
+			if (!generating || currentAgui.artifact) {
+				aguiStore.reset();
+			}
+			return;
+		}
+
+		try {
+			const artifact = JSON.parse(raw);
+			if (artifact?.artifact_type && artifact?.payload) {
+				aguiStore.restoreArtifact(
+					{
+						artifact_type: artifact.artifact_type,
+						payload: artifact.payload,
+						run_id: artifact.run_id || '',
+						timestamp: artifact.timestamp || Date.now()
+					},
+					false
+				);
+			} else {
+				aguiStore.reset();
+			}
+		} catch (error) {
+			console.warn('Failed to restore AG-UI artifact', error);
+			aguiStore.reset();
+		}
+	};
+
+	$: restoreAguiArtifact($chatId);
+	$: if ($chatId && $aguiStore.artifact) {
+		persistAguiArtifact($chatId, $aguiStore.artifact);
+	}
+
+	const handleAguiEvent = (aguiType: string, data: any, targetChatId = $chatId) => {
+		const runId = data?.run_id || null;
+		const timestamp = data?.timestamp || Date.now();
+
+		switch (aguiType) {
+			case 'step_started':
+				aguiStore.onStepStarted(data.step_name, timestamp, runId);
+				break;
+			case 'step_finished':
+				aguiStore.onStepFinished(data.step_name, runId);
+				break;
+			case 'tool_call_start':
+				aguiStore.onToolCallStart(
+					data.tool_call_id,
+					data.tool_name,
+					runId,
+					timestamp,
+					data.tool_args ?? data.arguments ?? data.params
+				);
+				break;
+			case 'tool_call_end':
+				aguiStore.onToolCallEnd(data.tool_call_id, runId, timestamp);
+				break;
+			case 'interaction_request':
+				const directInteraction = normalizeInteractionRequest(data, runId || '', timestamp);
+				if (directInteraction) {
+					aguiStore.onInteractionRequest(directInteraction);
+				}
+				break;
+			case 'state_snapshot':
+				if (data.artifact_type === 'interaction-request') {
+					const interaction = normalizeInteractionRequest(data.payload, runId || '', timestamp);
+					if (interaction) {
+						aguiStore.onInteractionRequest(interaction);
+					}
+					break;
+				}
+
+				const artifact = {
+					artifact_type: data.artifact_type,
+					payload: data.payload,
+					run_id: data.run_id || '',
+					timestamp
+				};
+				aguiStore.onStateSnapshot(artifact);
+				persistAguiArtifact(targetChatId, artifact);
+				break;
+		}
+	};
+
 	const chatEventHandler = async (event, cb) => {
 		console.log(event);
 
@@ -614,6 +734,11 @@
 			let message = eventMessage ?? history.messages[event.message_id];
 			const type = event?.data?.type ?? null;
 			const data = event?.data?.data ?? null;
+
+			if (type?.startsWith('agui:')) {
+				handleAguiEvent(type.replace('agui:', ''), data, event.chat_id || $chatId);
+				return;
+			}
 
 			if (type === 'chat:title') {
 				chatTitle.set(data);
@@ -2089,7 +2214,7 @@
 	// Chat functions
 	//////////////////////////
 
-	const submitPrompt = async (inputContent, inputFiles) => {
+	const submitPrompt = async (inputContent, inputFiles, { displayContent = null } = {}) => {
 		const _files = structuredClone(inputFiles);
 
 		chatFiles.push(
@@ -2111,7 +2236,10 @@
 			parentId: history.currentId ?? null,
 			childrenIds: [],
 			role: 'user',
-			content: inputContent,
+			content: displayContent ?? inputContent,
+			...(displayContent && displayContent !== inputContent
+				? { aguiInteractionContent: inputContent }
+				: {}),
 			files: _files.length > 0 ? _files : undefined,
 			timestamp: Math.floor(Date.now() / 1000), // Unix epoch
 			models: selectedModels
@@ -2134,7 +2262,7 @@
 		await sendMessage(history, userMessageId);
 	};
 
-	const submitHandler = async (userPrompt, { _raw = false } = {}) => {
+	const submitHandler = async (userPrompt, { _raw = false, displayContent = null } = {}) => {
 		console.log('submitHandler', userPrompt, $chatId);
 
 		const _selectedModels = selectedModels.map((modelId) =>
@@ -2191,7 +2319,10 @@
 				const _files = structuredClone(files);
 				chatRequestQueues.update((q) => ({
 					...q,
-					[$chatId]: [...(q[$chatId] ?? []), { id: uuidv4(), prompt: userPrompt, files: _files }]
+					[$chatId]: [
+						...(q[$chatId] ?? []),
+						{ id: uuidv4(), prompt: userPrompt, files: _files, displayContent }
+					]
 				}));
 				// Clear input
 				messageInput?.setText('');
@@ -2204,6 +2335,9 @@
 				await tick();
 			}
 		}
+
+		// ── AG-UI: activate for this run ──────────────────────────
+		aguiStore.activate(`run_${Date.now()}`);
 
 		if (history?.currentId) {
 			const currentMessage = history.messages[history.currentId];
@@ -2222,7 +2356,7 @@
 		files = [];
 		messageInput?.setText('');
 
-		await submitPrompt(userPrompt, _files);
+		await submitPrompt(userPrompt, _files, { displayContent });
 	};
 
 	const sendMessage = async (
@@ -2440,10 +2574,16 @@
 		}
 
 		const stream = model?.info?.params?.stream_response ?? true;
+		const userMessageContent =
+			userMessage?.aguiInteractionContent ??
+			userMessage?.merged?.content ??
+			userMessage?.content ??
+			'';
+
 		let messages = [
 			{
 				role: 'user',
-				content: processDetails(userMessage?.merged?.content ?? userMessage?.content ?? ''),
+				content: processDetails(userMessageContent),
 				...(userMessage?.files ? { files: userMessage.files } : {})
 			}
 		];
@@ -3001,6 +3141,81 @@
 		}
 	};
 
+	const buildAguiInteractionResponse = (interaction, response) => {
+		return `<agui_interaction_response>\n${JSON.stringify(
+			{
+				interaction_id: interaction.id,
+				kind: interaction.kind,
+				run_id: interaction.run_id,
+				response: {
+					type: response.type,
+					id: response.id,
+					label: response.label,
+					value: response.value
+				}
+			},
+			null,
+			2
+		)}\n</agui_interaction_response>`;
+	};
+
+	const buildAguiInteractionDisplayResponse = (interaction, response) => {
+		const value =
+			response?.type === 'custom'
+				? response?.value || response?.label || ''
+				: response?.label || response?.value || '';
+
+		if (response?.type === 'custom') {
+			return value ? `我的补充是：${value}，现在可以继续了。` : '我已补充信息，现在可以继续了。';
+		}
+
+		if (interaction?.kind === 'choice') {
+			return value ? `我选择 ${value}，现在可以继续了。` : '我已完成选择，现在可以继续了。';
+		}
+
+		return value ? `我确认选择 ${value}，现在可以继续了。` : '我已确认，现在可以继续了。';
+	};
+
+	const submitAguiInteractionResponse = async ({ detail }) => {
+		const { interaction, response } = detail;
+		if (!interaction || !response) return;
+
+		if (interaction.kind === 'approval') {
+			if (!interaction.run_id) {
+				toast.error('审批请求缺少 run_id，无法提交。');
+				return;
+			}
+
+			const res = await fetch(`${WEBUI_API_BASE_URL}/utils/agui/approval`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${localStorage.token}`
+				},
+				body: JSON.stringify({
+					run_id: interaction.run_id,
+					choice: response.value
+				})
+			});
+
+			if (!res.ok) {
+				const error = await res.json().catch(() => null);
+				toast.error(error?.detail?.error?.message ?? error?.detail ?? '审批提交失败。');
+				return;
+			}
+
+			aguiStore.clearInteraction(interaction.id);
+			toast.success('审批已提交。');
+			return;
+		}
+
+		aguiStore.clearInteraction(interaction.id);
+		await tick();
+		submitHandler(buildAguiInteractionResponse(interaction, response), {
+			displayContent: buildAguiInteractionDisplayResponse(interaction, response)
+		});
+	};
+
 	const archiveChatHandler = async (id: string) => {
 		try {
 			await archiveChatById(localStorage.token, id);
@@ -3051,7 +3266,7 @@
 	class="h-screen max-h-[100dvh] transition-width duration-200 ease-in-out {$showSidebar
 		? 'md:max-w-[calc(100%-var(--sidebar-width))]'
 		: ''} w-full max-w-full flex flex-col ml-5"
-	class:chat-side-panel-open={$showArtifacts || $showExpertAgentDrawer}
+	class:chat-side-panel-open={$showArtifacts || $showExpertAgentDrawer || $aguiPanelVisible}
 	id="chat-container"
 >
 	{#if !loading}
@@ -3154,6 +3369,21 @@
 							</div>
 						{/if}
 
+						{#if $activeInteraction}
+							<div
+								class="pointer-events-none absolute inset-x-0 bottom-28 z-30 flex justify-center sm:bottom-24"
+							>
+								<div class="pointer-events-auto w-full">
+									<InteractionCard
+										interaction={$activeInteraction}
+										disabled={generating && $activeInteraction.kind !== 'approval'}
+										on:submit={submitAguiInteractionResponse}
+										on:close={(e) => aguiStore.clearInteraction(e.detail.interaction.id)}
+									/>
+								</div>
+							</div>
+						{/if}
+
 						{#if ($settings?.landingPageMode === 'chat' && !$selectedFolder) || createMessagesList(history, history.currentId).length > 0}
 							<div
 								class=" pb-2.5 flex flex-col justify-between w-full flex-auto overflow-auto h-0 max-w-full z-10 scrollbar-hidden"
@@ -3228,7 +3458,9 @@
 											}));
 											await stopResponse(false);
 											await tick();
-											await submitPrompt(item.prompt, item.files);
+											await submitPrompt(item.prompt, item.files, {
+												displayContent: item.displayContent ?? null
+											});
 										}
 									}}
 									onQueueEdit={(id) => {

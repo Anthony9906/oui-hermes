@@ -24,11 +24,9 @@ export const toggleExpertAgentDrawer = () => {
 };
 
 export const buildExpertSkillPrompt = (skillName: string) => {
-	return [
-		`当前对话启用专家技能： ${skillName}`,
-		'优先按照该专家技能的知识、流程和约束完成用户的后续任务，',
-		'只读取SKILL.md，然后用简洁的语言指导用户下一步做什么'
-	].join('\n');
+	return `专家模式 : ${skillName}
+
+加载你的专家技能，然后直接问用户一个关键问题帮他快速切入任务，并给2-3个具体选项让他选。不要列能力，不要自我介绍。简洁、专业。`;
 };
 
 export const requestStartExpertSkillChat = (skill: ExpertSkillCard) => {
