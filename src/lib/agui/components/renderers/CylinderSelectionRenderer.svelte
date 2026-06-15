@@ -80,15 +80,6 @@
 		forceMargin: '推力裕量'
 	};
 
-	const staticThumbnailBySeries: Record<string, string> = {
-		RMS: '/assets/images/expert-agent/cylinder-selection/airtac-rms.png',
-		HFZ: '/assets/images/expert-agent/cylinder-selection/airtac-hfz.png',
-		HLS: '/assets/images/expert-agent/cylinder-selection/airtac-hls.png',
-		HRQ: '/assets/images/expert-agent/cylinder-selection/airtac-hrq.png',
-		MD: '/assets/images/expert-agent/cylinder-selection/airtac-md.png',
-		TNTR: '/assets/images/expert-agent/cylinder-selection/airtac-tntr.png'
-	};
-
 	const normalizeSummaryValue = (val: any) =>
 		typeof val === 'object' && val !== null
 			? val
@@ -114,21 +105,7 @@
 
 	const getThumbnailUrl = (rec: any) => {
 		const rawUrl = rec?.thumbnailUrl || rec?.imageUrl || rec?.thumbnail || rec?.image || '';
-		const model = String(rec?.model || '').toUpperCase();
-		const mapped = Object.entries(staticThumbnailBySeries).find(([series]) =>
-			model.includes(series)
-		)?.[1];
-
-		if (
-			typeof rawUrl === 'string' &&
-			rawUrl &&
-			!rawUrl.includes('10.10.14.110') &&
-			!rawUrl.includes('/agent-files/ea/assets/cylinder-thumbnails/')
-		) {
-			return rawUrl;
-		}
-
-		return mapped || rawUrl;
+		return typeof rawUrl === 'string' ? rawUrl : '';
 	};
 
 	const getImageAlt = (rec: any) =>
