@@ -56,6 +56,7 @@ from open_webui.models.models import Models
 
 from open_webui.utils.sanitize import sanitize_code
 from open_webui.utils.chat import generate_chat_completion
+from open_webui.utils.agui import AGUI_BRIDGE_MCP_NAME, extract_agui_event
 from open_webui.utils.task import (
     get_task_model_id,
     rag_template,
@@ -957,6 +958,64 @@ def _upsert_hermes_tool_event(output: list, data: dict, sse_event_type: str | No
         )
 
     return output
+
+
+async def _emit_agui_event_from_hermes_tool_event(
+    data: dict,
+    event_emitter,
+    sse_event_type: str | None = None,
+) -> bool:
+    if not event_emitter:
+        return False
+
+    payload = _extract_hermes_tool_payload(data)
+    candidates = [
+        payload,
+        _recursive_tool_result(payload),
+        _extract_hermes_tool_result(payload),
+        _recursive_tool_arguments(payload),
+    ]
+
+    for candidate in candidates:
+        agui_event, _ = extract_agui_event(candidate)
+        if agui_event:
+            await event_emitter(agui_event)
+            return True
+
+    tool_name = _normalize_tool_identifier(_extract_hermes_tool_name(payload))
+    if 'agui_bridge_mcp' not in tool_name:
+        return False
+
+    arguments = _parse_compact_json(_recursive_tool_arguments(payload))
+    if isinstance(arguments, dict) and isinstance(arguments.get('arguments'), dict):
+        arguments = arguments['arguments']
+    if not isinstance(arguments, dict):
+        return False
+
+    if 'ask_interactive_choice' in tool_name:
+        agui_event, _ = extract_agui_event(
+            {
+                'mcp': AGUI_BRIDGE_MCP_NAME,
+                'kind': 'choice',
+                **arguments,
+            }
+        )
+    elif 'emit_artifact_preview' in tool_name:
+        agui_event, _ = extract_agui_event(
+            {
+                'mcp': AGUI_BRIDGE_MCP_NAME,
+                'kind': 'artifact',
+                **arguments,
+            }
+        )
+    else:
+        agui_event = None
+
+    if agui_event:
+        await event_emitter(agui_event)
+        return True
+
+    return False
 
 
 def _render_openai_tool_call_handler(item: dict, done: bool) -> str:
@@ -2555,6 +2614,7 @@ async def add_direct_file_context(
     content_file_ids: set[str] | None = None,
     user=None,
     require_public_urls: bool = False,
+    include_agui_bridge_context: bool = False,
 ) -> list:
     """Inject Hermes default session context and URL-only attachment references into the latest user message."""
     if not messages:
@@ -2570,6 +2630,18 @@ async def add_direct_file_context(
             '<system_default_context>\n'
             f'<current_conversation_user user_id="{user_id}" user_name="{user_name}" display_name="{display_name}" />\n'
             '</system_default_context>'
+        )
+
+    if include_agui_bridge_context:
+        context_blocks.append(
+            '<open_webui_agui_bridge>\n'
+            'If the user asks to choose, pick, select, answer a multiple-choice question, '
+            'or asks you to provide options for them to choose from, call the MCP tool '
+            '`agui-bridge-mcp.ask_interactive_choice` instead of writing the options only as plain text. '
+            'Pass a concise title, the question as message, and the options array. '
+            'After calling the tool, wait for the user selection before deciding the answer. '
+            'Use ordinary text only when no user choice is needed.\n'
+            '</open_webui_agui_bridge>'
         )
 
     file_tags = []
@@ -3516,6 +3588,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             current_file_ids,
             user=user,
             require_public_urls=hermes_session_delta and bool(files),
+            include_agui_bridge_context=hermes_session_delta,
         )
         metadata['direct_files'] = files
         metadata['files'] = []
@@ -4844,6 +4917,11 @@ async def streaming_chat_response_handler(response, ctx):
                             if data:
                                 if _is_hermes_tool_event(data, current_sse_event_type):
                                     await flush_pending_delta_data()
+                                    await _emit_agui_event_from_hermes_tool_event(
+                                        data,
+                                        event_emitter,
+                                        current_sse_event_type,
+                                    )
                                     output = _upsert_hermes_tool_event(output, data, current_sse_event_type)
                                     await event_emitter(
                                         {

@@ -53,8 +53,12 @@
 		chatRequestQueues,
 		desktopEvent
 	} from '$lib/stores';
-
-	import { WEBUI_API_BASE_URL } from '$lib/constants';
+	import {
+		activeInteraction,
+		aguiPanelVisible,
+		aguiStore,
+		normalizeInteractionRequest
+	} from '$lib/agui/stores/agui';
 
 	import {
 		convertMessagesToHistory,
@@ -110,6 +114,7 @@
 	import Messages from '$lib/components/chat/Messages.svelte';
 	import Navbar from '$lib/components/chat/Navbar.svelte';
 	import ChatSidePanel from './ChatSidePanel.svelte';
+	import InteractionCard from '$lib/agui/components/InteractionCard.svelte';
 	import EventConfirmDialog from '../common/ConfirmDialog.svelte';
 	import Placeholder from './Placeholder.svelte';
 	import FilesOverlay from './MessageInput/FilesOverlay.svelte';
@@ -121,6 +126,9 @@
 	import { getBanners } from '$lib/apis/configs';
 
 	export let chatIdProp = '';
+
+	const AGUI_ARTIFACT_STORAGE_PREFIX = 'open-webui:agui-artifact:';
+	const AGUI_ARTIFACT_CHAT_KEY = 'agui_artifact';
 
 	let loading = true;
 
@@ -598,6 +606,136 @@
 		}
 	};
 
+	const getAguiArtifactStorageKey = (id: string) =>
+		id ? `${AGUI_ARTIFACT_STORAGE_PREFIX}${id}` : '';
+
+	const normalizeAguiArtifact = (artifact: any) => {
+		if (!artifact?.artifact_type || artifact?.payload === undefined) return null;
+
+		return {
+			artifact_type: artifact.artifact_type,
+			payload: artifact.payload,
+			run_id: artifact.run_id || '',
+			timestamp: artifact.timestamp || Date.now()
+		};
+	};
+
+	const getLocalAguiArtifact = (id: string) => {
+		const key = getAguiArtifactStorageKey(id);
+		if (!key || typeof localStorage === 'undefined') return null;
+
+		const raw = localStorage.getItem(key);
+		if (!raw) return null;
+
+		try {
+			return normalizeAguiArtifact(JSON.parse(raw));
+		} catch (error) {
+			console.warn('Failed to restore AG-UI artifact from local cache', error);
+			return null;
+		}
+	};
+
+	const persistAguiArtifactToLocalCache = (id: string, artifact: any) => {
+		const key = getAguiArtifactStorageKey(id);
+		if (!key || typeof localStorage === 'undefined') return;
+
+		const normalized = normalizeAguiArtifact(artifact);
+		if (!normalized) return;
+
+		try {
+			localStorage.setItem(key, JSON.stringify(normalized));
+		} catch (error) {
+			console.warn('Failed to persist AG-UI artifact', error);
+		}
+	};
+
+	const persistAguiArtifactToChat = async (id: string, artifact: any) => {
+		if (!id || id.startsWith('local:') || $temporaryChatEnabled) return;
+
+		const normalized = normalizeAguiArtifact(artifact);
+		if (!normalized) return;
+
+		try {
+			const updatedChat = await updateChatById(localStorage.token, id, {
+				[AGUI_ARTIFACT_CHAT_KEY]: normalized
+			});
+
+			if ($chatId === id && updatedChat) {
+				chat = updatedChat;
+			}
+		} catch (error) {
+			console.warn('Failed to persist AG-UI artifact to chat', error);
+		}
+	};
+
+	const getAguiArtifactFromChatContent = (chatContent: any) =>
+		normalizeAguiArtifact(chatContent?.[AGUI_ARTIFACT_CHAT_KEY]);
+
+	const withAguiArtifact = (chatContent: any) => {
+		const artifact = normalizeAguiArtifact(
+			get(aguiStore).artifact ?? chat?.chat?.[AGUI_ARTIFACT_CHAT_KEY]
+		);
+
+		return artifact
+			? {
+					...chatContent,
+					[AGUI_ARTIFACT_CHAT_KEY]: artifact
+				}
+			: chatContent;
+	};
+
+	let restoredAguiChatId = '';
+	const restoreAguiArtifact = (id: string) => {
+		if (typeof localStorage === 'undefined') return;
+
+		if (restoredAguiChatId === id) return;
+		restoredAguiChatId = id;
+
+		const artifact = getLocalAguiArtifact(id);
+		if (!artifact) {
+			if (!generating) {
+				aguiStore.reset();
+			}
+			return;
+		}
+
+		aguiStore.restoreArtifact(artifact, false);
+		void persistAguiArtifactToChat(id, artifact);
+	};
+
+	$: restoreAguiArtifact($chatId);
+	$: if ($chatId && $aguiStore.artifact) {
+		persistAguiArtifactToLocalCache($chatId, $aguiStore.artifact);
+	}
+
+	const handleAguiEvent = (aguiType: string, data: any, targetChatId = $chatId) => {
+		const runId = data?.run_id || '';
+		const timestamp = data?.timestamp || Date.now();
+
+		if (aguiType === 'interaction_request') {
+			const interaction = normalizeInteractionRequest(data?.payload ?? data, runId, timestamp);
+			if (interaction) {
+				aguiStore.onInteractionRequest(interaction);
+			}
+			return;
+		}
+
+		if (aguiType === 'state_snapshot') {
+			const artifact = normalizeAguiArtifact({
+				artifact_type: data?.artifact_type,
+				payload: data?.payload,
+				run_id: runId,
+				timestamp
+			});
+
+			if (artifact) {
+				aguiStore.onStateSnapshot(artifact);
+				persistAguiArtifactToLocalCache(targetChatId, artifact);
+				void persistAguiArtifactToChat(targetChatId, artifact);
+			}
+		}
+	};
+
 	const chatEventHandler = async (event, cb) => {
 		console.log(event);
 
@@ -614,6 +752,11 @@
 			let message = eventMessage ?? history.messages[event.message_id];
 			const type = event?.data?.type ?? null;
 			const data = event?.data?.data ?? null;
+
+			if (type?.startsWith('agui:')) {
+				handleAguiEvent(type.replace('agui:', ''), data, event.chat_id || $chatId);
+				return;
+			}
 
 			if (type === 'chat:title') {
 				chatTitle.set(data);
@@ -1617,6 +1760,18 @@
 
 				chatFiles = chatContent?.files ?? [];
 
+				const persistedAguiArtifact = getAguiArtifactFromChatContent(chatContent);
+				if (persistedAguiArtifact) {
+					aguiStore.restoreArtifact(persistedAguiArtifact, false);
+					persistAguiArtifactToLocalCache($chatId, persistedAguiArtifact);
+				} else {
+					const cachedAguiArtifact = getLocalAguiArtifact($chatId);
+					if (cachedAguiArtifact) {
+						aguiStore.restoreArtifact(cachedAguiArtifact, false);
+						void persistAguiArtifactToChat($chatId, cachedAguiArtifact);
+					}
+				}
+
 				// Load tasks from chat-level DB field
 				chatTasks = chat?.tasks ?? [];
 
@@ -1758,13 +1913,17 @@
 
 		if ($chatId == _chatId) {
 			if (!$temporaryChatEnabled) {
-				chat = await updateChatById(localStorage.token, _chatId, {
-					models: selectedModels,
-					messages: messages,
-					history: history,
-					files: chatFiles,
-					meta: buildChatMeta()
-				});
+				chat = await updateChatById(
+					localStorage.token,
+					_chatId,
+					withAguiArtifact({
+						models: selectedModels,
+						messages: messages,
+						history: history,
+						files: chatFiles,
+						meta: buildChatMeta()
+					})
+				);
 
 				currentChatPage.set(1);
 				await chats.set(await getChatList(localStorage.token, $currentChatPage));
@@ -2089,7 +2248,7 @@
 	// Chat functions
 	//////////////////////////
 
-	const submitPrompt = async (inputContent, inputFiles) => {
+	const submitPrompt = async (inputContent, inputFiles, { displayContent = null } = {}) => {
 		const _files = structuredClone(inputFiles);
 
 		chatFiles.push(
@@ -2111,7 +2270,10 @@
 			parentId: history.currentId ?? null,
 			childrenIds: [],
 			role: 'user',
-			content: inputContent,
+			content: displayContent ?? inputContent,
+			...(displayContent && displayContent !== inputContent
+				? { aguiInteractionContent: inputContent }
+				: {}),
 			files: _files.length > 0 ? _files : undefined,
 			timestamp: Math.floor(Date.now() / 1000), // Unix epoch
 			models: selectedModels
@@ -2134,7 +2296,7 @@
 		await sendMessage(history, userMessageId);
 	};
 
-	const submitHandler = async (userPrompt, { _raw = false } = {}) => {
+	const submitHandler = async (userPrompt, { _raw = false, displayContent = null } = {}) => {
 		console.log('submitHandler', userPrompt, $chatId);
 
 		const _selectedModels = selectedModels.map((modelId) =>
@@ -2222,7 +2384,7 @@
 		files = [];
 		messageInput?.setText('');
 
-		await submitPrompt(userPrompt, _files);
+		await submitPrompt(userPrompt, _files, { displayContent });
 	};
 
 	const sendMessage = async (
@@ -2440,10 +2602,15 @@
 		}
 
 		const stream = model?.info?.params?.stream_response ?? true;
+		const userMessageContent =
+			userMessage?.aguiInteractionContent ??
+			userMessage?.merged?.content ??
+			userMessage?.content ??
+			'';
 		let messages = [
 			{
 				role: 'user',
-				content: processDetails(userMessage?.merged?.content ?? userMessage?.content ?? ''),
+				content: processDetails(userMessageContent),
 				...(userMessage?.files ? { files: userMessage.files } : {})
 			}
 		];
@@ -2901,7 +3068,7 @@
 		if (!$temporaryChatEnabled) {
 			chat = await createNewChat(
 				localStorage.token,
-				{
+				withAguiArtifact({
 					id: _chatId,
 					title: initialTitle,
 					models: selectedModels,
@@ -2910,7 +3077,7 @@
 					meta: buildChatMeta(),
 					tags: [],
 					timestamp: Date.now()
-				},
+				}),
 				folderId
 			);
 
@@ -2942,13 +3109,17 @@
 	const saveChatHandler = async (_chatId, history) => {
 		if ($chatId == _chatId) {
 			if (!$temporaryChatEnabled) {
-				chat = await updateChatById(localStorage.token, _chatId, {
-					models: selectedModels,
-					history: history,
-					messages: createMessagesList(history, history.currentId),
-					files: chatFiles,
-					meta: buildChatMeta()
-				});
+				chat = await updateChatById(
+					localStorage.token,
+					_chatId,
+					withAguiArtifact({
+						models: selectedModels,
+						history: history,
+						messages: createMessagesList(history, history.currentId),
+						files: chatFiles,
+						meta: buildChatMeta()
+					})
+				);
 			}
 		}
 	};
@@ -3001,6 +3172,48 @@
 		}
 	};
 
+	const buildAguiInteractionResponse = (interaction, response) => {
+		return `<agui_interaction_response>\n${JSON.stringify(
+			{
+				interaction_id: interaction.id,
+				kind: interaction.kind,
+				run_id: interaction.run_id,
+				response: {
+					type: response.type,
+					id: response.id,
+					label: response.label,
+					value: response.value
+				}
+			},
+			null,
+			2
+		)}\n</agui_interaction_response>`;
+	};
+
+	const buildAguiInteractionDisplayResponse = (interaction, response) => {
+		const value =
+			response?.type === 'custom'
+				? response?.value || response?.label || ''
+				: response?.label || response?.value || '';
+
+		if (response?.type === 'custom') {
+			return value ? `我的补充是：${value}，现在可以继续了。` : '我已补充信息，现在可以继续了。';
+		}
+
+		return value ? `我选择 ${value}，现在可以继续了。` : '我已完成选择，现在可以继续了。';
+	};
+
+	const submitAguiInteractionResponse = async ({ detail }) => {
+		const { interaction, response } = detail;
+		if (!interaction || !response) return;
+
+		aguiStore.clearInteraction(interaction.id);
+		await tick();
+		submitHandler(buildAguiInteractionResponse(interaction, response), {
+			displayContent: buildAguiInteractionDisplayResponse(interaction, response)
+		});
+	};
+
 	const archiveChatHandler = async (id: string) => {
 		try {
 			await archiveChatById(localStorage.token, id);
@@ -3051,7 +3264,7 @@
 	class="h-screen max-h-[100dvh] transition-width duration-200 ease-in-out {$showSidebar
 		? 'md:max-w-[calc(100%-var(--sidebar-width))]'
 		: ''} w-full max-w-full flex flex-col ml-5"
-	class:chat-side-panel-open={$showArtifacts || $showExpertAgentDrawer}
+	class:chat-side-panel-open={$showArtifacts || $showExpertAgentDrawer || $aguiPanelVisible}
 	id="chat-container"
 >
 	{#if !loading}
@@ -3110,7 +3323,7 @@
 
 								const savedChat = await createNewChat(
 									localStorage.token,
-									{
+									withAguiArtifact({
 										id: uuidv4(),
 										title: title.length > 50 ? `${title.slice(0, 50)}...` : title,
 										models: selectedModels,
@@ -3118,7 +3331,7 @@
 										messages: messages,
 										meta: buildChatMeta(),
 										timestamp: Date.now()
-									},
+									}),
 									null
 								);
 
@@ -3150,6 +3363,21 @@
 								>
 									<span aria-hidden="true">🧩</span>
 									<span class="truncate">专家模式：{activeExpertSkillName}</span>
+								</div>
+							</div>
+						{/if}
+
+						{#if $activeInteraction}
+							<div
+								class="pointer-events-none absolute inset-x-0 bottom-28 z-30 flex justify-center sm:bottom-24"
+							>
+								<div class="pointer-events-auto w-full">
+									<InteractionCard
+										interaction={$activeInteraction}
+										disabled={false}
+										on:submit={submitAguiInteractionResponse}
+										on:close={(e) => aguiStore.clearInteraction(e.detail.interaction.id)}
+									/>
 								</div>
 							</div>
 						{/if}
