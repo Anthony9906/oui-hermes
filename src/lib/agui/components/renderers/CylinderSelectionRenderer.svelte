@@ -85,7 +85,8 @@
 		HFZ: '/assets/images/expert-agent/cylinder-selection/airtac-hfz.png',
 		HLS: '/assets/images/expert-agent/cylinder-selection/airtac-hls.png',
 		HRQ: '/assets/images/expert-agent/cylinder-selection/airtac-hrq.png',
-		MD: '/assets/images/expert-agent/cylinder-selection/airtac-md.png'
+		MD: '/assets/images/expert-agent/cylinder-selection/airtac-md.png',
+		TNTR: '/assets/images/expert-agent/cylinder-selection/airtac-tntr.png'
 	};
 
 	const normalizeSummaryValue = (val: any) =>
