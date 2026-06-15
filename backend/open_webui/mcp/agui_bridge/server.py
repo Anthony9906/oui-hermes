@@ -39,14 +39,23 @@ def _event(
 
 @mcp.tool()
 def emit_artifact_preview(
-    artifact_type: Literal['generic-preview', 'generic-json', 'html-preview', 'markdown-preview'],
+    artifact_type: Literal[
+        'generic-preview',
+        'generic-json',
+        'agui-generic',
+        'html-preview',
+        'markdown-preview',
+        'cylinder-selection-public',
+        'motor-selection-public',
+    ],
     payload: dict[str, Any],
     run_id: str | None = None,
 ) -> dict[str, Any]:
     """Show an AG-UI artifact preview in Open WebUI.
 
-    Use html-preview for trusted HTML strings, markdown-preview for Markdown content,
-    and generic-preview/generic-json for structured JSON payloads.
+    Use cylinder-selection-public and motor-selection-public for expo selection
+    result payloads, html-preview for trusted HTML strings, markdown-preview for
+    Markdown content, and generic-preview/generic-json for structured JSON payloads.
     """
 
     return _event(

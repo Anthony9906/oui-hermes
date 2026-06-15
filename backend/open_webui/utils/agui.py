@@ -8,8 +8,11 @@ AGUI_BRIDGE_MARKER = 'openwebui.agui_bridge_mcp'
 SUPPORTED_ARTIFACT_TYPES = {
     'generic-preview',
     'generic-json',
+    'agui-generic',
     'html-preview',
     'markdown-preview',
+    'cylinder-selection-public',
+    'motor-selection-public',
 }
 
 

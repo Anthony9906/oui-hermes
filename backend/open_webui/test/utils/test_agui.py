@@ -25,6 +25,25 @@ def test_extracts_artifact_event_from_bridge_payload():
     }
 
 
+def test_extracts_selection_renderer_artifact_types():
+    event, message = extract_agui_event(
+        {
+            'bridge': 'openwebui.agui_bridge_mcp',
+            'kind': 'artifact',
+            'artifact_type': 'motor-selection-public',
+            'payload': {
+                'type': 'motor-selection-public',
+                'version': '1.0',
+                'data': {'recommendations': []},
+            },
+        }
+    )
+
+    assert message == 'AG-UI artifact preview is now visible to the user.'
+    assert event['type'] == 'agui:state_snapshot'
+    assert event['data']['artifact_type'] == 'motor-selection-public'
+
+
 def test_extracts_choice_event_from_mcp_text_payload():
     event, message = extract_agui_event(
         '{"mcp":"agui-bridge-mcp","kind":"choice","title":"Pick","message":"Choose","options":["A","B"]}'
