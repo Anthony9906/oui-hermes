@@ -4,6 +4,7 @@
 
 	export let payload: any;
 	let modelViewerFailed = false;
+	let enlargedModelPreview: any = null;
 
 	$: data = payload?.data || payload || {};
 	$: scenario = data?.scenarioInfo || {};
@@ -66,7 +67,6 @@
 	};
 
 	const motorPreviewModelUrl = '/assets/model/MS1H4-10B30CB-A330R.glb';
-	const motorPreviewIosUrl = '/assets/model/MS1H4-10B30CB-A330R-ar-x180.usdz';
 	const motorPreviewOrientation = '0deg 180deg 0deg';
 
 	const normalizeSummaryValue = (val: any) =>
@@ -90,6 +90,14 @@
 
 	const getModelPreviewUrl = (_rec: any) => motorPreviewModelUrl;
 
+	const openModelPreview = (rec: any) => {
+		enlargedModelPreview = rec;
+	};
+
+	const closeModelPreview = () => {
+		enlargedModelPreview = null;
+	};
+
 	const getSpecChips = (rec: any) =>
 		[
 			rec?.power,
@@ -108,6 +116,14 @@
 		}
 	});
 </script>
+
+<svelte:window
+	on:keydown={(event) => {
+		if (event.key === 'Escape') {
+			closeModelPreview();
+		}
+	}}
+/>
 
 <div class="artifact-container min-h-full bg-[#F8FAFC] font-sans text-[#26384f]">
 	<div class="px-5 pt-5 pb-3">
@@ -222,7 +238,7 @@
 								<span>3D/外观预览 / Model Preview</span>
 							</div>
 							{#if getModelPreviewUrl(primaryRec)}
-								<div class="overflow-hidden rounded-lg bg-white/90">
+								<div class="relative overflow-hidden rounded-lg bg-white/90">
 									{#if modelViewerFailed}
 										<a
 											class="block break-all px-3 py-3 text-xs font-semibold text-[#155E75] transition hover:bg-white"
@@ -236,13 +252,8 @@
 										<model-viewer
 											class="h-48 w-full bg-[#f8fafc]"
 											src={getModelPreviewUrl(primaryRec)}
-											ios-src={motorPreviewIosUrl}
 											orientation={motorPreviewOrientation}
 											camera-controls
-											ar
-											ar-modes="webxr scene-viewer quick-look"
-											ar-placement="floor"
-											ar-scale="auto"
 											auto-rotate
 											rotation-per-second="24deg"
 											shadow-intensity="0.65"
@@ -250,6 +261,15 @@
 											loading="eager"
 											reveal="auto"
 										></model-viewer>
+										<button
+											type="button"
+											class="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-[#155E75] shadow-lg ring-1 ring-black/10 transition hover:bg-white hover:text-[#0f4757] focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#155E75]"
+											aria-label="放大查看 3D 模型"
+											title="放大查看 3D 模型"
+											on:click={() => openModelPreview(primaryRec)}
+										>
+											<LucideIcon name="maximize-2" className="size-4" strokeWidth="2" />
+										</button>
 									{/if}
 								</div>
 								<div class="mt-2 text-xs text-white/70">
@@ -354,4 +374,59 @@
 			AI can make mistakes — verify all selections with your engineering team before use.
 		</p>
 	</div>
+
+	{#if enlargedModelPreview && getModelPreviewUrl(enlargedModelPreview)}
+		<div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 sm:p-6">
+			<button
+				type="button"
+				class="absolute inset-0 h-full w-full cursor-default"
+				aria-label="关闭 3D 模型预览"
+				on:click={closeModelPreview}
+			></button>
+			<div
+				class="relative z-10 flex h-[82vh] w-[min(92vw,1040px)] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+				role="dialog"
+				aria-modal="true"
+				aria-label="放大查看 3D 模型"
+			>
+				<div
+					class="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-3"
+				>
+					<div class="min-w-0">
+						<div class="flex items-center gap-2 text-sm font-bold text-[#155E75]">
+							<LucideIcon name="box" className="size-4" strokeWidth="1.8" />
+							<span>3D/外观预览 / Model Preview</span>
+						</div>
+						{#if enlargedModelPreview.model}
+							<div class="mt-0.5 truncate text-xs font-semibold text-slate-500">
+								{enlargedModelPreview.model}
+							</div>
+						{/if}
+					</div>
+					<button
+						type="button"
+						class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#155E75]/30"
+						aria-label="关闭 3D 模型预览"
+						on:click={closeModelPreview}
+					>
+						<LucideIcon name="x" className="size-5" strokeWidth="2" />
+					</button>
+				</div>
+				<div class="min-h-0 flex-1 bg-[#f8fafc]">
+					<model-viewer
+						class="h-full w-full bg-[#f8fafc]"
+						src={getModelPreviewUrl(enlargedModelPreview)}
+						orientation={motorPreviewOrientation}
+						camera-controls
+						auto-rotate
+						rotation-per-second="18deg"
+						shadow-intensity="0.65"
+						exposure="0.9"
+						loading="eager"
+						reveal="auto"
+					></model-viewer>
+				</div>
+			</div>
+		</div>
+	{/if}
 </div>
