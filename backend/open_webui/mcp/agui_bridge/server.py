@@ -3,6 +3,7 @@ import time
 from typing import Any, Literal
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp.server import TransportSecuritySettings
 
 
 BRIDGE_MARKER = 'openwebui.agui_bridge_mcp'
@@ -15,6 +16,22 @@ mcp = FastMCP(
         'answer a multiple-choice question, or asks you to provide options for them to choose from, '
         'call ask_interactive_choice instead of writing the options only as plain text. '
         'Do not use this server for approvals.'
+    ),
+    transport_security=TransportSecuritySettings(
+        allowed_hosts=[
+            '127.0.0.1:*',
+            'localhost:*',
+            '[::1]:*',
+            'agui-bridge-mcp:*',
+            'oui-hermes-agui-mcp:*',
+        ],
+        allowed_origins=[
+            'http://127.0.0.1:*',
+            'http://localhost:*',
+            'http://[::1]:*',
+            'http://agui-bridge-mcp:*',
+            'http://oui-hermes-agui-mcp:*',
+        ],
     ),
 )
 
@@ -108,8 +125,12 @@ def main() -> None:
         choices=['streamable-http', 'sse', 'stdio'],
         help='MCP transport to use. Open WebUI MCP clients should use streamable-http.',
     )
+    parser.add_argument('--host', default='127.0.0.1', help='Host to bind for HTTP transports.')
+    parser.add_argument('--port', default=8000, type=int, help='Port to bind for HTTP transports.')
     args = parser.parse_args()
 
+    mcp.settings.host = args.host
+    mcp.settings.port = args.port
     mcp.run(transport=args.transport)
 
 
