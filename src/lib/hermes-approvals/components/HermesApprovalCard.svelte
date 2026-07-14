@@ -37,7 +37,7 @@
 </script>
 
 <div
-	class="mx-auto w-full max-w-2xl px-3 sm:px-4"
+	class="mx-auto w-full max-w-3xl px-3 sm:px-4"
 	in:fly={{ y: 18, duration: 220, easing: cubicOut }}
 	out:scale={{ start: 0.98, duration: 140, easing: cubicOut }}
 >
