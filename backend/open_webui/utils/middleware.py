@@ -806,7 +806,7 @@ def _find_tool_call_item(output: list, call_id: str, name: str) -> dict | None:
             continue
         if call_id and item.get('call_id') == call_id:
             return item
-        if item.get('name') == name and item.get('status') != 'completed':
+        if not call_id and item.get('name') == name and item.get('status') != 'completed':
             fallback = item
     return fallback
 

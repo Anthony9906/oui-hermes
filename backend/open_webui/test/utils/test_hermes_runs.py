@@ -1,8 +1,11 @@
+import json
+
 import pytest
 
 from open_webui.utils.hermes_runs import (
     HermesRun,
     HermesRunRegistry,
+    _iter_sse_json_events,
     hermes_run_capabilities_satisfied,
     hermes_run_reasoning_delta,
 )
@@ -97,3 +100,18 @@ def test_run_reasoning_accepts_only_dedicated_delta_events():
         )
         == ''
     )
+
+
+@pytest.mark.asyncio
+async def test_sse_parser_accepts_a_single_data_line_larger_than_aiohttp_limit():
+    payload = {'event': 'tool.completed', 'result': 'x' * 150_000}
+    encoded = f'data: {json.dumps(payload)}\n\n'.encode()
+
+    class ChunkedContent:
+        async def iter_chunked(self, _size):
+            for offset in range(0, len(encoded), 16_384):
+                yield encoded[offset : offset + 16_384]
+
+    events = [event async for event in _iter_sse_json_events(ChunkedContent())]
+
+    assert events == [payload]

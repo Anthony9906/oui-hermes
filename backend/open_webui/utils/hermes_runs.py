@@ -111,6 +111,50 @@ def _sse(data: dict[str, Any], event: str | None = None) -> bytes:
     return f'{prefix}data: {json.dumps(data, ensure_ascii=False)}\n\n'.encode()
 
 
+async def _iter_sse_json_events(content) -> AsyncIterator[dict[str, Any]]:
+    """Parse SSE from transport chunks without aiohttp's per-line read limit."""
+    buffer = bytearray()
+    data_lines: list[bytes] = []
+
+    async def decode_event():
+        if not data_lines:
+            return None
+        raw_data = b'\n'.join(data_lines).decode('utf-8', 'replace').strip()
+        data_lines.clear()
+        if not raw_data or raw_data == '[DONE]':
+            return None
+        try:
+            event = json.loads(raw_data)
+        except json.JSONDecodeError:
+            return None
+        return event if isinstance(event, dict) else None
+
+    async for chunk in content.iter_chunked(64 * 1024):
+        if not chunk:
+            continue
+        buffer.extend(chunk)
+        while True:
+            newline = buffer.find(b'\n')
+            if newline < 0:
+                break
+            raw_line = bytes(buffer[:newline]).rstrip(b'\r')
+            del buffer[: newline + 1]
+            if not raw_line:
+                event = await decode_event()
+                if event is not None:
+                    yield event
+            elif raw_line.startswith(b'data:'):
+                data_lines.append(raw_line[len(b'data:') :].lstrip())
+
+    if buffer:
+        raw_line = bytes(buffer).rstrip(b'\r')
+        if raw_line.startswith(b'data:'):
+            data_lines.append(raw_line[len(b'data:') :].lstrip())
+    event = await decode_event()
+    if event is not None:
+        yield event
+
+
 def _message_content(payload: dict[str, Any]) -> Any:
     messages = payload.get('messages') or []
     for message in reversed(messages):
@@ -382,16 +426,7 @@ async def create_hermes_run_response(
                 yield _sse({'error': {'message': error_text or 'Failed to subscribe to Agent task.'}})
                 return
 
-            async for raw_line in events_response.content:
-                line = raw_line.decode('utf-8', 'replace').strip()
-                if not line or line.startswith(':') or not line.startswith('data:'):
-                    continue
-                raw_data = line[len('data:') :].strip()
-                try:
-                    event = json.loads(raw_data)
-                except json.JSONDecodeError:
-                    continue
-
+            async for event in _iter_sse_json_events(events_response.content):
                 event_type = str(event.get('event') or '')
                 if event_type == 'message.delta':
                     delta = str(event.get('delta') or '')
@@ -447,7 +482,12 @@ async def create_hermes_run_response(
                 if event_type in {'tool.completed', 'tool.failed'}:
                     tool_name = str(event.get('tool') or event.get('tool_name') or 'tool')
                     call_id = str(event.get('tool_call_id') or event.get('toolCallId') or '')
-                    if not call_id and tool_calls[tool_name]:
+                    if call_id:
+                        try:
+                            tool_calls[tool_name].remove(call_id)
+                        except ValueError:
+                            pass
+                    elif tool_calls[tool_name]:
                         call_id = tool_calls[tool_name].popleft()
                     yield _sse(
                         {
