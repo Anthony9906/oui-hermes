@@ -311,7 +311,7 @@ async def create_hermes_run_response(
     chat_id = str(metadata.get('chat_id') or '')
     message_id = str(metadata.get('message_id') or '')
     if not chat_id or not message_id:
-        raise HTTPException(status_code=400, detail='Hermes Runs require chat_id and message_id.')
+        raise HTTPException(status_code=400, detail='Agent tasks require chat_id and message_id.')
 
     model_id = str(payload.get('model') or '')
     run_payload = {
@@ -343,11 +343,11 @@ async def create_hermes_run_response(
             if isinstance(start_data, dict)
             else str(start_data)
         )
-        raise HTTPException(status_code=start_response.status, detail=message or 'Failed to start Hermes run.')
+        raise HTTPException(status_code=start_response.status, detail=message or 'Failed to start Agent task.')
 
     run_id = str(start_data.get('run_id') or '')
     if not run_id:
-        raise HTTPException(status_code=502, detail='Hermes did not return a run_id.')
+        raise HTTPException(status_code=502, detail='Agent did not return a task ID.')
 
     run = HermesRun(
         run_id=run_id,
@@ -379,7 +379,7 @@ async def create_hermes_run_response(
             )
             if events_response.status >= 400:
                 error_text = await events_response.text()
-                yield _sse({'error': {'message': error_text or 'Failed to subscribe to Hermes run.'}})
+                yield _sse({'error': {'message': error_text or 'Failed to subscribe to Agent task.'}})
                 return
 
             async for raw_line in events_response.content:
