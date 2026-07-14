@@ -30,6 +30,7 @@ REQUIRED_RUN_FEATURES = frozenset(
         'approval_events',
         'run_tool_arguments',
         'run_tool_results',
+        'run_reasoning_deltas',
     }
 )
 _capability_cache: dict[str, tuple[float, bool]] = {}
@@ -54,6 +55,18 @@ def hermes_run_capabilities_satisfied(payload: Any) -> bool:
         return False
     features = payload.get('features')
     return isinstance(features, dict) and all(features.get(name) is True for name in REQUIRED_RUN_FEATURES)
+
+
+def hermes_run_reasoning_delta(event: Any) -> str:
+    """Return only dedicated Runs reasoning deltas.
+
+    Hermes' legacy ``reasoning.available`` tool-progress event contains an
+    assistant-content fallback for TUI displays, not model reasoning. Treating
+    it as ``reasoning_content`` duplicates the final answer in Open WebUI.
+    """
+    if not isinstance(event, dict) or event.get('event') != 'reasoning.delta':
+        return ''
+    return str(event.get('delta') or '')
 
 
 async def is_hermes_runs_capable(
@@ -394,21 +407,23 @@ async def create_hermes_run_response(
                         )
                     continue
 
-                if event_type == 'reasoning.available':
-                    yield _sse(
-                        {
-                            'id': completion_id,
-                            'object': 'chat.completion.chunk',
-                            'model': model_id,
-                            'choices': [
-                                {
-                                    'index': 0,
-                                    'delta': {'reasoning_content': str(event.get('text') or '')},
-                                    'finish_reason': None,
-                                }
-                            ],
-                        }
-                    )
+                if event_type in {'reasoning.delta', 'reasoning.available'}:
+                    reasoning_delta = hermes_run_reasoning_delta(event)
+                    if reasoning_delta:
+                        yield _sse(
+                            {
+                                'id': completion_id,
+                                'object': 'chat.completion.chunk',
+                                'model': model_id,
+                                'choices': [
+                                    {
+                                        'index': 0,
+                                        'delta': {'reasoning_content': reasoning_delta},
+                                        'finish_reason': None,
+                                    }
+                                ],
+                            }
+                        )
                     continue
 
                 if event_type == 'tool.started':

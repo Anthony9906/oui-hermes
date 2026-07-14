@@ -4,6 +4,7 @@ from open_webui.utils.hermes_runs import (
     HermesRun,
     HermesRunRegistry,
     hermes_run_capabilities_satisfied,
+    hermes_run_reasoning_delta,
 )
 
 
@@ -70,8 +71,24 @@ def test_run_capabilities_require_approval_and_rich_tool_events():
         'approval_events': True,
         'run_tool_arguments': True,
         'run_tool_results': True,
+        'run_reasoning_deltas': True,
     }
     assert hermes_run_capabilities_satisfied({'features': features}) is True
 
     features['run_tool_arguments'] = False
     assert hermes_run_capabilities_satisfied({'features': features}) is False
+
+
+def test_run_reasoning_accepts_only_dedicated_delta_events():
+    assert (
+        hermes_run_reasoning_delta(
+            {'event': 'reasoning.delta', 'delta': 'Inspect the file before editing.'}
+        )
+        == 'Inspect the file before editing.'
+    )
+    assert (
+        hermes_run_reasoning_delta(
+            {'event': 'reasoning.available', 'text': 'This is the final answer.'}
+        )
+        == ''
+    )
