@@ -12,7 +12,7 @@ const request = (id: string, chatId: string, sequence = 1) => ({
 	description: 'write outside workspace',
 	pattern_key: 'write',
 	pattern_keys: ['write'],
-	choices: ['once', 'session', 'always', 'deny'] as const,
+	choices: ['once', 'session', 'deny'] as const,
 	sequence,
 	status: 'pending' as const,
 	requested_at: sequence

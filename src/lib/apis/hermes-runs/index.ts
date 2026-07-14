@@ -1,6 +1,6 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
 
-export type HermesApprovalChoice = 'once' | 'session' | 'always' | 'deny';
+export type HermesApprovalChoice = 'once' | 'session' | 'deny';
 
 const parseError = async (response: Response) => {
 	try {

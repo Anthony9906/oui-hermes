@@ -20,7 +20,7 @@ from open_webui.utils.session_pool import cleanup_response, get_session
 
 log = logging.getLogger(__name__)
 
-APPROVAL_CHOICES = frozenset({'once', 'session', 'always', 'deny'})
+APPROVAL_CHOICES = frozenset({'once', 'session', 'deny'})
 TERMINAL_RUN_STATUSES = frozenset({'completed', 'failed', 'cancelled'})
 REQUIRED_RUN_FEATURES = frozenset(
     {
@@ -216,7 +216,7 @@ class HermesRunRegistry:
                 pattern_keys=[str(value) for value in data.get('pattern_keys') or []],
                 choices=[
                     str(value)
-                    for value in data.get('choices') or ['once', 'session', 'always', 'deny']
+                    for value in data.get('choices') or ['once', 'session', 'deny']
                     if str(value) in APPROVAL_CHOICES
                 ],
                 sequence=len(run.approvals) + 1,

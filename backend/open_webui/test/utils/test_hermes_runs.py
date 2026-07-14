@@ -28,7 +28,11 @@ async def test_approval_registry_enforces_owner_and_fifo():
     await registry.register(_run())
     _, first = await registry.add_approval(
         'run_1',
-        {'command': 'mkdir /tmp/a', 'description': 'write', 'choices': ['once', 'deny']},
+        {
+            'command': 'mkdir /tmp/a',
+            'description': 'write',
+            'choices': ['once', 'session', 'always', 'deny'],
+        },
     )
     await registry.add_approval(
         'run_1',
@@ -40,6 +44,7 @@ async def test_approval_registry_enforces_owner_and_fifo():
 
     pending = await registry.list_pending('user_1', 'chat_1')
     assert [item['sequence'] for item in pending] == [1, 2]
+    assert pending[0]['choices'] == ['once', 'session', 'deny']
 
     run, claimed = await registry.claim_approval('run_1', first.id, 'user_1', 'chat_1', 'once')
     assert run.status == 'waiting_for_approval'

@@ -2346,7 +2346,7 @@
 	const submitHandler = async (userPrompt, { _raw = false, displayContent = null } = {}) => {
 		console.log('submitHandler', userPrompt, $chatId);
 		if ($activeHermesApproval) {
-			toast.error('请先处理当前 Hermes 授权请求，再发送新消息。');
+			toast.error('请先处理当前 Agent 授权请求，再发送新消息。');
 			return;
 		}
 
@@ -3280,7 +3280,7 @@
 				choice
 			);
 			hermesApprovalStore.resolve(approval.approval_request_id, choice);
-			toast.success(choice === 'deny' ? '已拒绝该操作，Hermes 将继续处理。' : '授权已提交，Hermes 正在继续执行。');
+			toast.success(choice === 'deny' ? '已拒绝该操作，Agent 将继续处理。' : '授权已提交，Agent 正在继续执行。');
 		} catch (error) {
 			hermesApprovalStore.markPending(approval.approval_request_id);
 			toast.error(`${error}`);

@@ -22,7 +22,7 @@ router = APIRouter()
 class HermesApprovalResponseForm(BaseModel):
     chat_id: str
     approval_request_id: str
-    choice: Literal['once', 'session', 'always', 'deny']
+    choice: Literal['once', 'session', 'deny']
 
 
 @router.get('/approvals')
@@ -57,7 +57,7 @@ async def respond_to_approval(
             form_data.choice,
         )
     except LookupError:
-        raise HTTPException(status_code=404, detail='Hermes run not found for this chat.')
+        raise HTTPException(status_code=404, detail='Agent task not found for this chat.')
     except RuntimeError as exc:
         code = str(exc)
         if code == 'approval_not_at_queue_head':
@@ -97,7 +97,7 @@ async def respond_to_approval(
                 if isinstance(response_data, dict)
                 else str(response_data)
             )
-            raise HTTPException(status_code=response.status, detail=message or 'Hermes rejected the approval response.')
+            raise HTTPException(status_code=response.status, detail=message or 'Agent rejected the approval response.')
 
         await hermes_run_registry.finish_approval(run_id, approval.id, form_data.choice)
         return {
@@ -112,7 +112,7 @@ async def respond_to_approval(
     except Exception as exc:
         await hermes_run_registry.release_approval(run_id, approval.id)
         log.exception('Failed to respond to Hermes approval for run %s', run_id)
-        raise HTTPException(status_code=502, detail=f'Failed to reach Hermes: {exc}')
+        raise HTTPException(status_code=502, detail=f'Failed to reach Agent: {exc}')
     finally:
         if response is not None:
             await cleanup_response(response)
