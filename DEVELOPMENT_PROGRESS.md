@@ -135,6 +135,17 @@ Status: patched
 - The chat input menu no longer shows screenshot capture, existing-file attachment, or attached knowledge entries. Direct file upload, webpage attachment, notes, chat references, and cloud-drive integrations remain.
 - PDF/document workflow cleanup removed old RAG-facing preview/content controls from the user path.
 
+### Hermes Runs Approval Passthrough
+
+Status: patched and runtime verified
+
+- Open WebUI can opt into Hermes Runs when `HERMES_RUN_APPROVALS_ENABLED=true` and the upstream capability response advertises run submission, SSE events, approval responses, approval events, tool arguments, and tool results.
+- Hermes approval requests are translated into dedicated `hermes:approval_request` frontend events and rendered by an approval card with once, session, always, and deny choices. Responses use a dedicated backend endpoint and resume the existing Hermes run instead of creating a new chat message.
+- Approval state, ownership checks, FIFO ordering, and idempotency are isolated in a separate Hermes approval registry and store. The existing `agui:*` event path, AG-UI interaction store, and MCP choice submission flow remain unchanged.
+- Pending approvals can be restored after a browser refresh while the Open WebUI backend process remains alive. The registry is process-local, so backend restart recovery and multi-worker coordination require a future persistent/shared store.
+- Runtime verification created a real approval request through Open WebUI, denied it through the new endpoint, observed Hermes resume the original run, and confirmed the guarded command did not execute.
+- Hermes command allowlists must not broadly permit shell `-c` or `-lc` invocations, because such rules bypass command-specific manual approval. The local expert-agent and task-agent profiles now use an empty command allowlist with manual approvals enabled.
+
 ### Local Runtime
 
 Status: verified with caveats

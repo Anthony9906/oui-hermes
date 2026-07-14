@@ -69,6 +69,11 @@ from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.headers import include_user_info_headers
 from open_webui.utils.anthropic import is_anthropic_url, get_anthropic_models
 from open_webui.utils.hermes import apply_hermes_session_header, build_hermes_delta_payload
+from open_webui.utils.hermes_runs import (
+    create_hermes_run_response,
+    hermes_run_approvals_enabled,
+    is_hermes_runs_capable,
+)
 
 log = logging.getLogger(__name__)
 
@@ -1172,6 +1177,21 @@ async def generate_chat_completion(
             payload['logit_bias'] = json.loads(logit_bias)
 
     headers, cookies = await get_headers_and_cookies(request, url, key, api_config, metadata, user=user)
+
+    if (
+        metadata
+        and metadata.get('hermes_session_delta')
+        and hermes_run_approvals_enabled()
+        and await is_hermes_runs_capable(url, headers, cookies)
+    ):
+        return await create_hermes_run_response(
+            payload=payload,
+            metadata=metadata,
+            user_id=user.id,
+            base_url=url,
+            headers=headers,
+            cookies=cookies,
+        )
 
     is_responses = api_config.get('api_type') == 'responses'
 

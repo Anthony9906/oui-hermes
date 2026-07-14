@@ -92,6 +92,7 @@ from open_webui.routers import (
     models,
     evaluations,
     expert_agents,
+    hermes_runs,
     users,
     utils,
     scim,
@@ -1331,6 +1332,7 @@ app.mount('/ws', socket_app)
 
 
 app.include_router(openai.router, prefix='/openai', tags=['openai'])
+app.include_router(hermes_runs.router, prefix='/api/v1/hermes', tags=['hermes-runs'])
 
 
 app.include_router(pipelines.router, prefix='/api/v1/pipelines', tags=['pipelines'])

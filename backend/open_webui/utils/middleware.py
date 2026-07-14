@@ -4915,6 +4915,25 @@ async def streaming_chat_response_handler(response, ctx):
                             )
 
                             if data:
+                                if current_sse_event_type == 'hermes.approval.request':
+                                    await flush_pending_delta_data()
+                                    await event_emitter(
+                                        {
+                                            'type': 'hermes:approval_request',
+                                            'data': data,
+                                        }
+                                    )
+                                    continue
+
+                                if current_sse_event_type == 'hermes.approval.responded':
+                                    await event_emitter(
+                                        {
+                                            'type': 'hermes:approval_responded',
+                                            'data': data,
+                                        }
+                                    )
+                                    continue
+
                                 if _is_hermes_tool_event(data, current_sse_event_type):
                                     await flush_pending_delta_data()
                                     await _emit_agui_event_from_hermes_tool_event(

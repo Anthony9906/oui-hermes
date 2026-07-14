@@ -59,6 +59,11 @@
 		aguiStore,
 		normalizeInteractionRequest
 	} from '$lib/agui/stores/agui';
+	import {
+		activeHermesApproval,
+		hermesApprovalStore,
+		type HermesApprovalRequest
+	} from '$lib/hermes-approvals/stores/approvals';
 
 	import {
 		convertMessagesToHistory,
@@ -86,6 +91,11 @@
 		updateChatFolderIdById
 	} from '$lib/apis/chats';
 	import { generateOpenAIChatCompletion } from '$lib/apis/openai';
+	import {
+		getPendingHermesApprovals,
+		respondToHermesApproval,
+		type HermesApprovalChoice
+	} from '$lib/apis/hermes-runs';
 	import { processWeb, processWebSearch, processYoutubeVideo } from '$lib/apis/retrieval';
 	import { getAndUpdateUserLocation, getUserSettings } from '$lib/apis/users';
 	import {
@@ -115,6 +125,7 @@
 	import Navbar from '$lib/components/chat/Navbar.svelte';
 	import ChatSidePanel from './ChatSidePanel.svelte';
 	import InteractionCard from '$lib/agui/components/InteractionCard.svelte';
+	import HermesApprovalCard from '$lib/hermes-approvals/components/HermesApprovalCard.svelte';
 	import EventConfirmDialog from '../common/ConfirmDialog.svelte';
 	import Placeholder from './Placeholder.svelte';
 	import FilesOverlay from './MessageInput/FilesOverlay.svelte';
@@ -139,6 +150,29 @@
 	let processing = '';
 	let messagesContainerElement: HTMLDivElement;
 	let activeExpertSkillName = '';
+	let restoredHermesApprovalsChatId = '';
+
+	const restoreHermesApprovals = async (targetChatId: string) => {
+		if (typeof localStorage === 'undefined') return;
+		if (!targetChatId || targetChatId.startsWith('local:')) return;
+		if (restoredHermesApprovalsChatId === targetChatId) return;
+		restoredHermesApprovalsChatId = targetChatId;
+
+		const result = await getPendingHermesApprovals(localStorage.token, targetChatId).catch(
+			(error) => {
+				console.debug('Unable to restore pending Hermes approvals', error);
+				return null;
+			}
+		);
+		if (result?.items) {
+			hermesApprovalStore.replacePendingForChat(targetChatId, result.items);
+		}
+	};
+
+	$: {
+		hermesApprovalStore.setActiveChat($chatId || '');
+		void restoreHermesApprovals($chatId || '');
+	}
 
 	const focusChatInput = ({ defer = false } = {}) => {
 		if ($mobile || $showCallOverlay) {
@@ -752,6 +786,19 @@
 			let message = eventMessage ?? history.messages[event.message_id];
 			const type = event?.data?.type ?? null;
 			const data = event?.data?.data ?? null;
+
+			if (type === 'hermes:approval_request') {
+				hermesApprovalStore.onRequest(data as HermesApprovalRequest);
+				return;
+			}
+
+			if (type === 'hermes:approval_responded') {
+				hermesApprovalStore.resolveFirstForRun(
+					data?.run_id,
+					data?.choice as HermesApprovalChoice
+				);
+				return;
+			}
 
 			if (type?.startsWith('agui:')) {
 				handleAguiEvent(type.replace('agui:', ''), data, event.chat_id || $chatId);
@@ -2298,6 +2345,10 @@
 
 	const submitHandler = async (userPrompt, { _raw = false, displayContent = null } = {}) => {
 		console.log('submitHandler', userPrompt, $chatId);
+		if ($activeHermesApproval) {
+			toast.error('请先处理当前 Hermes 授权请求，再发送新消息。');
+			return;
+		}
 
 		const _selectedModels = selectedModels.map((modelId) =>
 			$models.map((m) => m.id).includes(modelId) ? modelId : ''
@@ -3214,6 +3265,28 @@
 		});
 	};
 
+	const submitHermesApprovalResponse = async ({ detail }) => {
+		const approval = detail?.approval as HermesApprovalRequest;
+		const choice = detail?.choice as HermesApprovalChoice;
+		if (!approval || !choice || approval.status === 'responding') return;
+
+		hermesApprovalStore.markResponding(approval.approval_request_id, choice);
+		try {
+			await respondToHermesApproval(
+				localStorage.token,
+				approval.run_id,
+				approval.chat_id,
+				approval.approval_request_id,
+				choice
+			);
+			hermesApprovalStore.resolve(approval.approval_request_id, choice);
+			toast.success(choice === 'deny' ? '已拒绝该操作，Hermes 将继续处理。' : '授权已提交，Hermes 正在继续执行。');
+		} catch (error) {
+			hermesApprovalStore.markPending(approval.approval_request_id);
+			toast.error(`${error}`);
+		}
+	};
+
 	const archiveChatHandler = async (id: string) => {
 		try {
 			await archiveChatById(localStorage.token, id);
@@ -3367,7 +3440,19 @@
 							</div>
 						{/if}
 
-						{#if $activeInteraction}
+					{#if $activeHermesApproval}
+						<div
+							class="pointer-events-none absolute inset-x-0 bottom-28 z-40 flex justify-center sm:bottom-24"
+						>
+							<div class="pointer-events-auto w-full">
+								<HermesApprovalCard
+									approval={$activeHermesApproval}
+									disabled={$activeHermesApproval.status === 'responding'}
+									on:submit={submitHermesApprovalResponse}
+								/>
+							</div>
+						</div>
+					{:else if $activeInteraction}
 							<div
 								class="pointer-events-none absolute inset-x-0 bottom-28 z-30 flex justify-center sm:bottom-24"
 							>
