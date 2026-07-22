@@ -1,188 +1,105 @@
 # Development Progress
 
-Last updated: 2026-05-25
+Last updated: 2026-07-22
 
-This is the compact handoff log for Hermes-specific Open WebUI development. Keep it evidence-based: preserve current outcomes, active contracts, validation rules, and durable caveats. Do not append debugging chronology.
+This is the compact handoff for the Hermes-focused Open WebUI fork. It keeps only the current baseline, durable integration contracts, verified behavior, active risks, and next actions; implementation chronology belongs in Git history.
 
-## Current Status
+## Current Baseline
 
-Conclusion: verified for the core chat, tool rendering, Expert Agent, R2 attachment, and file preview paths listed below. Full repo-wide production build is intentionally not part of the default validation flow.
+| Area | Development baseline | Deployment status |
+| --- | --- | --- |
+| OUI-Hermes | `940a4f1e692981120ef700d857b1b452ccd07f99` from `origin/codex/hermes-run-approvals` | Same OUI baseline |
+| Hermes Agent | v0.19.0 on `expert/codex/hermes-v0.19.0-gateway`, HEAD `5a7b1f3ffefc493e49cf77d7526f396bf5f2a6da` | Still v0.18.2 on `expert/codex/production-v0.18.2`, HEAD `3f1c4dce9a34095b59bbc1397dfb7e937d9d89d4` |
+| Hermes release anchor | Official `v2026.7.20` plus eight local enhancement commits | Upgrade pending |
+| Deployment artifact | Tag `deploy/hermes-v0.19.0-gateway-20260722` | Follow `HERMES_V0.19.0_DEPLOYMENT_UPGRADE_GUIDE.md` |
 
-The project is now a Hermes-focused Open WebUI fork: it keeps Open WebUI's useful chat/admin/file infrastructure, removes or disables broad platform features that are not needed for Hermes Agent, and adapts streaming/tool/attachment behavior to the Hermes gateway contract.
+The development Hermes branch and deployment tag are published to `Anthony9906/herems-expert`. OUI's intentionally untracked `output/` and `tmp/` artifact directories remain outside version control.
 
-## Active Structure
+## Environment Mapping
 
-- Chat forwarding, Hermes SSE adaptation, file context injection: `backend/open_webui/utils/middleware.py`
-- Expert Agent API: `backend/open_webui/routers/expert_agents.py`
-- Chat orchestration: `src/lib/components/chat/Chat.svelte`
-- Assistant message rendering: `src/lib/components/chat/Messages/ResponseMessage.svelte`
-- Native reasoning/tool details: `src/lib/components/chat/Messages/Markdown/MarkdownTokens.svelte` and `src/lib/components/common/ToolCallDisplay.svelte`
-- File preview modal: `src/lib/components/common/FileItemModal.svelte`
-- Startup helpers: `scripts/start-oui.sh`, `backend/dev.sh`, `backend/start.sh`
-- Full production build helper: `npm run build:bigmem`
+- Development profile: `expertagent`, stored under `~/.hermes/profiles/expertagent/`.
+- Deployment profile: `expert-agent`, stored under `~/.hermes/profiles/expert-agent/`.
+- Do not copy profile state between environments or normalize the two names.
+- Standard development ports are Hermes `8642`, OUI backend `8080`, frontend `5173`, AG-UI Bridge `8000`, and MinIO `9000/9001` when enabled.
+- OUI root `.env` is ignored by Git; API keys and other secrets must not be recorded here.
 
-## Validation Rules
+## Product And Integration Boundary
 
-- Do not run `npm run check` automatically; it is noisy in this trimmed Open WebUI fork.
-- Do not run `npm run build:bigmem` unless the user explicitly asks for a full build.
-- Prefer focused validation:
-  - `python3 -m py_compile` for touched backend Python files.
-  - Prettier check/write only on touched frontend files.
-  - Single-file Svelte compiler smoke compile for touched Svelte components.
-  - `git diff --check -- <touched-files>` for final whitespace checks.
-- If a runtime behavior matters, verify with a new Hermes/Open WebUI session. Old saved chats may not contain enough structured metadata to prove the current bridge.
+Open WebUI owns chat UX, authentication, uploads, storage, previews, approval UI, AG-UI rendering, and Expert Agent discovery. Hermes owns agent execution, Runs, reasoning/tool events, approvals, sessions, skills, and Gateway platforms.
 
-## Core Outcomes
+Primary integration points:
 
-### Hermes Reasoning And Tool Rendering
+- Runs adaptation: `backend/open_webui/utils/middleware.py`, `backend/open_webui/utils/hermes_runs.py`
+- Approval proxy and UI: `backend/open_webui/routers/hermes_runs.py`, `src/lib/hermes-approvals/`
+- AG-UI bridge and rendering: `backend/open_webui/mcp/agui_bridge/`, `src/lib/agui/`
+- Expert Agent discovery: `backend/open_webui/routers/expert_agents.py`
+- Hermes Gateway/API enhancements: `gateway/platforms/api_server.py`
+- Hermes Dashboard profile status: `hermes_cli/web_server.py`
 
-Status: patched and verified
+## Stable Runtime Contracts
 
-- Hermes reasoning and tool calls stay on Open WebUI's native Markdown `<details>` / `ToolCallDisplay` path; no active parallel Hermes trace renderer is required.
-- `middleware.py` recognizes Hermes tool SSE events and converts useful ones into Open WebUI-compatible `function_call` / `function_call_output` items.
-- `event: hermes.tool.progress` is display-only metadata. It is kept out of local Open WebUI tool execution while its official Hermes preview remains visible in chat.
-- Open WebUI preserves the official Hermes progress lifecycle:
-  - `toolCallId` correlates `running` and `completed` updates.
-  - `label` and `emoji` remain the official preview fields.
-  - `args` / `arguments` are preserved so Todo lists, file paths, skill file paths, and search parameters can render.
-  - Duplicate Open WebUI pending rows are suppressed only when the same `call_id` already has a Hermes display row.
-- `ToolCallDisplay.svelte` renders a compact icon + tool/action + preview row, with richer previews for Todo, file, search, and skill calls.
-- Known limitation: old saved messages that only persisted `label` / `emoji` or empty `arguments="{}"` cannot be retroactively enriched.
+### Runs, Reasoning, And Tools
 
-### Hermes Gateway Patch Boundary
+- OUI enables Runs only when `HERMES_RUN_APPROVALS_ENABLED=true` and Hermes advertises the required capabilities.
+- Only `reasoning.delta` becomes visible reasoning; progress-like text must not duplicate the final answer.
+- Concurrent tools are correlated by `tool_call_id`; arguments, progress, and results must stay attached to the same call.
+- Hermes progress events are display metadata, not instructions for OUI to execute tools locally.
+- The v0.19.0 enhancement branch restores persisted Runs history and preserves reasoning/tool metadata across refresh and continuation.
 
-Status: patched and verified after `hermes update`
+### Approvals
 
-- The Hermes checkout at `~/.hermes/hermes-agent` was reset to official upstream by `hermes update`; old local gateway routes should not be assumed active.
-- Official Hermes gateway source no longer exposes the custom `/skills` route. Open WebUI should read local Hermes skill storage directly for Expert Agent listing.
-- The preferred minimal Hermes gateway patches are:
-  - Chat Completions SSE reasoning passthrough via `choices[0].delta.reasoning_content`.
-  - Raw `args` passthrough on `hermes.tool.progress` events so Open WebUI can preserve structured tool preview details.
-- Preserve Hermes official fields (`event`, `toolCallId`, `status`, `label`, `emoji`) and adapt Open WebUI around them.
-- A live 8642 stream returned normal `delta.content`; absence of `reasoning_content` in a specific response proves only that the provider did not emit public reasoning for that request.
+- Approval decisions continue through the Hermes Runs approval endpoint, never as ordinary chat messages.
+- Supported UI decisions are `once`, `session`, and `deny`; permanent `always` is intentionally absent.
+- OUI holds active approval ownership, ordering, and idempotency in a process-local registry.
+- Known limitation: Hermes keys approval state by `run_id`, so `session` currently applies within one Run rather than across later chat messages. This is accepted deferred work.
 
-### Expert Agent
+### AG-UI, Expert Agents, And Files
 
-Status: patched and verified
+- Choice/custom-answer cards send structured content while the chat bubble shows natural language; approval cards remain a separate path.
+- Team Expert Agent cards come only from `skills/experts/`.
+- Open WebUI owns uploads, storage, preview URLs, model-accessible attachment URLs, and `<attached_files>` injection.
+- `STORAGE_PROVIDER` and `ARTIFACT_STORAGE_PROVIDER` are independent; `local_artifact` is not a general upload provider.
+- Historical chats cannot recover structured tool or media metadata that was never persisted.
 
-- `GET /api/v1/expert-agents` and detail reads are implemented in Open WebUI and read only the `experts/` subdirectory under the configured Hermes skills root, defaulting to `~/.hermes/profiles/expertagent/skills/experts` when present.
-- `experts/` is the team Expert Agent asset boundary. Skills outside `experts/` remain available to Hermes Agent as its own assets but are not shown as Open WebUI Expert Agent cards.
-- Expert Builder should publish confirmed team expert skills into `experts/<skill-name>/`; no visible whitelist, bundled manifest, or hidden-skill filtering is needed for the frontend card list.
-- Local development pins `HERMES_EXPERT_AGENT_SKILLS_DIR` to `~/.hermes/profiles/expertagent/skills`; the current intended Expert Agent card set lives under `experts/`.
-- Skill cards and detail modals display `metadata.hermes.tags`; list cards request detail fallback when tags are missing from the list response, so pre-existing version/author/icon metadata does not suppress tag hydration.
-- Expert Agent card styling is aligned to the current white / pale-blue / deep-navy UI direction, and the detail preview/source line-number gutters use stable shared scrolling instead of textarea scroll mirroring.
-- Expert Agent UI lives in the chat right-side pane beside Controls / Files / Overview, not as a global overlay.
-- Normal-user "Start Chat" routes through `/?expert-agent=<skill>&expert-agent-start=<nonce>` and uses the repo's `uuidv4()` helper instead of `crypto.randomUUID()` for browser compatibility.
-- Active expert skill state is stored in chat `meta.expert_skill_name`; the chat top area shows the active expert mode badge.
-- Expert skill management is intentionally not implemented as destructive UI controls in Open WebUI. Skill lifecycle work should happen through the agent/Hermes side.
+## v0.19.0 Enhancement Set
 
-### Chat Homepage Suggested Skill Cards
+The development branch is the official v0.19.0 release plus eight focused commits:
 
-Status: patched
+1. Preserve reasoning and tool-progress metadata.
+2. Fix Dashboard multimodal session rendering.
+3. Generate API Server session titles.
+4. Expose rich Hermes Runs tool events.
+5. Stream real reasoning from Runs.
+6. Harden concurrent Agent Run tool events.
+7. Restore persisted history for Agent Runs.
+8. Scope Dashboard Gateway status to the selected profile.
 
-- The chat homepage uses `Suggestions.svelte` to render two engineering skill cards for Standard Parts Selection and PLC Flow Chart, with compact English tags, lucide icons, and static sketch images under `static/assets/images/expert-agent/`.
-- Suggested card ordering is deterministic: Standard Parts Selection and PLC Flow Chart are prioritized ahead of other persisted prompt suggestions, avoiding the previous random-sort behavior where the two cards could disappear until refresh.
-- Card copy supports three-line descriptions and non-wrapping tag rows; validation used Prettier, single-file Svelte compiler smoke compile, and `git diff --check` on `Suggestions.svelte`.
-- Performance caveat: the two PNG sketch assets are about 860 KB combined and the card styling uses blur, gradients, shadows, and hover transitions; consider WebP/AVIF assets and lighter effects if homepage rendering feels slow.
+The delta from the official release is limited to seven source/test files under the Gateway API, Dashboard API/UI, and their regression tests. Future Hermes upgrades should port this commit set onto the exact official release tag and validate it before changing deployment.
 
-### Attachments, R2, And Preview
+## Verified Development Behavior
 
-Status: patched and runtime verified
+- Hermes reports v0.19.0 and API Server `/health` returns healthy on `8642`.
+- Dashboard profile status resolves `expertagent` state correctly and shows the live Gateway/API Server rather than default-profile stale state.
+- Final Dashboard/profile regression suites passed 67 relevant tests; Python syntax and whitespace checks passed.
+- Hermes Dashboard web tests, type checking, and production build passed during the v0.19.0 migration.
+- Runs integration was exercised for real reasoning, approval allow/deny, parallel tool-call correlation, refresh, and persisted continuation.
+- OUI's existing Runs/approval contract remains compatible; no OUI source upgrade is required solely for the Hermes v0.19.0 deployment.
 
-- Open WebUI owns attachment upload, storage, preview, model URL generation, and `<attached_files>` injection.
-- R2/S3-compatible storage is supported through the existing Open WebUI storage provider plus Hermes-style `R2_*` variables.
-- `R2_PUBLIC_BASE_URL` / `S3_PUBLIC_BASE_URL` is used to generate model-accessible public URLs.
-- Images upload with `process=false`, preview through `/api/v1/files/{id}/content`, and are sent to Hermes as model-accessible image URLs.
-- PDF, HTML, Markdown, TXT, JSON, CSV, and YAML attachments upload directly without Open WebUI RAG/vector processing.
-- Document attachments are injected into the latest user message as `<attached_files>` with URL, content type, file name, and lightweight extracted text when supported.
-- Text extraction now runs in Open WebUI's chat forwarding path:
-  - PDF extraction uses `pypdf`.
-  - Text/HTML extraction is capped by `ATTACHED_FILE_CONTENT_MAX_CHARS` and `ATTACHED_FILES_TOTAL_MAX_CHARS`.
-  - Unsupported/binary files fall back to URL-only `<file .../>` tags.
-- File IDs are resolved from either direct IDs or Open WebUI file-content URLs.
-- File preview remains UI-owned: PDF uses `PDFViewer`, Markdown renders as Markdown, HTML uses sandboxed `iframe srcdoc`, and other text/code files use source previews.
-- Runtime tests confirmed PDF, HTML, Markdown, and image attachments store in R2, inject attachment URLs into the Hermes request, and are parsed by the agent.
-- `STORAGE_PROVIDER` and `ARTIFACT_STORAGE_PROVIDER` are intentionally independent. `ARTIFACT_STORAGE_PROVIDER=local_artifact` must not become the global upload storage provider; development can use `STORAGE_PROVIDER=r2` with local artifact preview, while production MinIO should use the S3-compatible path (`STORAGE_PROVIDER=s3`, `ARTIFACT_STORAGE_PROVIDER=s3`, `S3_*` variables).
+## Active Risks
 
-### Attachment URL And Multimodal Boundary
+- Deployment still runs Hermes v0.18.2; do not assume development and deployment are currently identical.
+- The approval registry is process-local; backend restart and multi-worker recovery need shared persistence or explicit recovery semantics.
+- `session` approval wording and actual Run-scoped behavior remain mismatched across chat messages.
+- Hermes exposes an unsandboxed terminal backend; restrict API reachability to trusted networks or introduce a sandbox before broader exposure.
+- Dependency audits still contain unresolved npm findings; no automatic audit fix has been applied.
 
-Status: patched and verified
+## Next Actions
 
-- Image attachments must not be forwarded to Hermes as `data:image/...base64`; the Open WebUI middleware now rejects inline data images and no longer falls back to reading local images into base64.
-- Stored image files are forwarded as model-accessible URLs when storage provides one. R2/S3 public URLs work for remote multimodal providers; local `localhost` artifact URLs are only suitable for local agent tools or browser/file previews, not direct provider `image_url` fetching.
-- Open WebUI's visible attachment URL (`/api/v1/files/{id}/content`) is a UI/download route and is not necessarily the model URL. Runtime verification showed successful image recognition used the R2 public URL in the Hermes session payload.
-- Historical image attachments are no longer re-injected into every later chat turn; only the current user turn's images are added as `image_url` parts, preventing old image URLs from breaking unrelated later document turns.
-- Non-image attachments continue to use the established `<attached_files>` path: Open WebUI sends URL, content type, name, and lightweight pre-extracted text when supported.
-- Hermes dashboard black screens on image sessions were not caused by Open WebUI re-sending base64 after the fix; the remaining cause was dashboard rendering code assuming `message.content` is always a string. The Hermes dashboard was updated to render OpenAI-style multimodal content arrays.
+1. Upgrade deployment Hermes with `HERMES_V0.19.0_DEPLOYMENT_UPGRADE_GUIDE.md`, using profile `expert-agent` and pinned commit `5a7b1f3ff`.
+2. Re-run the deployment acceptance matrix for reasoning, concurrent tools, approvals, history, Dashboard profile state, attachments, and AG-UI artifacts.
+3. Keep the v0.18.2 rollback branch and deployment state backup until the observation period is accepted.
+4. Design the cross-message approval-scope fix without allowing one concurrent Run to authorize another.
 
-### Reusable Artifact Title Cards
+## Maintenance Rule
 
-Status: patched and focused-verified
-
-- Fenced HTML iframe artifact cards first use explicit iframe `title` / `aria-label`, inline `<title>` / `<h1>`, and then the artifact id as a local fallback.
-- When a local artifact iframe only contains `/v/{artifact_id}`, Open WebUI now reads title metadata through `GET /api/v1/utils/artifacts/title?url=...`, which server-side proxies only allowed local artifact viewer URLs to `/api/artifacts/{artifact_id}`. This avoids browser cross-port CORS limits from `localhost:5173` to `localhost:8787`.
-- Validation confirmed `http://localhost:8787/v/art_1230a6?nocache=2` resolves to `气缸快速预选推荐 - 顶升`, rejects non-local artifact hosts, passes `py_compile` for `backend/open_webui/routers/utils.py`, and passes scoped `svelte-check` for `src/lib/components/chat/Messages`.
-
-### Trimmed Open WebUI Surface
-
-Status: patched
-
-- The project keeps Chat, Auth/User/Admin basics, model/admin settings needed for Hermes, files/tools APIs needed by chat startup, Automations, Evaluations, Analytics, Pipelines, and file upload preview.
-- Ollama is disabled by default.
-- Workspace routes for Models, Knowledge, Prompts, Tools, and Skills are removed from the frontend.
-- Notes, Channels, Calendar, Playground, and Admin Functions routes are removed or disabled.
-- RAG, Retrieval, Vector DB, Web Search, Image Generation, and Code Execution are disabled by default.
-- The chat input menu no longer shows screenshot capture, existing-file attachment, or attached knowledge entries. Direct file upload, webpage attachment, notes, chat references, and cloud-drive integrations remain.
-- PDF/document workflow cleanup removed old RAG-facing preview/content controls from the user path.
-
-### Hermes Runs Approval Passthrough
-
-Status: patched and runtime verified
-
-- Open WebUI can opt into Hermes Runs when `HERMES_RUN_APPROVALS_ENABLED=true` and the upstream capability response advertises run submission, SSE events, approval responses, approval events, tool arguments, and tool results.
-- Hermes approval requests are translated into dedicated `hermes:approval_request` frontend events and rendered by an approval card with once, session, always, and deny choices. Responses use a dedicated backend endpoint and resume the existing Hermes run instead of creating a new chat message.
-- Approval state, ownership checks, FIFO ordering, and idempotency are isolated in a separate Hermes approval registry and store. The existing `agui:*` event path, AG-UI interaction store, and MCP choice submission flow remain unchanged.
-- Pending approvals can be restored after a browser refresh while the Open WebUI backend process remains alive. The registry is process-local, so backend restart recovery and multi-worker coordination require a future persistent/shared store.
-- Runtime verification created a real approval request through Open WebUI, denied it through the new endpoint, observed Hermes resume the original run, and confirmed the guarded command did not execute.
-- Hermes command allowlists must not broadly permit shell `-c` or `-lc` invocations, because such rules bypass command-specific manual approval. The local expert-agent and task-agent profiles now use an empty command allowlist with manual approvals enabled.
-
-### Local Runtime
-
-Status: verified with caveats
-
-- `backend/dev.sh` and `backend/start.sh` auto-load repo-root `.env` for local non-Docker runs.
-- `scripts/start-oui.sh` is the preferred local start/restart helper; it manages frontend `5173` and backend `8080` and writes logs under `logs/`.
-- Verified runtime ports in the latest handoff: Hermes gateway `8642`, Open WebUI backend `8080`, frontend `5173`, local artifact service `8787`.
-- Running backend processes do not automatically reload new `.env`, storage, dependency, or middleware changes; restart before runtime validation.
-- In the Codex sandbox, `uvicorn --reload` or binding `0.0.0.0:8080` may fail with `Operation not permitted`; use an approved/user-session launch path when runtime proof is needed.
-
-## Recent Focused Validation
-
-- Hermes gateway: `py_compile` on `gateway/platforms/api_server.py`; targeted tests for reasoning SSE, tool progress display event, `toolCallId/status`, and `reasoning_config` forwarding.
-- Open WebUI backend: `python3 -m py_compile backend/open_webui/utils/middleware.py`
-- Open WebUI backend in venv: `.venv/bin/python -m py_compile backend/open_webui/utils/middleware.py`
-- Attachment helper smoke tests: HTML extraction, truncation, and CDATA wrapping.
-- Frontend: Prettier and single-file Svelte compiler smoke checks on touched components such as `ToolCallDisplay.svelte`, `Chat.svelte`, `ChatControls.svelte`, `Navbar.svelte`, `FileItemModal.svelte`, and message input components.
-- Runtime/user checks: PDF, HTML, Markdown, and image attachments through R2 into Hermes Agent.
-
-## Known Limits And Next Work
-
-- Full `npm run check` and `npm run build:bigmem` remain manual only.
-- Old saved chats cannot be backfilled with structured tool arguments that were not stored at the time.
-- HTML preview is scoped to single-file HTML reports; relative sibling assets may need a later resource-resolution path.
-- Optional runtime imports can make local shell import probes fail when the full environment is not installed; prefer syntax checks and focused runtime tests.
-- Future cleanup candidates: Pyodide worker remnants, unused Workspace/Notes/Channels components, and any remaining RAG/vector-facing UI surfaces not needed by Hermes.
-
-## Future Entry Rule
-
-Append only durable outcomes in this shape:
-
-```md
-### Short outcome title
-
-Status: patched | verified | blocked
-
-- What changed.
-- Validation performed.
-- Remaining caveat, if any.
-```
+Replace superseded statements instead of appending dated debugging history. Keep only current behavior, evidence, durable constraints, active risks, and the next few concrete actions.
