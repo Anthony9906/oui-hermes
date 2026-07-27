@@ -783,10 +783,10 @@
 	>
 		<div class="flex shrink-0 items-start justify-between gap-3 px-4 pb-2 pt-4">
 			<div class="min-w-0">
-				<div class="text-xl font-semibold leading-7 text-[#20283a] dark:text-gray-100">
+				<div class="text-xl font-semibold leading-7 text-[#25324a] dark:text-gray-100">
 					Expert Agent
 				</div>
-				<div class="mt-1 text-[13px] leading-5 text-[#718097] dark:text-gray-400">
+				<div class="mt-1 text-[13px] leading-5 text-[#66748c] dark:text-gray-400">
 					{copy.subtitle}
 				</div>
 			</div>
@@ -794,7 +794,7 @@
 			<div class="flex shrink-0 items-center gap-2">
 				<button
 					type="button"
-					class="rounded-lg p-1.5 text-[#7f8aa0] transition hover:bg-[#edf1f7] hover:text-[#293246] disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-gray-800 dark:hover:text-gray-100"
+					class="rounded-lg p-1.5 text-[#8794aa] transition hover:bg-[#eef1f8] hover:text-[#3558d8] disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-gray-800 dark:hover:text-gray-100"
 					aria-label={copy.refreshPanel}
 					title={copy.refreshPanel}
 					disabled={loading}
@@ -810,7 +810,7 @@
 				</button>
 				<button
 					type="button"
-					class="rounded-lg p-1.5 text-[#7f8aa0] transition hover:bg-[#edf1f7] hover:text-[#293246] dark:hover:bg-gray-800 dark:hover:text-gray-100"
+					class="rounded-lg p-1.5 text-[#8794aa] transition hover:bg-[#eef1f8] hover:text-[#3558d8] dark:hover:bg-gray-800 dark:hover:text-gray-100"
 					aria-label={copy.closePanel}
 					title={copy.closePanel}
 					on:click={close}
@@ -822,11 +822,11 @@
 
 		<div class="shrink-0 px-4 pb-3">
 			<div
-				class="flex h-9 items-center gap-2 rounded-xl border border-[#d7e7f7] bg-white/72 px-3 text-[#6f819d] shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] dark:border-gray-800 dark:bg-gray-900/72 dark:text-gray-400"
+				class="flex h-9 items-center gap-2 rounded-xl border border-[rgba(75,96,136,0.2)] bg-white/80 px-3 text-[#718099] shadow-[0_4px_16px_rgba(44,64,103,0.04),inset_0_1px_0_rgba(255,255,255,0.94)] focus-within:border-[rgba(70,105,236,0.42)] focus-within:shadow-[0_0_0_3px_rgba(70,105,236,0.07),inset_0_1px_0_rgba(255,255,255,0.94)] dark:border-gray-800 dark:bg-gray-900/72 dark:text-gray-400"
 			>
 				<LucideIcon name="search" className="size-4 shrink-0" strokeWidth="1.8" />
 				<input
-					class="min-w-0 flex-1 bg-transparent text-[12px] font-medium text-[#314461] outline-none placeholder:text-[#8da0ba] dark:text-gray-100 dark:placeholder:text-gray-500"
+					class="min-w-0 flex-1 bg-transparent text-[12px] font-medium text-[#39465d] outline-none placeholder:text-[#94a1b6] dark:text-gray-100 dark:placeholder:text-gray-500"
 					bind:value={searchQuery}
 					placeholder={copy.searchPlaceholder}
 					aria-label={copy.searchAria}
@@ -835,7 +835,7 @@
 				{#if searchQuery}
 					<button
 						type="button"
-						class="flex size-5 shrink-0 items-center justify-center rounded-md text-[#9db0c7] transition hover:bg-[#eef6ff] hover:text-[#4f6f98] dark:hover:bg-gray-800"
+						class="flex size-5 shrink-0 items-center justify-center rounded-md text-[#94a1b6] transition hover:bg-[#eef3ff] hover:text-[#4669ec] dark:hover:bg-gray-800"
 						aria-label={copy.clearSearch}
 						on:click={() => {
 							searchQuery = '';
@@ -846,7 +846,7 @@
 				{/if}
 				<button
 					type="button"
-					class="flex size-6 shrink-0 items-center justify-center rounded-md text-[#8da0ba] transition hover:bg-[#eef6ff] hover:text-[#4f6f98] dark:hover:bg-gray-800"
+					class="flex size-6 shrink-0 items-center justify-center rounded-md text-[#8794aa] transition hover:bg-[#eef3ff] hover:text-[#4669ec] dark:hover:bg-gray-800"
 					aria-label={showCategoryFilters ? copy.hideFilters : copy.showFilters}
 					aria-pressed={showCategoryFilters}
 					on:click={() => {
@@ -863,8 +863,8 @@
 						<span
 							class="expert-agent-filter-chip inline-flex h-6 items-center rounded-full border px-2.5 text-[11px] font-semibold transition {filterIdx ===
 							0
-								? 'border-[#90c2f2] bg-[#eaf6ff] text-[#0f4f96]'
-								: 'border-[#d7e7f7] bg-white/72 text-[#6f819d] dark:border-gray-800 dark:bg-gray-900/72 dark:text-gray-400'}"
+								? 'border-[rgba(70,105,236,0.34)] bg-[#eef3ff] text-[#3558d8]'
+								: 'border-[rgba(75,96,136,0.16)] bg-white/76 text-[#66748c] dark:border-gray-800 dark:bg-gray-900/72 dark:text-gray-400'}"
 						>
 							{filterLabel}
 						</span>
@@ -1227,16 +1227,12 @@
 
 <style>
 	.expert-agent-drawer {
-		background: linear-gradient(
-			180deg,
-			rgba(255, 255, 255, 0.96) 0%,
-			rgba(243, 249, 255, 0.86) 100%
-		);
+		background: transparent;
 	}
 
 	.expert-agent-card-list {
 		scrollbar-width: thin;
-		scrollbar-color: rgba(116, 155, 200, 0.42) transparent;
+		scrollbar-color: rgba(108, 124, 174, 0.36) transparent;
 	}
 
 	.expert-agent-card-list::-webkit-scrollbar {
@@ -1250,7 +1246,7 @@
 	.expert-agent-card-list::-webkit-scrollbar-thumb {
 		border: 2px solid transparent;
 		border-radius: 999px;
-		background: rgba(116, 155, 200, 0.42);
+		background: rgba(108, 124, 174, 0.36);
 		background-clip: padding-box;
 	}
 
@@ -1259,7 +1255,7 @@
 	}
 
 	:global(.dark) .expert-agent-drawer {
-		background: linear-gradient(180deg, rgba(17, 24, 39, 0.96) 0%, rgba(17, 24, 39, 0.9) 100%);
+		background: transparent;
 	}
 
 	.expert-skill-detail-header {

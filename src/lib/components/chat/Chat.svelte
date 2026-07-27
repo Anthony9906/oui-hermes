@@ -793,10 +793,7 @@
 			}
 
 			if (type === 'hermes:approval_responded') {
-				hermesApprovalStore.resolveFirstForRun(
-					data?.run_id,
-					data?.choice as HermesApprovalChoice
-				);
+				hermesApprovalStore.resolveFirstForRun(data?.run_id, data?.choice as HermesApprovalChoice);
 				return;
 			}
 
@@ -3280,7 +3277,9 @@
 				choice
 			);
 			hermesApprovalStore.resolve(approval.approval_request_id, choice);
-			toast.success(choice === 'deny' ? '已拒绝该操作，Agent 将继续处理。' : '授权已提交，Agent 正在继续执行。');
+			toast.success(
+				choice === 'deny' ? '已拒绝该操作，Agent 将继续处理。' : '授权已提交，Agent 正在继续执行。'
+			);
 		} catch (error) {
 			hermesApprovalStore.markPending(approval.approval_request_id);
 			toast.error(`${error}`);
@@ -3440,19 +3439,19 @@
 							</div>
 						{/if}
 
-					{#if $activeHermesApproval}
-						<div
-							class="pointer-events-none absolute inset-x-0 bottom-28 z-40 flex justify-center sm:bottom-24"
-						>
-							<div class="pointer-events-auto w-full">
-								<HermesApprovalCard
-									approval={$activeHermesApproval}
-									disabled={$activeHermesApproval.status === 'responding'}
-									on:submit={submitHermesApprovalResponse}
-								/>
+						{#if $activeHermesApproval}
+							<div
+								class="pointer-events-none absolute inset-x-0 bottom-28 z-40 flex justify-center sm:bottom-24"
+							>
+								<div class="pointer-events-auto w-full">
+									<HermesApprovalCard
+										approval={$activeHermesApproval}
+										disabled={$activeHermesApproval.status === 'responding'}
+										on:submit={submitHermesApprovalResponse}
+									/>
+								</div>
 							</div>
-						</div>
-					{:else if $activeInteraction}
+						{:else if $activeInteraction}
 							<div
 								class="pointer-events-none absolute inset-x-0 bottom-28 z-30 flex justify-center sm:bottom-24"
 							>
@@ -3645,13 +3644,19 @@
 		--chat-side-panel-width: clamp(640px, 58vw, 800px);
 	}
 
+	:global(#chat-container) {
+		transition:
+			max-width 280ms ease-in-out,
+			margin-right 280ms ease-in-out;
+	}
+
 	:global(#chat-container.chat-side-panel-open) {
-		max-width: calc(100vw - var(--chat-side-panel-width) - 60px) !important;
+		max-width: calc(100vw - var(--chat-side-panel-width) - 40px) !important;
 		margin-right: calc(var(--chat-side-panel-width) + 20px) !important;
 	}
 
 	:global(.app:has(#sidebar[data-state='true']) #chat-container.chat-side-panel-open) {
-		max-width: calc(100vw - var(--sidebar-width) - var(--chat-side-panel-width) - 80px) !important;
+		max-width: calc(100vw - var(--sidebar-width) - var(--chat-side-panel-width) - 60px) !important;
 	}
 
 	@media (max-width: 1023px) {

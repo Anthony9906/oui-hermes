@@ -112,14 +112,14 @@
 </script>
 
 <div
-	class="expert-skill-card group relative flex w-full min-w-[240px] flex-col overflow-hidden rounded-xl border border-[#b9d3ee]/80 bg-white shadow-[0_10px_28px_rgba(16,67,132,0.07),inset_0_1px_0_rgba(255,255,255,0.88)] transition duration-200 hover:-translate-y-0.5 hover:border-[#5f91c7]/60 hover:bg-[#fbfdff] hover:shadow-[0_18px_40px_rgba(16,67,132,0.12),inset_0_1px_0_rgba(255,255,255,0.95)] focus-within:border-[#5f91c7]/60 focus-within:bg-[#fbfdff] focus-within:shadow-[0_18px_40px_rgba(16,67,132,0.12),inset_0_1px_0_rgba(255,255,255,0.95)] dark:border-gray-800 dark:bg-gray-900/92 dark:hover:border-gray-700 dark:hover:bg-gray-900 {isFeatured
+	class="expert-skill-card group relative flex w-full min-w-[240px] flex-col overflow-hidden rounded-xl border border-[rgba(75,96,136,0.18)] bg-white shadow-[0_10px_28px_rgba(44,64,103,0.07),inset_0_1px_0_rgba(255,255,255,0.9)] transition duration-200 hover:-translate-y-0.5 hover:border-[rgba(70,105,236,0.34)] hover:bg-[#fcfdff] hover:shadow-[0_18px_40px_rgba(44,64,103,0.12),inset_0_1px_0_rgba(255,255,255,0.96)] focus-within:border-[rgba(70,105,236,0.34)] focus-within:bg-[#fcfdff] focus-within:shadow-[0_18px_40px_rgba(44,64,103,0.12),inset_0_1px_0_rgba(255,255,255,0.96)] dark:border-gray-800 dark:bg-gray-900/92 dark:hover:border-gray-700 dark:hover:bg-gray-900 {isFeatured
 		? 'expert-skill-card-featured min-h-[14rem] p-3.5'
 		: 'min-h-[9.75rem] p-3.5'}"
 >
 	<div class="flex items-start justify-between gap-3">
 		<div class="flex min-w-0 gap-3 {isFeatured ? 'items-start' : 'items-center pr-1'}">
 			<div
-				class="skill-icon-block flex shrink-0 items-center justify-center rounded-xl text-[#31506b] {isFeatured
+				class="skill-icon-block flex shrink-0 items-center justify-center rounded-xl text-[#4e5f7c] {isFeatured
 					? 'h-14 w-14'
 					: 'h-8 w-8 rounded-lg'}"
 				style:background-color={iconBackground}
@@ -135,7 +135,7 @@
 				{#if isFeatured}
 					<button
 						type="button"
-						class="line-clamp-1 max-w-full text-left text-[24px] font-semibold leading-8 text-[#071f4d] transition hover:text-[#0f5ca8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#83bdf1]/60 dark:text-gray-100 dark:hover:text-[#b9d8ff]"
+						class="line-clamp-1 max-w-full text-left text-[24px] font-semibold leading-8 text-[#25324a] transition hover:text-[#4669ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4669ec]/40 dark:text-gray-100 dark:hover:text-[#b9d8ff]"
 						aria-label={copy.viewDetails(skill.skill_name)}
 						title={skill.skill_name}
 						on:click|stopPropagation={() => {
@@ -145,7 +145,7 @@
 						{skill.skill_name}
 					</button>
 					<div
-						class="mt-0.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#5f6f8f]"
+						class="mt-0.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#6f7d94]"
 					>
 						<span class="version-badge">{skillVersion}</span>
 						{#if isRecentlyUpdated}
@@ -155,7 +155,7 @@
 				{:else}
 					<button
 						type="button"
-						class="line-clamp-1 max-w-full text-left text-[15px] font-semibold leading-5 text-[#071f4d] transition hover:text-[#0f5ca8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#83bdf1]/60 dark:text-gray-100 dark:hover:text-[#b9d8ff]"
+						class="line-clamp-1 max-w-full text-left text-[15px] font-semibold leading-5 text-[#25324a] transition hover:text-[#4669ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4669ec]/40 dark:text-gray-100 dark:hover:text-[#b9d8ff]"
 						aria-label={copy.viewDetails(skill.skill_name)}
 						title={skill.skill_name}
 						on:click|stopPropagation={() => {
@@ -171,7 +171,7 @@
 		{#if isFeatured}
 			<button
 				type="button"
-				class="start-chat-button inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-[#001f5b] bg-[#001f5b] px-3.5 text-[12px] font-semibold text-white shadow-[0_10px_22px_rgba(0,31,91,0.22)] transition hover:border-[#071f4d] hover:bg-[#071f4d] dark:border-gray-100 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
+				class="start-chat-button inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-[#4669ec] bg-[#4669ec] px-3.5 text-[12px] font-semibold text-white shadow-[0_10px_22px_rgba(70,105,236,0.22)] transition hover:border-[#3558d8] hover:bg-[#3558d8] dark:border-gray-100 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
 				on:click={() => onStart(skill)}
 			>
 				<ChatBubble className="size-4" strokeWidth="1.9" />
@@ -180,7 +180,7 @@
 		{:else}
 			<button
 				type="button"
-				class="start-chat-button inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-[#b9d3ee] bg-white text-[#001f5b] shadow-none transition group-hover:border-[#001f5b] group-hover:bg-[#001f5b] group-hover:text-white group-hover:shadow-[0_10px_24px_rgba(0,31,91,0.18)] hover:bg-[#071f4d] dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:group-hover:border-[#d9e2f5] dark:group-hover:bg-[#d9e2f5] dark:group-hover:text-[#1e2637]"
+				class="start-chat-button inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-[rgba(70,105,236,0.28)] bg-white text-[#4669ec] shadow-none transition group-hover:border-[#4669ec] group-hover:bg-[#4669ec] group-hover:text-white group-hover:shadow-[0_10px_24px_rgba(70,105,236,0.18)] hover:bg-[#3558d8] dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:group-hover:border-[#d9e2f5] dark:group-hover:bg-[#d9e2f5] dark:group-hover:text-[#1e2637]"
 				aria-label={copy.startChatWith(skill.skill_name)}
 				title={copy.startChat}
 				on:click={() => onStart(skill)}
@@ -221,24 +221,24 @@
 
 	<div
 		class="skill-description-preview flex-1 dark:text-gray-500 {isFeatured
-			? 'mt-3 max-w-[65%] text-[13px] leading-5 text-[#61708f]'
-			: 'mt-2.5 text-[11px] leading-4 text-[#8a99b0]'}"
+			? 'mt-3 max-w-[65%] text-[13px] leading-5 text-[#66748c]'
+			: 'mt-2.5 text-[11px] leading-4 text-[#7f8da4]'}"
 	>
 		{skill.description || copy.noDescription}
 	</div>
 
 	{#if isFeatured}
 		<div
-			class="featured-meta-row mt-3 flex max-w-[55%] items-center gap-3 text-[11px] font-medium leading-4 text-[#6f84a4] dark:text-gray-500"
+			class="featured-meta-row mt-3 flex max-w-[55%] items-center gap-3 text-[11px] font-medium leading-4 text-[#78869e] dark:text-gray-500"
 		>
 			{#if skill.author}
 				<div class="min-w-0 flex items-center gap-1.5 truncate" title={skill.author}>
-					<LucideIcon name="user" className="size-3.5 shrink-0 text-[#9db0c7]" strokeWidth="1.8" />
+					<LucideIcon name="user" className="size-3.5 shrink-0 text-[#94a1b6]" strokeWidth="1.8" />
 					<span class="truncate">{skill.author}</span>
 				</div>
 			{/if}
 			<div
-				class="shrink-0 flex items-center gap-1.5 text-[#7d91ae]"
+				class="shrink-0 flex items-center gap-1.5 text-[#78869e]"
 				title={copy.usageTitle(usageCount)}
 			>
 				<LucideIcon name="bookmark-check" className="size-3.5" strokeWidth="1.8" />
@@ -246,22 +246,24 @@
 			</div>
 		</div>
 	{:else}
-		<div class="mt-3 flex items-center gap-3 border-t border-[#edf1f6] pt-2.5 dark:border-gray-800">
+		<div
+			class="mt-3 flex items-center gap-3 border-t border-[rgba(75,96,136,0.1)] pt-2.5 dark:border-gray-800"
+		>
 			<div
-				class="min-w-0 flex items-center gap-3 text-[11px] font-medium leading-4 text-[#7b8ba8] dark:text-gray-500"
+				class="min-w-0 flex items-center gap-3 text-[11px] font-medium leading-4 text-[#78869e] dark:text-gray-500"
 			>
 				{#if skill.author}
 					<div class="min-w-0 flex items-center gap-1.5 truncate" title={skill.author}>
 						<LucideIcon
 							name="user"
-							className="size-3.5 shrink-0 text-[#9db0c7]"
+							className="size-3.5 shrink-0 text-[#94a1b6]"
 							strokeWidth="1.8"
 						/>
 						<span class="truncate">{skill.author}</span>
 					</div>
 				{/if}
 				<div
-					class="shrink-0 flex items-center gap-1.5 text-[#8da0ba]"
+					class="shrink-0 flex items-center gap-1.5 text-[#8794aa]"
 					title={copy.usageWithVersionTitle(usageCount, skillVersion)}
 				>
 					<LucideIcon name="bookmark-check" className="size-3.5" strokeWidth="1.8" />
@@ -281,7 +283,7 @@
 		background: linear-gradient(
 			135deg,
 			rgba(255, 255, 255, 0.98) 0%,
-			rgba(244, 250, 255, 0.9) 100%
+			rgba(246, 248, 253, 0.92) 100%
 		);
 	}
 
@@ -289,14 +291,14 @@
 		background:
 			radial-gradient(
 				ellipse at 6% 0%,
-				rgba(112, 188, 255, 0.34) 0%,
-				rgba(185, 226, 255, 0.18) 36%,
+				rgba(126, 151, 226, 0.26) 0%,
+				rgba(185, 199, 241, 0.16) 38%,
 				transparent 58%
 			),
 			linear-gradient(
 				135deg,
 				rgba(255, 255, 255, 0.98) 0%,
-				rgba(241, 248, 255, 0.94) 56%,
+				rgba(244, 247, 253, 0.94) 56%,
 				rgba(255, 255, 255, 0.98) 100%
 			);
 	}
@@ -325,17 +327,17 @@
 		position: absolute;
 		inset: 0;
 		z-index: 0;
-		border-top: 2px solid rgba(123, 184, 238, 0.72);
+		border-top: 2px solid rgba(70, 105, 236, 0.34);
 		opacity: 0.72;
 		transition: opacity 180ms ease;
 		pointer-events: none;
 	}
 
 	.skill-icon-block {
-		background: linear-gradient(145deg, rgba(238, 247, 255, 0.96), rgba(218, 241, 255, 0.86));
+		background: linear-gradient(145deg, rgba(245, 247, 253, 0.98), rgba(229, 234, 248, 0.9));
 		box-shadow:
 			0 1px 1px rgba(47, 58, 82, 0.04),
-			0 0 0 1px rgba(123, 164, 216, 0.18) inset;
+			0 0 0 1px rgba(86, 105, 164, 0.16) inset;
 	}
 
 	.start-chat-button {

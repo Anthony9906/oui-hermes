@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { onMount, tick } from 'svelte';
-	import { fly } from 'svelte/transition';
 	import { v4 as uuidv4 } from 'uuid';
 
 	import Drawer from '$lib/components/common/Drawer.svelte';
@@ -12,6 +11,7 @@
 	const MIN_WIDTH = 420;
 	const MAX_WIDTH = 920;
 	const DEFAULT_WIDTH = 640;
+	const PANEL_EXIT_DURATION = 260;
 
 	let largeScreen = false;
 	let panelWidth = DEFAULT_WIDTH;
@@ -19,6 +19,55 @@
 	let startClientX = 0;
 	let startWidth = DEFAULT_WIDTH;
 	let activePointerId: number | null = null;
+	let panelRendered = false;
+	let panelEntered = false;
+	let panelLifecycleReady = false;
+	let previousPanelVisible = false;
+	let panelAnimationFrame: number | null = null;
+	let panelCloseTimer: number | null = null;
+
+	const clearPanelAnimationHandles = () => {
+		if (panelAnimationFrame !== null) {
+			cancelAnimationFrame(panelAnimationFrame);
+			panelAnimationFrame = null;
+		}
+
+		if (panelCloseTimer !== null) {
+			window.clearTimeout(panelCloseTimer);
+			panelCloseTimer = null;
+		}
+	};
+
+	const syncPanelAnimation = async (shouldShow: boolean) => {
+		clearPanelAnimationHandles();
+
+		if (shouldShow) {
+			if (!panelRendered) {
+				panelRendered = true;
+				panelEntered = false;
+				await tick();
+			}
+
+			panelAnimationFrame = requestAnimationFrame(() => {
+				panelEntered = true;
+				panelAnimationFrame = null;
+			});
+			return;
+		}
+
+		if (!panelRendered) return;
+
+		panelEntered = false;
+		panelCloseTimer = window.setTimeout(() => {
+			panelRendered = false;
+			panelCloseTimer = null;
+		}, PANEL_EXIT_DURATION);
+	};
+
+	$: if (panelLifecycleReady && $showExpertAgentDrawer !== previousPanelVisible) {
+		previousPanelVisible = $showExpertAgentDrawer;
+		void syncPanelAnimation($showExpertAgentDrawer);
+	}
 
 	const clampWidth = (width: number) => {
 		if (typeof window === 'undefined') return width;
@@ -74,6 +123,10 @@
 	}
 
 	onMount(() => {
+		panelLifecycleReady = true;
+		previousPanelVisible = $showExpertAgentDrawer;
+		void syncPanelAnimation($showExpertAgentDrawer);
+
 		const mediaQuery = window.matchMedia('(min-width: 1024px)');
 		const handleMediaQuery = (e: MediaQueryListEvent | MediaQueryList) => {
 			largeScreen = e.matches;
@@ -94,27 +147,27 @@
 			window.removeEventListener('pointerup', resizeEndHandler);
 			window.removeEventListener('pointercancel', resizeEndHandler);
 			window.removeEventListener('resize', resizeViewportHandler);
+			clearPanelAnimationHandles();
 			document.body.style.userSelect = '';
 		};
 	});
 </script>
 
-{#if $showExpertAgentDrawer}
+{#if panelRendered}
 	{#if largeScreen}
-		<div class="expert-agent-side-panel-host">
+		<div
+			class="expert-agent-side-panel-host"
+			class:expert-agent-side-panel-host-entered={panelEntered}
+		>
 			<button
 				type="button"
 				class="expert-agent-side-panel-resizer"
 				aria-label="Resize expert agent panel"
 				on:pointerdown={resizeStartHandler}
 			></button>
-			<div
-				in:fly={{ x: 56, duration: 320, opacity: 0.72 }}
-				out:fly={{ x: 44, duration: 220, opacity: 0.62 }}
-				class="expert-agent-side-panel-shell"
-			>
+			<div class="expert-agent-side-panel-shell">
 				<ExpertAgentDrawer
-					show={$showExpertAgentDrawer}
+					show={true}
 					on:start={(event) => {
 						void startExpertAgentChat(event.detail);
 					}}
@@ -130,7 +183,7 @@
 		>
 			<div class="h-[100dvh] min-h-0">
 				<ExpertAgentDrawer
-					show={$showExpertAgentDrawer}
+					show={true}
 					on:start={(event) => {
 						void startExpertAgentChat(event.detail);
 					}}
@@ -151,6 +204,24 @@
 		width: var(--chat-side-panel-width, clamp(480px, 38vw, 760px));
 		padding: 20px 18px 20px 0;
 		pointer-events: none;
+		will-change: transform, opacity;
+		opacity: 0;
+		visibility: hidden;
+		transform: translateX(calc(var(--chat-side-panel-width, clamp(480px, 38vw, 760px)) + 24px));
+		transition:
+			transform 260ms cubic-bezier(0.4, 0, 1, 1),
+			opacity 220ms ease,
+			visibility 0s linear 260ms;
+	}
+
+	.expert-agent-side-panel-host-entered {
+		opacity: 1;
+		visibility: visible;
+		transform: translateX(0);
+		transition:
+			transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
+			opacity 260ms ease,
+			visibility 0s linear 0s;
 	}
 
 	.expert-agent-side-panel-resizer {
@@ -171,7 +242,7 @@
 		background: linear-gradient(
 			90deg,
 			transparent 0%,
-			rgba(121, 171, 223, 0.34) 48%,
+			rgba(87, 112, 205, 0.28) 48%,
 			transparent 100%
 		);
 	}
@@ -186,9 +257,9 @@
 		border-radius: 999px;
 		background: linear-gradient(
 			180deg,
-			rgba(127, 164, 205, 0.24) 0%,
-			rgba(69, 126, 188, 0.52) 50%,
-			rgba(127, 164, 205, 0.24) 100%
+			rgba(114, 130, 179, 0.22) 0%,
+			rgba(70, 105, 236, 0.5) 50%,
+			rgba(114, 130, 179, 0.22) 100%
 		);
 		box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55);
 		transform: translate(-50%, -50%);
@@ -202,21 +273,15 @@
 		overflow: hidden;
 		pointer-events: auto;
 		border-radius: 1.5rem;
-		border: 1px solid rgba(186, 215, 238, 0.72);
-		background: linear-gradient(
-			180deg,
-			rgba(255, 255, 255, 0.96) 0%,
-			rgba(243, 249, 255, 0.86) 100%
-		);
-		box-shadow:
-			-18px 18px 45px rgba(71, 79, 102, 0.16),
-			inset 1px 1px 0 rgba(255, 255, 255, 0.94);
-		backdrop-filter: blur(18px);
+		border: 0;
+		background: transparent;
+		box-shadow: none;
+		backdrop-filter: none;
 	}
 
 	:global(.dark) .expert-agent-side-panel-shell {
-		border-color: rgba(55, 65, 81, 0.9);
-		background: #111827;
-		box-shadow: -18px 18px 45px rgba(0, 0, 0, 0.26);
+		border-color: transparent;
+		background: transparent;
+		box-shadow: none;
 	}
 </style>

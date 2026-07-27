@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { onMount, tick } from 'svelte';
-	import { fly } from 'svelte/transition';
 	import { v4 as uuidv4 } from 'uuid';
 
 	import { showArtifacts } from '$lib/stores';
@@ -13,26 +12,128 @@
 	import AguiPanel from '$lib/agui/components/AguiPanel.svelte';
 	import ExpertAgentDrawer from '$lib/components/expert-agents/ExpertAgentDrawer.svelte';
 	import { aguiPanelVisible, aguiStore } from '$lib/agui/stores/agui';
+	import {
+		isChatSidePanelVisible,
+		resolveChatBasePanel,
+		type ChatBasePanel
+	} from './chatSidePanelState';
 
 	export let history;
 
 	const MIN_WIDTH = 420;
 	const MAX_WIDTH = 920;
 	const DEFAULT_WIDTH = 800;
+	const PANEL_EXIT_DURATION = 260;
 
 	let largeScreen = false;
-	let activePanel: 'artifacts' | 'expertAgents' | 'agui' = 'expertAgents';
+	let basePanel: ChatBasePanel = null;
 	let previousArtifacts = false;
-	let previousExpertAgent = false;
 	let previousAgui = false;
 	let panelWidth = DEFAULT_WIDTH;
 	let isResizing = false;
 	let startClientX = 0;
 	let startWidth = DEFAULT_WIDTH;
 	let activePointerId: number | null = null;
+	let panelRendered = false;
+	let panelEntered = false;
+	let panelLifecycleReady = false;
+	let previousPanelVisible = false;
+	let panelAnimationFrame: number | null = null;
+	let panelCloseTimer: number | null = null;
+	let expertRendered = false;
+	let expertEntered = false;
+	let previousExpertVisible = false;
+	let expertAnimationFrame: number | null = null;
+	let expertCloseTimer: number | null = null;
 
 	$: aguiVisible = $aguiPanelVisible;
-	$: visible = $showArtifacts || $showExpertAgentDrawer || aguiVisible;
+	$: visible = isChatSidePanelVisible(basePanel, $showExpertAgentDrawer);
+
+	const clearPanelAnimationHandles = () => {
+		if (panelAnimationFrame !== null) {
+			cancelAnimationFrame(panelAnimationFrame);
+			panelAnimationFrame = null;
+		}
+
+		if (panelCloseTimer !== null) {
+			window.clearTimeout(panelCloseTimer);
+			panelCloseTimer = null;
+		}
+	};
+
+	const syncPanelAnimation = async (shouldShow: boolean) => {
+		clearPanelAnimationHandles();
+
+		if (shouldShow) {
+			if (!panelRendered) {
+				panelRendered = true;
+				panelEntered = false;
+				await tick();
+			}
+
+			panelAnimationFrame = requestAnimationFrame(() => {
+				panelEntered = true;
+				panelAnimationFrame = null;
+			});
+			return;
+		}
+
+		if (!panelRendered) return;
+
+		panelEntered = false;
+		panelCloseTimer = window.setTimeout(() => {
+			panelRendered = false;
+			panelCloseTimer = null;
+		}, PANEL_EXIT_DURATION);
+	};
+
+	const clearExpertAnimationHandles = () => {
+		if (expertAnimationFrame !== null) {
+			cancelAnimationFrame(expertAnimationFrame);
+			expertAnimationFrame = null;
+		}
+
+		if (expertCloseTimer !== null) {
+			window.clearTimeout(expertCloseTimer);
+			expertCloseTimer = null;
+		}
+	};
+
+	const syncExpertAnimation = async (shouldShow: boolean) => {
+		clearExpertAnimationHandles();
+
+		if (shouldShow) {
+			if (!expertRendered) {
+				expertRendered = true;
+				expertEntered = false;
+				await tick();
+			}
+
+			expertAnimationFrame = requestAnimationFrame(() => {
+				expertEntered = true;
+				expertAnimationFrame = null;
+			});
+			return;
+		}
+
+		if (!expertRendered) return;
+
+		expertEntered = false;
+		expertCloseTimer = window.setTimeout(() => {
+			expertRendered = false;
+			expertCloseTimer = null;
+		}, PANEL_EXIT_DURATION);
+	};
+
+	$: if (panelLifecycleReady && visible !== previousPanelVisible) {
+		previousPanelVisible = visible;
+		void syncPanelAnimation(visible);
+	}
+
+	$: if (panelLifecycleReady && $showExpertAgentDrawer !== previousExpertVisible) {
+		previousExpertVisible = $showExpertAgentDrawer;
+		void syncExpertAnimation($showExpertAgentDrawer);
+	}
 
 	const clampWidth = (width: number) => {
 		if (typeof window === 'undefined') return width;
@@ -78,45 +179,36 @@
 
 	$: {
 		const artifactsVisible = $showArtifacts;
-		const expertAgentVisible = $showExpertAgentDrawer;
+		const nextBasePanel = resolveChatBasePanel(basePanel, {
+			artifactsVisible,
+			aguiVisible,
+			artifactsJustOpened: artifactsVisible && !previousArtifacts,
+			aguiJustOpened: aguiVisible && !previousAgui
+		});
 
-		if (aguiVisible && !previousAgui) {
-			activePanel = 'agui';
-		} else if (artifactsVisible && !previousArtifacts) {
-			activePanel = 'artifacts';
-		} else if (expertAgentVisible && !previousExpertAgent) {
-			activePanel = 'expertAgents';
-		}
-
-		if (!aguiVisible && activePanel === 'agui') {
-			if (artifactsVisible) {
-				activePanel = 'artifacts';
-			} else if (expertAgentVisible) {
-				activePanel = 'expertAgents';
-			}
-		}
-
-		if (!artifactsVisible && expertAgentVisible && activePanel === 'artifacts') {
-			activePanel = 'expertAgents';
-		}
-
-		if (!expertAgentVisible && artifactsVisible && activePanel === 'expertAgents') {
-			activePanel = 'artifacts';
+		if (nextBasePanel !== basePanel) {
+			basePanel = nextBasePanel;
 		}
 
 		previousArtifacts = artifactsVisible;
-		previousExpertAgent = expertAgentVisible;
 		previousAgui = aguiVisible;
 	}
 
-	const closeActivePanel = () => {
-		if (activePanel === 'artifacts') {
+	const closeBasePanel = () => {
+		if (basePanel === 'artifacts') {
 			showArtifacts.set(false);
-		} else if (activePanel === 'agui') {
+		} else if (basePanel === 'agui') {
 			aguiStore.hidePanel();
-		} else {
-			closeExpertAgentDrawer();
 		}
+	};
+
+	const closeTopPanel = () => {
+		if ($showExpertAgentDrawer) {
+			closeExpertAgentDrawer();
+			return;
+		}
+
+		closeBasePanel();
 	};
 
 	async function startExpertAgentChat(skill: ExpertSkillCard) {
@@ -131,6 +223,12 @@
 	}
 
 	onMount(() => {
+		panelLifecycleReady = true;
+		previousPanelVisible = visible;
+		void syncPanelAnimation(visible);
+		previousExpertVisible = $showExpertAgentDrawer;
+		void syncExpertAnimation($showExpertAgentDrawer);
+
 		const mediaQuery = window.matchMedia('(min-width: 1024px)');
 		const handleMediaQuery = (e: MediaQueryListEvent | MediaQueryList) => {
 			largeScreen = e.matches;
@@ -151,63 +249,79 @@
 			window.removeEventListener('pointerup', resizeEndHandler);
 			window.removeEventListener('pointercancel', resizeEndHandler);
 			window.removeEventListener('resize', resizeViewportHandler);
+			clearPanelAnimationHandles();
+			clearExpertAnimationHandles();
 			document.body.style.userSelect = '';
 		};
 	});
 </script>
 
-{#if visible}
+{#if panelRendered}
 	{#if largeScreen}
-		<div class="chat-side-panel-host">
+		<div class="chat-side-panel-host" class:chat-side-panel-host-entered={panelEntered}>
 			<button
 				type="button"
 				class="chat-side-panel-resizer"
-				class:chat-side-panel-resizer-artifacts={activePanel === 'artifacts'}
 				aria-label="Resize side panel"
 				on:pointerdown={resizeStartHandler}
 			>
 				<span class="chat-side-panel-resizer-grip" aria-hidden="true"></span>
 			</button>
 			<div
-				in:fly={{ x: 56, duration: 320, opacity: 0.72 }}
-				out:fly={{ x: 44, duration: 220, opacity: 0.62 }}
 				class="chat-side-panel-shell"
-				class:chat-side-panel-shell-artifacts={activePanel === 'artifacts'}
+				class:chat-side-panel-shell-artifacts={basePanel === 'artifacts'}
+				class:chat-side-panel-shell-expert-only={basePanel === null && expertRendered}
 			>
-				{#if activePanel === 'artifacts'}
-					<Artifacts {history} on:close={closeActivePanel} />
-				{:else if activePanel === 'agui'}
+				{#if basePanel === 'artifacts'}
+					<Artifacts {history} on:close={closeBasePanel} />
+				{:else if basePanel === 'agui'}
 					<AguiPanel />
-				{:else}
-					<ExpertAgentDrawer
-						show={$showExpertAgentDrawer}
-						on:start={(event) => {
-							void startExpertAgentChat(event.detail);
-						}}
-						on:close={closeActivePanel}
-					/>
+				{/if}
+
+				{#if expertRendered}
+					<div
+						class="chat-side-panel-expert-layer"
+						class:chat-side-panel-expert-layer-entered={expertEntered || basePanel === null}
+						class:chat-side-panel-expert-layer-interactive={$showExpertAgentDrawer}
+					>
+						<ExpertAgentDrawer
+							show={true}
+							on:start={(event) => {
+								void startExpertAgentChat(event.detail);
+							}}
+							on:close={closeExpertAgentDrawer}
+						/>
+					</div>
 				{/if}
 			</div>
 		</div>
 	{:else}
 		<Drawer
 			show={visible}
-			onClose={closeActivePanel}
+			onClose={closeTopPanel}
 			className="min-h-[100dvh] !bg-white dark:!bg-gray-850"
 		>
-			<div class="h-[100dvh] min-h-0">
-				{#if activePanel === 'artifacts'}
-					<Artifacts {history} on:close={closeActivePanel} />
-				{:else if activePanel === 'agui'}
+			<div class="relative h-[100dvh] min-h-0 overflow-hidden">
+				{#if basePanel === 'artifacts'}
+					<Artifacts {history} on:close={closeBasePanel} />
+				{:else if basePanel === 'agui'}
 					<AguiPanel />
-				{:else}
-					<ExpertAgentDrawer
-						show={$showExpertAgentDrawer}
-						on:start={(event) => {
-							void startExpertAgentChat(event.detail);
-						}}
-						on:close={closeActivePanel}
-					/>
+				{/if}
+
+				{#if expertRendered}
+					<div
+						class="chat-side-panel-expert-layer"
+						class:chat-side-panel-expert-layer-entered={expertEntered || basePanel === null}
+						class:chat-side-panel-expert-layer-interactive={$showExpertAgentDrawer}
+					>
+						<ExpertAgentDrawer
+							show={true}
+							on:start={(event) => {
+								void startExpertAgentChat(event.detail);
+							}}
+							on:close={closeExpertAgentDrawer}
+						/>
+					</div>
 				{/if}
 			</div>
 		</Drawer>
@@ -224,19 +338,33 @@
 		width: var(--chat-side-panel-width);
 		padding: 20px 18px 20px 0;
 		pointer-events: none;
+		will-change: transform, opacity;
+		opacity: 0;
+		visibility: hidden;
+		transform: translateX(calc(var(--chat-side-panel-width) + 24px));
+		transition:
+			transform 260ms cubic-bezier(0.4, 0, 1, 1),
+			opacity 220ms ease,
+			visibility 0s linear 260ms;
+	}
+
+	.chat-side-panel-host-entered {
+		opacity: 1;
+		visibility: visible;
+		transform: translateX(0);
+		transition:
+			transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
+			opacity 260ms ease,
+			visibility 0s linear 0s;
 	}
 
 	.chat-side-panel-resizer {
 		position: absolute;
-		top: 50%;
-		left: -16px;
+		top: 20px;
+		bottom: 20px;
+		left: -6px;
 		z-index: 2;
-		width: 32px;
-		height: 88px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		transform: translateY(-50%);
+		width: 12px;
 		cursor: col-resize;
 		pointer-events: auto;
 		touch-action: none;
@@ -244,42 +372,52 @@
 		background: transparent;
 	}
 
+	.chat-side-panel-resizer:hover {
+		background: linear-gradient(
+			90deg,
+			transparent 0%,
+			rgba(87, 112, 205, 0.28) 48%,
+			transparent 100%
+		);
+	}
+
 	.chat-side-panel-resizer-grip {
-		width: 14px;
-		height: 58px;
-		border: 1px solid rgba(47, 84, 157, 0.28);
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		width: 4px;
+		height: 56px;
+		border: 0;
 		border-radius: 999px;
-		background:
-			radial-gradient(circle at 50% 17px, rgba(47, 84, 157, 0.78) 0 2px, transparent 2.4px),
-			radial-gradient(circle at 50% 29px, rgba(47, 84, 157, 0.78) 0 2px, transparent 2.4px),
-			radial-gradient(circle at 50% 41px, rgba(47, 84, 157, 0.78) 0 2px, transparent 2.4px),
-			linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(239, 246, 255, 0.92));
-		box-shadow:
-			0 10px 26px rgba(15, 42, 89, 0.18),
-			0 0 0 1px rgba(255, 255, 255, 0.86) inset;
+		background: linear-gradient(
+			180deg,
+			rgba(114, 130, 179, 0.22) 0%,
+			rgba(70, 105, 236, 0.5) 50%,
+			rgba(114, 130, 179, 0.22) 100%
+		);
+		box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55);
+		transform: translate(-50%, -50%);
 		opacity: 0.72;
 		transition:
 			opacity 160ms ease,
-			border-color 160ms ease,
 			box-shadow 160ms ease,
 			transform 160ms ease;
 	}
 
 	.chat-side-panel-resizer:hover .chat-side-panel-resizer-grip,
-	.chat-side-panel-resizer:focus-visible .chat-side-panel-resizer-grip,
-	.chat-side-panel-resizer-artifacts .chat-side-panel-resizer-grip {
-		border-color: rgba(37, 99, 235, 0.5);
-		opacity: 0.96;
+	.chat-side-panel-resizer:focus-visible .chat-side-panel-resizer-grip {
+		opacity: 1;
 		box-shadow:
-			0 14px 30px rgba(15, 42, 89, 0.22),
-			0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+			0 0 0 1px rgba(255, 255, 255, 0.72),
+			0 0 14px rgba(70, 105, 236, 0.2);
 	}
 
 	.chat-side-panel-resizer:active .chat-side-panel-resizer-grip {
-		transform: scale(0.96);
+		transform: translate(-50%, -50%) scale(0.94);
 	}
 
 	.chat-side-panel-shell {
+		position: relative;
 		width: 100%;
 		height: 100%;
 		min-height: 0;
@@ -288,6 +426,46 @@
 		border-radius: 1.5rem;
 		background: #fff;
 		box-shadow: var(--light-card-shadow, -18px 18px 45px rgba(71, 79, 102, 0.16));
+	}
+
+	.chat-side-panel-shell-expert-only {
+		background: transparent;
+		box-shadow: none;
+		backdrop-filter: none;
+	}
+
+	.chat-side-panel-expert-layer {
+		position: absolute;
+		inset: 0;
+		z-index: 3;
+		overflow: hidden;
+		border-radius: inherit;
+		background: var(--light-surface, rgba(255, 255, 255, 0.96));
+		box-shadow: -18px 18px 45px rgba(71, 79, 102, 0.12);
+		backdrop-filter: blur(18px);
+		pointer-events: none;
+		will-change: transform, opacity;
+		opacity: 0;
+		visibility: hidden;
+		transform: translateX(calc(100% + 24px));
+		transition:
+			transform 260ms cubic-bezier(0.4, 0, 1, 1),
+			opacity 220ms ease,
+			visibility 0s linear 260ms;
+	}
+
+	.chat-side-panel-expert-layer-entered {
+		opacity: 1;
+		visibility: visible;
+		transform: translateX(0);
+		transition:
+			transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
+			opacity 260ms ease,
+			visibility 0s linear 0s;
+	}
+
+	.chat-side-panel-expert-layer-interactive {
+		pointer-events: auto;
 	}
 
 	.chat-side-panel-shell-artifacts {
@@ -304,15 +482,23 @@
 		box-shadow: -18px 18px 45px rgba(0, 0, 0, 0.26);
 	}
 
+	:global(.dark) .chat-side-panel-shell-expert-only {
+		background: transparent;
+		box-shadow: none;
+	}
+
+	:global(.dark) .chat-side-panel-expert-layer {
+		background: rgba(17, 24, 39, 0.98);
+		box-shadow: -18px 18px 45px rgba(0, 0, 0, 0.24);
+	}
+
 	:global(.dark) .chat-side-panel-resizer-grip {
-		border-color: rgba(148, 163, 184, 0.42);
-		background:
-			radial-gradient(circle at 50% 17px, rgba(191, 219, 254, 0.85) 0 2px, transparent 2.4px),
-			radial-gradient(circle at 50% 29px, rgba(191, 219, 254, 0.85) 0 2px, transparent 2.4px),
-			radial-gradient(circle at 50% 41px, rgba(191, 219, 254, 0.85) 0 2px, transparent 2.4px),
-			linear-gradient(180deg, rgba(30, 41, 59, 0.96), rgba(17, 24, 39, 0.94));
-		box-shadow:
-			0 10px 26px rgba(0, 0, 0, 0.34),
-			0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+		background: linear-gradient(
+			180deg,
+			rgba(148, 163, 184, 0.28) 0%,
+			rgba(147, 197, 253, 0.74) 50%,
+			rgba(148, 163, 184, 0.28) 100%
+		);
+		box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.5);
 	}
 </style>

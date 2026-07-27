@@ -37,6 +37,8 @@
 	import ChatPlus from '../icons/ChatPlus.svelte';
 	import ChatCheck from '../icons/ChatCheck.svelte';
 	import { aguiPanelVisible, aguiStore, hasArtifact } from '$lib/agui/stores/agui';
+	import { closeExpertAgentDrawer, showExpertAgentDrawer } from '$lib/stores/expertAgents';
+	import { isAguiPanelTopmost } from './chatSidePanelState';
 
 	const i18n = getContext('i18n');
 
@@ -59,6 +61,17 @@
 
 	let showShareChatModal = false;
 	let showDownloadChatModal = false;
+	$: aguiPanelTopmost = isAguiPanelTopmost($aguiPanelVisible, $showExpertAgentDrawer);
+
+	const toggleAguiPanel = () => {
+		if ($showExpertAgentDrawer) {
+			aguiStore.showPanel();
+			closeExpertAgentDrawer();
+			return;
+		}
+
+		aguiStore.togglePanel();
+	};
 
 	const toggleResponsiveMode = () => {
 		const nextMobile = !$mobile;
@@ -151,17 +164,16 @@
 					{#if $mobile && !$temporaryChatEnabled && chat && chat.id}
 						<Tooltip content={$i18n.t('New Chat')}>
 							<button
+								type="button"
 								class=" flex {$showSidebar
 									? 'md:hidden'
-									: ''} cursor-pointer px-2 py-2 rounded-xl text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-850 transition"
+									: ''} mr-2 h-10 w-10 translate-y-[10px] cursor-pointer items-center justify-center rounded-xl border border-transparent text-gray-600 transition hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-850"
 								on:click={() => {
 									initNewChat();
 								}}
 								aria-label="New Chat"
 							>
-								<div class=" m-auto self-center">
-									<ChatPlus className=" size-4.5" strokeWidth="1.5" />
-								</div>
+								<ChatPlus className="size-5" strokeWidth="1.5" />
 							</button>
 						</Tooltip>
 					{/if}
@@ -179,26 +191,26 @@
 							{moveChatHandler}
 						>
 							<button
-								class="flex cursor-pointer px-2 py-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-850 transition"
+								type="button"
+								class="flex h-10 w-10 translate-y-[10px] cursor-pointer items-center justify-center rounded-xl border border-transparent transition hover:bg-gray-50 dark:hover:bg-gray-850"
 								id="chat-context-menu-button"
+								aria-label="打开对话菜单"
 							>
-								<div class=" m-auto self-center">
-									<EllipsisHorizontal className=" size-5" strokeWidth="1.5" />
-								</div>
+								<EllipsisHorizontal className="size-5" strokeWidth="1.5" />
 							</button>
 						</Menu>
 					{/if}
 
 					{#if $hasArtifact}
-						<Tooltip content={$aguiPanelVisible ? '隐藏 AI 工作区' : '显示 AI 工作区'}>
+						<Tooltip content={aguiPanelTopmost ? '隐藏制品预览' : '显示制品预览'}>
 							<button
 								type="button"
-								class="flex h-10 w-10 translate-y-[10px] cursor-pointer items-center justify-center rounded-xl border transition {$aguiPanelVisible
+								class="ml-2 flex h-10 w-10 translate-y-[10px] cursor-pointer items-center justify-center rounded-xl border transition {aguiPanelTopmost
 									? 'border-blue-200 bg-blue-50 text-blue-600 dark:border-blue-700/60 dark:bg-blue-900/30 dark:text-blue-200'
 									: 'border-transparent hover:bg-gray-50 dark:hover:bg-gray-850'}"
-								aria-label={$aguiPanelVisible ? '隐藏 AI 工作区' : '显示 AI 工作区'}
-								aria-pressed={$aguiPanelVisible}
-								on:click={() => aguiStore.togglePanel()}
+								aria-label={aguiPanelTopmost ? '隐藏制品预览' : '显示制品预览'}
+								aria-pressed={aguiPanelTopmost}
+								on:click={toggleAguiPanel}
 							>
 								<LucideIcon name="sparkles" className="size-6" strokeWidth="1.45" />
 							</button>

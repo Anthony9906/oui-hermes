@@ -144,7 +144,7 @@
 								placement="top"
 							>
 								<div
-									class="expert-agent-subtitle mt-1 w-full max-w-[42rem] break-words px-2 text-[1.75rem] @sm:text-[1.875rem] @4xl:max-w-[64rem] @4xl:text-[2rem] leading-tight text-[#52617e] dark:text-gray-300 line-clamp-2 markdown"
+									class="expert-agent-subtitle mt-1 w-full max-w-[42rem] break-words px-2 text-[1.75rem] @sm:text-[1.875rem] @4xl:max-w-[64rem] @4xl:text-[2rem] leading-tight text-[#66748c] dark:text-gray-300 line-clamp-2 markdown"
 								>
 									{@html DOMPurify.sanitize(
 										marked.parse(
@@ -240,26 +240,14 @@
 		position: relative;
 		display: inline-block;
 		background: linear-gradient(
-			90deg,
-			#7bdcff 0%,
-			#b7f0ff 6%,
-			#9ee7ff 12%,
-			#58c9ff 18%,
-			#1684e8 24%,
-			#0b4ca3 32%,
-			#071f4d 40%,
-			#2d6fc4 45%,
-			#58c9ff 49%,
-			#7bdcff 50%,
-			#b7f0ff 56%,
-			#9ee7ff 62%,
-			#58c9ff 68%,
-			#1684e8 74%,
-			#0b4ca3 82%,
-			#071f4d 90%,
-			#2d6fc4 95%,
-			#58c9ff 99%,
-			#7bdcff 100%
+			100deg,
+			#5ea6f6 0%,
+			#4d83ef 18%,
+			#526fe8 36%,
+			#4164dc 50%,
+			#5a82eb 68%,
+			#4b6ff7 84%,
+			#5ea6f6 100%
 		);
 		background-size: 200% 100%;
 		background-position: 0% 50%;
@@ -271,7 +259,7 @@
 		text-shadow: none;
 		filter: none;
 		text-transform: none;
-		animation: expert-agent-gradient-flow 24s linear infinite;
+		animation: expert-agent-gradient-flow 32s linear infinite;
 	}
 
 	.expert-agent-subtitle {
