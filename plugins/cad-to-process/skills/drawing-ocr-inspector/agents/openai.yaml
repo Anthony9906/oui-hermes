@@ -1,0 +1,4 @@
+interface:
+  display_name: "Drawing OCR Inspector"
+  short_description: "Extract evidence from scanned engineering drawings"
+  default_prompt: "Use $drawing-ocr-inspector to segment and OCR this scanned engineering drawing."

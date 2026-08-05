@@ -1,0 +1,4 @@
+interface:
+  display_name: "Drawing Intake Router"
+  short_description: "Route manufacturing drawings to exact parsers"
+  default_prompt: "Use $drawing-intake-router to classify these manufacturing drawing files and create an evidence manifest."

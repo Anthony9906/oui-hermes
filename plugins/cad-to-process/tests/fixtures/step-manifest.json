@@ -1,0 +1,63 @@
+{
+  "schema_version": "0.1.0",
+  "artifact_id": "fixture-step",
+  "created_at": "2026-07-27T00:00:00+00:00",
+  "source": {
+    "path": "fixture.step",
+    "kind": "step",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "parser": "fixture",
+    "parser_version": "0.1.0"
+  },
+  "document": {
+    "semantic_pmi_counts": {
+      "dimensions": 1,
+      "geometric_tolerances": 0,
+      "datums": 0
+    }
+  },
+  "geometry": {
+    "occurrence_count": 1,
+    "occurrences": [
+      {
+        "selector": "#o1",
+        "valid_brep": true,
+        "faces": [
+          {
+            "selector": "#o1.f1",
+            "ordinal": 1,
+            "surface_type": "cylinder",
+            "params": {
+              "origin": [10.0, 20.0, 0.0],
+              "axis": [0.0, 0.0, 1.0],
+              "radius": 5.0
+            }
+          },
+          {
+            "selector": "#o1.f2",
+            "ordinal": 2,
+            "surface_type": "cylinder",
+            "params": {
+              "origin": [10.0, 20.0, 10.0],
+              "axis": [0.0, 0.0, 1.0],
+              "radius": 5.0
+            }
+          }
+        ],
+        "edges": []
+      }
+    ]
+  },
+  "views": [],
+  "annotations": [],
+  "associations": [],
+  "feature_candidates": [],
+  "requirements": [],
+  "conflicts": [],
+  "evidence": [],
+  "findings": [],
+  "release": {
+    "decision": "not_evaluated",
+    "blockers": []
+  }
+}

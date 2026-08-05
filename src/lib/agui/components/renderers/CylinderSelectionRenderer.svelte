@@ -111,6 +111,9 @@
 	const getImageAlt = (rec: any) =>
 		rec?.imageAlt || `${rec?.brand || ''} ${rec?.model || ''}`.trim() || 'Product preview';
 
+	const getRecommendationMeta = (rec: any) =>
+		[rec?.brand, rec?.partNo ? `料号 ${rec.partNo}` : '', rec?.source].filter(Boolean).join(' · ');
+
 	const openImagePreview = (rec: any) => {
 		const url = getThumbnailUrl(rec);
 		if (!url) return;
@@ -202,7 +205,11 @@
 			</h2>
 			<!-- Primary -->
 			<div class="rounded-xl bg-[#1976D2] p-4 text-white shadow-sm">
-				<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_45%]">
+				<div
+					class="grid gap-4 {getThumbnailUrl(primaryRec)
+						? 'lg:grid-cols-[minmax(0,1fr)_45%]'
+						: 'grid-cols-1'}"
+				>
 					<div class="min-w-0">
 						<div class="mb-4 flex flex-wrap items-center gap-2">
 							<span class="text-xl leading-none">★</span>
@@ -216,32 +223,32 @@
 						</div>
 						<div class="text-2xl font-bold leading-tight">{primaryRec.model}</div>
 						<div class="mt-3 text-sm font-semibold text-white/85">
-							{primaryRec.brand} · 料号 {primaryRec.partNo}
+							{getRecommendationMeta(primaryRec)}
 						</div>
-						<div class="mt-4 flex flex-wrap gap-2">
+						<div class="mt-4 flex min-w-0 items-center gap-2">
 							{#if primaryRec.bore}
-								<span class="rounded-md bg-white/20 px-2.5 py-1 text-xs font-semibold"
+								<span class="shrink-0 rounded-md bg-white/20 px-2.5 py-1 text-xs font-semibold"
 									>{primaryRec.bore}</span
 								>
 							{/if}
 							{#if primaryRec.stroke}
-								<span class="rounded-md bg-white/20 px-2.5 py-1 text-xs font-semibold"
+								<span class="shrink-0 rounded-md bg-white/20 px-2.5 py-1 text-xs font-semibold"
 									>{primaryRec.stroke}</span
 								>
 							{/if}
 							{#if primaryRec.theoreticalForce}
-								<span class="rounded-md bg-white/20 px-2.5 py-1 text-xs font-semibold"
+								<span class="shrink-0 rounded-md bg-white/20 px-2.5 py-1 text-xs font-semibold"
 									>{primaryRec.theoreticalForce}</span
 								>
 							{/if}
+							{#if primaryRec.mounting}
+								<div
+									class="inline-flex min-w-0 rounded-md bg-white/20 px-2.5 py-1 text-xs font-semibold"
+								>
+									<span class="truncate">{primaryRec.mounting}</span>
+								</div>
+							{/if}
 						</div>
-						{#if primaryRec.mounting}
-							<div
-								class="mt-3 inline-flex max-w-full rounded-md bg-white/20 px-2.5 py-1 text-xs font-semibold"
-							>
-								<span class="truncate">{primaryRec.mounting}</span>
-							</div>
-						{/if}
 						{#if primaryRec.reason}
 							<div
 								class="mt-4 border-t border-white/20 pt-3 text-sm font-normal leading-relaxed text-white/70"
@@ -285,7 +292,7 @@
 								</div>
 								<div class="text-lg font-bold leading-tight text-[#111827]">{alt.model}</div>
 								<div class="mt-1 text-sm font-medium text-[#71717a]">
-									{alt.brand} · {alt.partNo}
+									{getRecommendationMeta(alt)}
 								</div>
 							</div>
 							{#if getThumbnailUrl(alt)}

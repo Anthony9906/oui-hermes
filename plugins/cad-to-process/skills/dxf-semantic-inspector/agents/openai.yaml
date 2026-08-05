@@ -1,0 +1,4 @@
+interface:
+  display_name: "DXF Semantic Inspector"
+  short_description: "Extract DXF dimensions, notes, leaders, and layers"
+  default_prompt: "Use $dxf-semantic-inspector to extract structured drawing evidence from this DXF."

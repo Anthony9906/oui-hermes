@@ -1,0 +1,4 @@
+interface:
+  display_name: "Machining Feature Recognizer"
+  short_description: "Recognize auditable machining feature candidates"
+  default_prompt: "Use $machining-feature-recognizer to identify machining feature candidates from this B-Rep manifest."

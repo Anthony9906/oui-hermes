@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/manufacturing-drawing-manifest.schema.json",
+  "title": "Manufacturing Drawing Evidence Manifest",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "artifact_id",
+    "source",
+    "document",
+    "geometry",
+    "views",
+    "annotations",
+    "associations",
+    "feature_candidates",
+    "requirements",
+    "conflicts",
+    "evidence",
+    "findings",
+    "release"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "0.1.0"
+    },
+    "artifact_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "source": {
+      "type": "object",
+      "required": ["path", "kind", "sha256"],
+      "properties": {
+        "path": {
+          "oneOf": [
+            {"type": "string"},
+            {
+              "type": "array",
+              "items": {"type": "string"},
+              "minItems": 1
+            }
+          ]
+        },
+        "kind": {"type": "string"},
+        "sha256": {"type": "string"},
+        "parser": {"type": "string"},
+        "parser_version": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "document": {"type": "object"},
+    "geometry": {"type": "object"},
+    "views": {"type": "array"},
+    "annotations": {"type": "array"},
+    "associations": {"type": "array"},
+    "feature_candidates": {"type": "array"},
+    "requirements": {"type": "array"},
+    "conflicts": {"type": "array"},
+    "evidence": {"type": "array"},
+    "findings": {"type": "array"},
+    "release": {
+      "type": "object",
+      "required": ["decision", "blockers"],
+      "properties": {
+        "decision": {
+          "enum": ["not_evaluated", "needs_review", "blocked", "candidate_for_release"]
+        },
+        "blockers": {"type": "array"}
+      },
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "evidence_state": {
+      "enum": ["observed", "derived", "inferred", "assumed", "unknown"]
+    }
+  },
+  "additionalProperties": true
+}

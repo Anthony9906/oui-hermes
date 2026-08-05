@@ -6,6 +6,8 @@ from open_webui.utils.hermes_runs import (
     HermesRun,
     HermesRunRegistry,
     _iter_sse_json_events,
+    hermes_run_approval_error,
+    hermes_run_approval_is_gone,
     hermes_run_capabilities_satisfied,
     hermes_run_reasoning_delta,
 )
@@ -71,6 +73,31 @@ async def test_approval_registry_is_idempotent_after_resolution():
     assert repeated.selected_choice == 'deny'
 
 
+@pytest.mark.asyncio
+async def test_approval_registry_expires_all_pending_approvals_when_run_is_gone():
+    registry = HermesRunRegistry()
+    await registry.register(_run())
+    _, first = await registry.add_approval(
+        'run_1',
+        {'command': 'mkdir /tmp/a', 'description': 'write'},
+    )
+    _, second = await registry.add_approval(
+        'run_1',
+        {'command': 'rm /tmp/a', 'description': 'delete'},
+    )
+    await registry.claim_approval('run_1', first.id, 'user_1', 'chat_1', 'deny')
+
+    await registry.expire_approvals('run_1')
+
+    assert await registry.list_pending('user_1', 'chat_1') == []
+    run = await registry.get('run_1')
+    assert run is not None
+    assert run.status == 'failed'
+    assert [approval.status for approval in run.approvals] == ['expired', 'expired']
+    assert first.responded_at is not None
+    assert second.responded_at is not None
+
+
 def test_run_capabilities_require_approval_and_rich_tool_events():
     features = {
         'run_submission': True,
@@ -85,6 +112,29 @@ def test_run_capabilities_require_approval_and_rich_tool_events():
 
     features['run_tool_arguments'] = False
     assert hermes_run_capabilities_satisfied({'features': features}) is False
+
+
+def test_approval_terminal_errors_use_machine_codes():
+    inactive = {
+        'error': {
+            'message': 'Run has no active approval session: run_1',
+            'code': 'approval_not_active',
+        }
+    }
+
+    assert hermes_run_approval_error(inactive) == (
+        'Run has no active approval session: run_1',
+        'approval_not_active',
+    )
+    assert hermes_run_approval_is_gone(409, inactive) is True
+    assert hermes_run_approval_is_gone(
+        409,
+        {'error': {'message': 'Run has no pending approval', 'code': 'approval_not_pending'}},
+    ) is True
+    assert hermes_run_approval_is_gone(
+        409,
+        {'error': {'message': 'Another approval must be answered first', 'code': 'queue_conflict'}},
+    ) is False
 
 
 def test_run_reasoning_accepts_only_dedicated_delta_events():

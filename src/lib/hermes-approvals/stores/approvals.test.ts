@@ -1,9 +1,10 @@
 import { get } from 'svelte/store';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { activeHermesApproval, hermesApprovalStore } from './approvals';
+import type { HermesApprovalChoice } from '$lib/apis/hermes-runs';
+import { activeHermesApproval, hermesApprovalStore, type HermesApprovalRequest } from './approvals';
 
-const request = (id: string, chatId: string, sequence = 1) => ({
+const request = (id: string, chatId: string, sequence = 1): HermesApprovalRequest => ({
 	approval_request_id: id,
 	run_id: 'run_1',
 	chat_id: chatId,
@@ -12,7 +13,7 @@ const request = (id: string, chatId: string, sequence = 1) => ({
 	description: 'write outside workspace',
 	pattern_key: 'write',
 	pattern_keys: ['write'],
-	choices: ['once', 'session', 'deny'] as const,
+	choices: ['once', 'session', 'deny'] as HermesApprovalChoice[],
 	sequence,
 	status: 'pending' as const,
 	requested_at: sequence
@@ -39,5 +40,16 @@ describe('hermesApprovalStore', () => {
 		expect(get(activeHermesApproval)?.status).toBe('responding');
 		hermesApprovalStore.resolve('approval_1', 'once');
 		expect(get(activeHermesApproval)?.approval_request_id).toBe('approval_2');
+	});
+
+	it('hides all unresolved approvals after their run expires', () => {
+		hermesApprovalStore.setActiveChat('chat_a');
+		hermesApprovalStore.onRequest(request('approval_1', 'chat_a'));
+		hermesApprovalStore.onRequest(request('approval_2', 'chat_a', 2));
+
+		hermesApprovalStore.markResponding('approval_1', 'deny');
+		hermesApprovalStore.expireForRun('run_1');
+
+		expect(get(activeHermesApproval)).toBeNull();
 	});
 });

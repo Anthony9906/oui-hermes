@@ -46,19 +46,31 @@
 		aria-live="assertive"
 	>
 		<header
-			class="flex items-center gap-3 border-b border-amber-200 bg-amber-50/90 px-4 py-3 dark:border-amber-900 dark:bg-amber-950/30"
+			class="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50/90 px-4 py-3 dark:border-amber-900 dark:bg-amber-950/30"
 		>
-			<span
-				class="flex size-8 shrink-0 items-center justify-center text-amber-700 dark:text-amber-400"
-			>
-				<LucideIcon name="shield-alert" className="size-7" strokeWidth="1.8" />
-			</span>
-			<div class="min-w-0">
-				<div class="text-base font-semibold sm:text-lg">Agent 需要你的授权</div>
-				<div class="text-xs text-amber-800/80 dark:text-amber-300/80">
-					该操作尚未执行。请核对风险说明和命令后再选择。
+			<div class="flex min-w-0 items-center gap-3">
+				<span
+					class="flex size-8 shrink-0 items-center justify-center text-amber-700 dark:text-amber-400"
+				>
+					<LucideIcon name="shield-alert" className="size-7" strokeWidth="1.8" />
+				</span>
+				<div class="min-w-0">
+					<div class="text-base font-semibold sm:text-lg">Agent 需要你的授权</div>
+					<div class="text-xs text-amber-800/80 dark:text-amber-300/80">
+						该操作尚未执行。请核对风险说明和命令后再选择。
+					</div>
 				</div>
 			</div>
+			<button
+				type="button"
+				class="shrink-0 rounded-lg p-1.5 text-amber-700/70 transition hover:bg-white/70 hover:text-amber-900 focus:outline-none focus:ring-2 focus:ring-amber-500/40 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-300/70 dark:hover:bg-gray-800 dark:hover:text-amber-200"
+				aria-label="关闭并拒绝授权请求"
+				title="关闭并拒绝"
+				{disabled}
+				on:click={() => dispatch('submit', { approval, choice: 'deny' })}
+			>
+				<LucideIcon name="x" className="size-5" strokeWidth="2" />
+			</button>
 		</header>
 
 		<div class="space-y-3 px-4 py-3">

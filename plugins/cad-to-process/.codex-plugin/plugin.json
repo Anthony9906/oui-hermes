@@ -1,0 +1,37 @@
+{
+	"name": "cad-to-process",
+	"version": "0.1.0",
+	"description": "Evidence-first foundation for translating CAD models and manufacturing drawings into governed machining process plans and objective-aware route recommendations.",
+	"author": {
+		"name": "Anthony"
+	},
+	"license": "MIT",
+	"keywords": [
+		"manufacturing",
+		"engineering-drawing",
+		"cad",
+		"step",
+		"brep",
+		"dxf",
+		"ocr",
+		"gdandt",
+		"capp",
+		"process-planning",
+		"route-optimization"
+	],
+	"skills": "./skills/",
+	"interface": {
+		"displayName": "CAD to Process",
+		"shortDescription": "From CAD and drawings to governed machining process plans.",
+		"longDescription": "The process-planning link between text-to-cad and a future process-to-cam stage. It coordinates expert skills that translate CAD models, drawings, PMI, and manufacturing constraints into machining-feature evidence, feasible process-route candidates, and objective-aware recommendations. Version 0.1 establishes the auditable B-Rep, DXF, OCR, feature, and intent-fusion foundation; route planning, feasibility checking, and cost/time/value optimization remain governed extension layers.",
+		"developerName": "Anthony",
+		"category": "Productivity",
+		"capabilities": ["Interactive", "Write"],
+		"defaultPrompt": [
+			"Build an auditable part-intent manifest from these drawing files.",
+			"Inspect this STEP model for B-Rep geometry and semantic PMI.",
+			"Assess whether the fused evidence is sufficient for process-route planning and identify every blocker."
+		],
+		"brandColor": "#0F766E"
+	}
+}

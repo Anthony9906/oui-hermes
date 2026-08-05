@@ -21,6 +21,9 @@ from open_webui.utils.session_pool import cleanup_response, get_session
 log = logging.getLogger(__name__)
 
 APPROVAL_CHOICES = frozenset({'once', 'session', 'deny'})
+TERMINAL_APPROVAL_ERROR_CODES = frozenset(
+    {'run_not_found', 'approval_not_active', 'approval_not_pending'}
+)
 TERMINAL_RUN_STATUSES = frozenset({'completed', 'failed', 'cancelled'})
 REQUIRED_RUN_FEATURES = frozenset(
     {
@@ -67,6 +70,36 @@ def hermes_run_reasoning_delta(event: Any) -> str:
     if not isinstance(event, dict) or event.get('event') != 'reasoning.delta':
         return ''
     return str(event.get('delta') or '')
+
+
+def hermes_run_approval_error(payload: Any) -> tuple[str, str]:
+    """Extract an OpenAI-style approval error message and machine code."""
+    if not isinstance(payload, dict):
+        return str(payload), ''
+
+    message = ''
+    code = ''
+    error = payload.get('error')
+    if isinstance(error, dict):
+        message = str(error.get('message') or '')
+        code = str(error.get('code') or '')
+    elif error:
+        message = str(error)
+
+    detail = payload.get('detail')
+    if isinstance(detail, dict):
+        message = message or str(detail.get('message') or '')
+        code = code or str(detail.get('code') or '')
+    elif detail:
+        message = message or str(detail)
+
+    return message, code
+
+
+def hermes_run_approval_is_gone(status: int, payload: Any) -> bool:
+    """Return true only when retrying this approval cannot succeed."""
+    _, code = hermes_run_approval_error(payload)
+    return status == 404 or code in TERMINAL_APPROVAL_ERROR_CODES
 
 
 async def is_hermes_runs_capable(
@@ -338,6 +371,20 @@ class HermesRunRegistry:
                 approval.status = 'pending'
                 approval.selected_choice = None
                 run.updated_at = time.time()
+
+    async def expire_approvals(self, run_id: str) -> None:
+        """Expire unresolved approvals after Hermes reports that their run is gone."""
+        async with self._lock:
+            run = self._runs.get(run_id)
+            if not run:
+                return
+            now = time.time()
+            for approval in run.approvals:
+                if approval.status in {'pending', 'responding'}:
+                    approval.status = 'expired'
+                    approval.responded_at = now
+            run.status = 'failed'
+            run.updated_at = now
 
 
 hermes_run_registry = HermesRunRegistry()

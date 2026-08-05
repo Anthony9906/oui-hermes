@@ -1,0 +1,4 @@
+interface:
+  display_name: "STEP B-Rep Inspector"
+  short_description: "Inspect STEP topology, geometry, and semantic PMI"
+  default_prompt: "Use $step-brep-inspector to inspect this STEP file and report B-Rep and PMI evidence."

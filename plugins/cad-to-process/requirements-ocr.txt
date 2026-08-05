@@ -1,0 +1,7 @@
+# Install eDOCr2 from a reviewed, pinned upstream commit before production use.
+# Repository: https://github.com/javvi51/edocr2
+numpy
+opencv-python
+pdf2image
+pytesseract
+tensorflow

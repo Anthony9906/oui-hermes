@@ -37,10 +37,7 @@ function createHermesApprovalStore() {
 		replacePendingForChat(chatId: string, requests: HermesApprovalRequest[]) {
 			update((state) => ({
 				...state,
-				requests: [
-					...state.requests.filter((request) => request.chat_id !== chatId),
-					...requests
-				]
+				requests: [...state.requests.filter((request) => request.chat_id !== chatId), ...requests]
 			}));
 		},
 		onRequest(request: HermesApprovalRequest) {
@@ -74,6 +71,21 @@ function createHermesApprovalStore() {
 				)
 			}));
 		},
+		expireForRun(runId: string) {
+			update((state) => ({
+				...state,
+				requests: state.requests.map((request) =>
+					request.run_id === runId &&
+					(request.status === 'pending' || request.status === 'responding')
+						? {
+								...request,
+								status: 'expired',
+								responded_at: Date.now() / 1000
+							}
+						: request
+				)
+			}));
+		},
 		resolve(id: string, choice?: HermesApprovalChoice) {
 			update((state) => ({
 				...state,
@@ -94,8 +106,7 @@ function createHermesApprovalStore() {
 				const request = state.requests
 					.filter(
 						(item) =>
-							item.run_id === runId &&
-							(item.status === 'pending' || item.status === 'responding')
+							item.run_id === runId && (item.status === 'pending' || item.status === 'responding')
 					)
 					.sort((a, b) => a.sequence - b.sequence)
 					.at(0);
@@ -122,13 +133,15 @@ function createHermesApprovalStore() {
 }
 
 export const hermesApprovalStore = createHermesApprovalStore();
-export const activeHermesApproval = derived(hermesApprovalStore, ($state) =>
-	$state.requests
-		.filter(
-			(request) =>
-				request.chat_id === $state.active_chat_id &&
-				(request.status === 'pending' || request.status === 'responding')
-		)
-		.sort((a, b) => a.requested_at - b.requested_at || a.sequence - b.sequence)
-		.at(0) ?? null
+export const activeHermesApproval = derived(
+	hermesApprovalStore,
+	($state) =>
+		$state.requests
+			.filter(
+				(request) =>
+					request.chat_id === $state.active_chat_id &&
+					(request.status === 'pending' || request.status === 'responding')
+			)
+			.sort((a, b) => a.requested_at - b.requested_at || a.sequence - b.sequence)
+			.at(0) ?? null
 );

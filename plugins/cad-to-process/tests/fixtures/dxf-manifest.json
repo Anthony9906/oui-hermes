@@ -1,0 +1,38 @@
+{
+  "schema_version": "0.1.0",
+  "artifact_id": "fixture-dxf",
+  "created_at": "2026-07-27T00:00:00+00:00",
+  "source": {
+    "path": "fixture.dxf",
+    "kind": "dxf",
+    "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "parser": "fixture",
+    "parser_version": "0.1.0"
+  },
+  "document": {},
+  "geometry": {},
+  "views": [],
+  "annotations": [],
+  "associations": [],
+  "feature_candidates": [],
+  "requirements": [
+    {
+      "id": "requirement:diameter-1",
+      "characteristic_id": "diameter-1",
+      "kind": "diameter",
+      "nominal": 10.0,
+      "tolerance": 0.02,
+      "unit": "mm",
+      "state": "observed",
+      "critical": true,
+      "geometry_refs": ["#o1.f1", "#o1.f2"]
+    }
+  ],
+  "conflicts": [],
+  "evidence": [],
+  "findings": [],
+  "release": {
+    "decision": "not_evaluated",
+    "blockers": []
+  }
+}

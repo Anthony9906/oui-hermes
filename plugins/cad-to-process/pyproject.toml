@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cad-to-process"
+version = "0.1.0"
+description = "Deterministic adapters for manufacturing drawing evidence extraction."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+step = [
+  "cadquery-ocp",
+]
+dxf = [
+  "ezdxf>=1.4,<2",
+]
+ocr = [
+  "numpy",
+  "opencv-python",
+  "pdf2image",
+  "pytesseract",
+  "tensorflow",
+]
+
+[tool.setuptools]
+py-modules = []

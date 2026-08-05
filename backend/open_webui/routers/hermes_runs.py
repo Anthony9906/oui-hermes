@@ -10,6 +10,8 @@ from open_webui.models.chats import Chats
 from open_webui.utils.auth import get_verified_user
 from open_webui.utils.hermes_runs import (
     APPROVAL_CHOICES,
+    hermes_run_approval_error,
+    hermes_run_approval_is_gone,
     hermes_run_registry,
 )
 from open_webui.utils.session_pool import cleanup_response, get_session
@@ -91,13 +93,16 @@ async def respond_to_approval(
             response_data = {'error': {'message': await response.text()}}
 
         if response.status >= 400:
-            await hermes_run_registry.release_approval(run_id, approval.id)
-            message = (
-                (response_data.get('error') or {}).get('message')
-                if isinstance(response_data, dict)
-                else str(response_data)
+            message, _ = hermes_run_approval_error(response_data)
+            approval_is_gone = hermes_run_approval_is_gone(response.status, response_data)
+            if approval_is_gone:
+                await hermes_run_registry.expire_approvals(run_id)
+            else:
+                await hermes_run_registry.release_approval(run_id, approval.id)
+            raise HTTPException(
+                status_code=410 if approval_is_gone else response.status,
+                detail=message or 'Agent rejected the approval response.',
             )
-            raise HTTPException(status_code=response.status, detail=message or 'Agent rejected the approval response.')
 
         await hermes_run_registry.finish_approval(run_id, approval.id, form_data.choice)
         return {

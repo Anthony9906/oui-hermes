@@ -281,6 +281,7 @@
 				{#if expertRendered}
 					<div
 						class="chat-side-panel-expert-layer"
+						class:chat-side-panel-expert-layer-standalone={basePanel === null}
 						class:chat-side-panel-expert-layer-entered={expertEntered || basePanel === null}
 						class:chat-side-panel-expert-layer-interactive={$showExpertAgentDrawer}
 					>
@@ -468,6 +469,12 @@
 		pointer-events: auto;
 	}
 
+	.chat-side-panel-expert-layer-standalone {
+		background: transparent;
+		box-shadow: none;
+		backdrop-filter: none;
+	}
+
 	.chat-side-panel-shell-artifacts {
 		min-height: min(560px, calc(100dvh - 40px));
 		max-height: calc(100dvh - 40px);
@@ -490,6 +497,11 @@
 	:global(.dark) .chat-side-panel-expert-layer {
 		background: rgba(17, 24, 39, 0.98);
 		box-shadow: -18px 18px 45px rgba(0, 0, 0, 0.24);
+	}
+
+	:global(.dark) .chat-side-panel-expert-layer-standalone {
+		background: transparent;
+		box-shadow: none;
 	}
 
 	:global(.dark) .chat-side-panel-resizer-grip {

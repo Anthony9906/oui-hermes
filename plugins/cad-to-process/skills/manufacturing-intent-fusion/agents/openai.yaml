@@ -1,0 +1,4 @@
+interface:
+  display_name: "Manufacturing Intent Fusion"
+  short_description: "Fuse geometry and drawing evidence with release gates"
+  default_prompt: "Use $manufacturing-intent-fusion to reconcile these drawing manifests and flag conflicts for review."

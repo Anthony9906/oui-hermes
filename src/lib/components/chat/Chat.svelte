@@ -93,6 +93,7 @@
 	import { generateOpenAIChatCompletion } from '$lib/apis/openai';
 	import {
 		getPendingHermesApprovals,
+		isHermesApprovalGoneError,
 		respondToHermesApproval,
 		type HermesApprovalChoice
 	} from '$lib/apis/hermes-runs';
@@ -3281,6 +3282,11 @@
 				choice === 'deny' ? '已拒绝该操作，Agent 将继续处理。' : '授权已提交，Agent 正在继续执行。'
 			);
 		} catch (error) {
+			if (isHermesApprovalGoneError(error)) {
+				hermesApprovalStore.expireForRun(approval.run_id);
+				toast.info('Agent 任务已结束，过期的授权请求已关闭。');
+				return;
+			}
 			hermesApprovalStore.markPending(approval.approval_request_id);
 			toast.error(`${error}`);
 		}
